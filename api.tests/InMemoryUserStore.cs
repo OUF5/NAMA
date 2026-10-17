@@ -11,6 +11,10 @@ public sealed class InMemoryUserStore : IUserStore
     private sealed class UserData(SetupData setup)
     {
         public SetupData Setup { get; } = setup;
+        // lastBankAccountId changes with every entry (decision 5).
+        public UserProfile Profile { get; set; } = setup.Profile;
+        public List<BankAccount> BankAccounts { get; } = [.. setup.BankAccounts];
+        public List<Entry> Entries { get; } = [];
         public List<Category> Categories { get; } = [.. setup.Categories];
         public List<SubCategory> SubCategories { get; } = [];
         // Key: {fyId}_{subCategoryId}, as in Firestore (PRD 7.4).
@@ -23,7 +27,13 @@ public sealed class InMemoryUserStore : IUserStore
     public SetupData? Saved(string uid) => _users.GetValueOrDefault(uid)?.Setup;
 
     public Task<UserProfile?> GetProfileAsync(string uid) =>
-        Task.FromResult(_users.TryGetValue(uid, out var data) ? data.Setup.Profile : null);
+        Task.FromResult(_users.TryGetValue(uid, out var data) ? data.Profile : null);
+
+    // Archive comes with Settings (M8); tests add archived accounts here.
+    public Task AddBankAccount(string uid, BankAccount account) => Write(uid, data => data.BankAccounts.Add(account));
+
+    // Every entry of a user, as stored.
+    public IReadOnlyList<Entry> Entries(string uid) => Read<Entry>(uid, data => data.Entries).Result;
 
     public Task<IReadOnlyList<FiscalYear>> GetFiscalYearsAsync(string uid) =>
         Task.FromResult<IReadOnlyList<FiscalYear>>(_users.TryGetValue(uid, out var data) ? [data.Setup.FiscalYear] : []);
@@ -48,6 +58,18 @@ public sealed class InMemoryUserStore : IUserStore
 
     public Task<IReadOnlyList<IncomeItem>> GetIncomesAsync(string uid) =>
         Read<IncomeItem>(uid, data => data.Setup.Incomes);
+
+    public Task<IReadOnlyList<BankAccount>> GetBankAccountsAsync(string uid) =>
+        Read<BankAccount>(uid, data => data.BankAccounts);
+
+    public Task AddEntryAsync(string uid, Entry entry) => Write(uid, data =>
+    {
+        data.Entries.Add(entry);
+        data.Profile = data.Profile with { LastBankAccountId = entry.BankAccountId };
+    });
+
+    public Task<IReadOnlyList<Entry>> GetEntriesAsync(string uid, string subCategoryId, string periodKey) =>
+        Read<Entry>(uid, data => data.Entries.Where(entry => entry.SubCategoryId == subCategoryId && entry.PeriodKey == periodKey));
 
     private Task<IReadOnlyList<T>> Read<T>(string uid, Func<UserData, IEnumerable<T>> select)
     {

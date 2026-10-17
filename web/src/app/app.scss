@@ -44,6 +44,11 @@
   flex: 1;
 }
 
+// PRD 5.4: the desktop Add button in the top bar. Outlined, so a page's Save stays the one filled button.
+.top-add {
+  margin-right: 8px;
+}
+
 .layout {
   flex: 1;
   min-height: 0;
@@ -113,6 +118,10 @@
 @media (max-width: 767.98px) {
   .top-bar {
     padding: 0 4px 0 16px;
+  }
+
+  .top-add {
+    display: none;
   }
 
   // Two lines: NAMA · project (cut with "…"), then the month caption.

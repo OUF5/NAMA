@@ -28,7 +28,14 @@
   - "Done when", totals match a manual check. Worked out by hand: salary 15,000 + rent 2,000 monthly + a once bonus of 500.25 in Sep; Groceries 1,500 every month, Fuel 400 from Sep. That gives Jan planned 1,500, income 17,000, unplanned 15,500, and Sep planned 1,900, income 17,500.25, unplanned 15,600.25. `PlanCalculatorTests` and `PlansTests` assert exactly these numbers.
   - The owner checked the page locally and approved the push. Commit `fdd8d06` deployed, and every CI step passed (`dotnet test`: 232 of 232).
   - On production, `/api/health` returns version `fdd8d06…`, and `/api/categories`, `/api/fiscal-years` and `/api/fiscal-years/2026-01/plans` return 401 without a token.
-- Next: M5 Add entry, in a fresh session.
+- **M5 Add entry: built locally (17 Oct 2026).** The Add page (ENT-01 to ENT-03, FY-03, R-STA-03), `GET /api/bank-accounts`, `GET /api/indicator`, `POST /api/entries`, the shared planned indicator, and the desktop top-bar Add button (PRD 5.4).
+  - Locally: `dotnet test api.tests` passed 285 of 285 (232 before). `npm run build` passed with no warnings: initial 529.99 kB (513.87 kB before; the shell now uses the outlined `MatButton` for the top-bar Add), Add chunk 142.70 kB lazy. `npx ng test --watch=false` passed 53 of 53 (38 before). No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
+  - "Done when", each entry gets the right month: `EntriesTests` post 17 Oct, 26 Oct, 27 Oct, 27 Jan and 26 Jan 2027 and get `2026-09`, `2026-09`, `2026-10`, `2026-01` and `2026-12`, all in FY `2026-01`. 26 Jan 2026 and 27 Jan 2027 get 422. A scratch program ran `FirestoreUserStore` against the emulator with a throwaway user, deleted afterwards. It found the following:
+    - The entry was stored with `date` 2026-10-17, `periodKey` 2026-09, `fyId` 2026-01 and `amountMinor` 79999, plus `createdAt` and `updatedAt`.
+    - `lastBankAccountId` went from null to the last entry's account.
+    - The (subCategoryId, periodKey) query returned only that sub-category's entries in that month.
+  - "Done when", indicator numbers match a hand check. Groceries is planned at 1,500 in Sep. Entries are 400 and 799.99 in Sep, 50 in Aug, and 100 on Fuel. That gives planned 1,500, spent 1,199.99, remaining 300.01 and 79%; Aug gives 1,000 / 50 / 950 / 5%. `IndicatorTests` assert exactly these numbers, and the emulator query summed 119999 (Sep) and 5000 (Aug).
+  - "Done when", usable one-handed at 360 px: the owner checked the page locally (emulator) and approved the push. The first check found two UX problems, both fixed before the push: the "Saved" message was easy to miss, and the cleared amount showed an error after each save (see Decisions).
 
 ## Decisions
 
@@ -104,10 +111,40 @@
   - The editor has 12 inputs labeled with the stored month label and dates, "Same amount for all months" with "Apply to all", and a "Copy from <previous month>" icon button on months 2 to 12.
   - Save is the only filled button. Archived categories and sub-categories are hidden.
 - 17 Oct 2026, M4: `DocumentIds.New()` (in `UserStore.cs`) now makes every document id; setup uses it too.
+- 17 Oct 2026, M5: **The Add page makes 2 calls (NFR-01)**: `GET /api/categories` and `GET /api/bank-accounts`.
+  - `/api/me` is already cached by `setupGuard`. It now also returns `profile.lastBankAccountId`, `today` (R-CAL-10), and `firstDate`/`lastDate` (the first and last day of the stored FYs, for FY-03). These additions extend PRD 7.5.
+  - `GET /api/indicator` runs when the sub-category or the date changes, and again after a save.
+  - After a save the page updates `lastBankAccountId` in `MeService`, so the cached `/api/me` stays right.
+- 17 Oct 2026, M5: **Default bank account:** the last used one (decision 5). Before the first entry, it is the first active account by name, ignoring case; `GET /api/bank-accounts` returns them in that order. Setup order is unknown, because the setup batch gives every account the same `createdAt`.
+- 17 Oct 2026, M5: **Default date:** today, when it is inside a stored FY. After the last FY ends (rollover is M8), the date starts empty. The Material datepicker (`provideNativeDateAdapter`, part of `@angular/material`) only offers `firstDate` to `lastDate`.
+- 17 Oct 2026, M5: **Status codes:**
+  - `POST /api/entries` answers 422 ValidationProblem on `Date` for a date outside every FY (PRD 7.5). `GET /api/indicator` does the same.
+  - Everything else is 400: the amount (R-MON-02), a note over 200 characters, a missing or malformed date, or an unknown, archived or other user's sub-category or account.
+  - The indicator answers 404 for an unknown sub-category.
+- 17 Oct 2026, M5: An entry's note is trimmed; no note is stored as `""`. `categoryId` is copied from the sub-category. The entry and the profile's `lastBankAccountId` are written in one batch.
+- 17 Oct 2026, M5: **Indicator:**
+  - "Spent so far" is one Firestore query, `entries where subCategoryId == X and periodKey == Y`, summed as `long`. It uses only equality filters, which single-field indexes serve (Firebase "Index overview"), so `firestore.indexes.json` stays empty. The `entries (fyId asc, date desc)` index stays in M6.
+  - `percent` is rounded down and null without a plan (`PlanCalculator.Percent`).
+  - The colors (ENT-01) come from `planStatus` in `web/src/app/shared/planned-indicator.ts`, in exact minor-unit math: under 80% "Within plan", 80% to 100% "Near limit", over 100% "Over by SAR X".
+  - The bar, the chip and "After this entry" include the typed amount (the live preview).
+- 17 Oct 2026, M5: ENT-04, TBL-02 and TBL-03 (edit and delete, `PUT` and `DELETE /api/entries/{id}`) are M6. `POST` and `PUT /api/bank-accounts` are M8 (STG-04).
+- 17 Oct 2026, M5: **Add form layout** (docs/DESIGN.md "Add form"):
+  - On all sizes, Category | Sub-category and Bank account | Date sit in two-column rows; Amount and Note are full width.
+  - The indicator sits under the note.
+  - Save is the one filled button in a sticky bar, and it is full width on phones.
+  - On phones, inputs are 44 px high for touch.
+  - Category offers only categories with an active sub-category. If there is none, a card links to Plan.
+- 17 Oct 2026, M5: **Top-bar Add (PRD 5.4):** an outlined button next to the gear, shown from 768 px wide once setup is complete. It is outlined, so a page's Save stays the one filled button. The sidebar item stays.
+- 17 Oct 2026, M5: **"Saved" message (ENT-02), after the owner's local test:**
+  - The first version used a 2-second snackbar (PRD 7.7), and it was easy to miss.
+  - Now the Save bar shows "Saved SAR 125.50 to Groceries" in `--ok`, with a check icon and `role="status"`. It stays until the next amount is typed, and it is always on screen because the bar is sticky. No snackbar is used.
+- 17 Oct 2026, M5: **No error right after a save** (found in the owner's test). Material shows field errors once a form has been submitted, so the cleared amount turned red after every save. The Add page now provides an `ErrorStateMatcher` that shows errors on touched fields only. Save on an invalid form still marks every field touched.
 
 ## Open questions
 
 - Plan has no FY selector. It shows the FY that contains today, or the latest FY after that ends. Once M8 can start the next FY, should Plan get a selector (like MON-03) so the next FY can be planned before it starts?
+- M5: `today`, `firstDate` and `lastDate` come from the cached `/api/me`, which loads once per sign-in. If a tab stays open past midnight, the Add form's default date is yesterday until a reload. The top bar's current month has the same limit. Reload `/api/me` when the app comes back to the foreground?
+- M5: Should docs/DESIGN.md get rules for the inline "Saved" confirmation and the planned indicator's layout?
 - Two FYs can share a label. Example: a transition FY "FY 2027" (Jan to Jun 2027), then the start month changes again before the next rollover, giving a second transition "FY 2027" (Jul to Sep 2027). The ids differ. Should the label get a suffix?
 
 - The Angular specs (interceptor, guards, app) run locally with `npx ng test --watch=false`, but CI only builds. Add `npm test` to the workflow?

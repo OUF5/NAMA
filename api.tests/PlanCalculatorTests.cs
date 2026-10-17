@@ -108,4 +108,35 @@ public class PlanCalculatorTests
     {
         Assert.Null(PlanCalculator.NormalizeAmounts(new Dictionary<string, long> { [key] = 100 }, Fy.Periods));
     }
+
+    // ENT-01: remaining can go below 0 when over plan.
+    [Theory]
+    [InlineData(150_000, 119_999, 30_001)]
+    [InlineData(150_000, 150_000, 0)]
+    [InlineData(150_000, 160_000, -10_000)]
+    [InlineData(0, 10_000, -10_000)]
+    public void Remaining_is_planned_minus_spent(long planned, long spent, long remaining)
+    {
+        Assert.Equal(remaining, PlanCalculator.Remaining(planned, spent));
+    }
+
+    // ENT-01: rounded down, so 79.99% stays below the 80% "Near limit" line.
+    [Theory]
+    [InlineData(150_000, 0, 0)]
+    [InlineData(150_000, 119_999, 79)]
+    [InlineData(150_000, 120_000, 80)]
+    [InlineData(150_000, 150_000, 100)]
+    [InlineData(150_000, 150_001, 100)]
+    [InlineData(150_000, 300_000, 200)]
+    public void Percent_is_rounded_down(long planned, long spent, int percent)
+    {
+        Assert.Equal(percent, PlanCalculator.Percent(planned, spent));
+    }
+
+    // "No plan for this month".
+    [Fact]
+    public void Percent_is_null_without_a_plan()
+    {
+        Assert.Null(PlanCalculator.Percent(0, 10_000));
+    }
 }

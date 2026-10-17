@@ -8,7 +8,7 @@ describe('App', () => {
   const me = signal<Me | null>(null);
 
   beforeEach(async () => {
-    me.set({ setupCompleted: true, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null });
+    me.set({ setupCompleted: true, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null });
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [provideRouter([]), { provide: MeService, useValue: { me } }],
@@ -33,10 +33,14 @@ describe('App', () => {
         timezone: 'Asia/Riyadh',
         fiscalStartMonth: 1,
         paydayDay: 27,
+        lastBankAccountId: null,
       },
       currentFyId: '2026-01',
       currentPeriodKey: '2026-09',
       currentPeriod: { key: '2026-09', label: 'Sep 2026', startDate: '2026-09-27', endDate: '2026-10-26' },
+      today: '2026-10-17',
+      firstDate: '2026-01-27',
+      lastDate: '2027-01-26',
     });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -53,6 +57,13 @@ describe('App', () => {
     expect(labels).toEqual(['Dashboard', 'Months', 'Add', 'Entries', 'Plan']);
   });
 
+  it('should show the Add button in the top bar (PRD 5.4)', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('.top-add')?.getAttribute('href')).toBe('/add');
+  });
+
   it('should hide navigation and settings when signed out or not allowed', async () => {
     me.set(null);
     const fixture = TestBed.createComponent(App);
@@ -64,11 +75,12 @@ describe('App', () => {
   });
 
   it('should hide navigation and settings until setup is complete', async () => {
-    me.set({ setupCompleted: false, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null });
+    me.set({ setupCompleted: false, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.nav')).toBeNull();
     expect(compiled.querySelector('[aria-label="Settings"]')).toBeNull();
+    expect(compiled.querySelector('.top-add')).toBeNull();
   });
 });

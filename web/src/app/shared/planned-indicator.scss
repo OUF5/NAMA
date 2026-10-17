@@ -1,0 +1,86 @@
+// ENT-01 colors with docs/DESIGN.md chips and progress bars. Tokens only.
+@use '@angular/material' as mat;
+
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.chip.ok {
+  color: var(--ok);
+  background: var(--ok-bg);
+}
+
+.chip.warn {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.chip.danger {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+mat-progress-bar.ok {
+  @include mat.progress-bar-overrides((active-indicator-color: var(--ok)));
+}
+
+mat-progress-bar.warn {
+  @include mat.progress-bar-overrides((active-indicator-color: var(--warn)));
+}
+
+mat-progress-bar.danger {
+  @include mat.progress-bar-overrides((active-indicator-color: var(--danger)));
+}
+
+.numbers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 0;
+
+  dd {
+    margin: 0;
+  }
+}
+
+.after,
+.no-plan {
+  margin: 0;
+}
+
+.after {
+  color: var(--text-2);
+
+  &.warn {
+    color: var(--warn);
+  }
+
+  &.danger {
+    color: var(--danger);
+  }
+}
+
+.no-plan {
+  color: var(--text-2);
+
+  + .caption {
+    margin: 0;
+  }
+}

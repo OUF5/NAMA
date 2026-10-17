@@ -15,7 +15,8 @@ public static class MeEndpoint
         string Currency,
         string Timezone,
         int FiscalStartMonth,
-        int PaydayDay);
+        int PaydayDay,
+        string? LastBankAccountId);
 
     // DateOnly is sent as YYYY-MM-DD.
     public record PeriodDto(string Key, string Label, DateOnly StartDate, DateOnly EndDate)
@@ -23,12 +24,17 @@ public static class MeEndpoint
         public static PeriodDto From(Period period) => new(period.Key, period.Label, period.StartDate, period.EndDate);
     }
 
+    // Today (R-CAL-10) and the first and last day of the stored FYs (FY-03, R-STA-03) are for the
+    // Add form, so it needs no extra call (M5, NFR-01).
     public record MeResponse(
         bool SetupCompleted,
         ProfileDto? Profile,
         string? CurrentFyId,
         string? CurrentPeriodKey,
-        PeriodDto? CurrentPeriod);
+        PeriodDto? CurrentPeriod,
+        DateOnly? Today,
+        DateOnly? FirstDate,
+        DateOnly? LastDate);
 
     public static IEndpointRouteBuilder MapMe(this IEndpointRouteBuilder api)
     {
@@ -44,16 +50,21 @@ public static class MeEndpoint
         var profile = await store.GetProfileAsync(uid);
         if (profile is null)
         {
-            return new MeResponse(SetupCompleted: false, Profile: null, CurrentFyId: null, CurrentPeriodKey: null, CurrentPeriod: null);
+            return new MeResponse(SetupCompleted: false, Profile: null, CurrentFyId: null, CurrentPeriodKey: null,
+                CurrentPeriod: null, Today: null, FirstDate: null, LastDate: null);
         }
         var today = FiscalCalendar.Today(time, profile.Timezone);
-        var current = FiscalCalendar.FindPeriod(await store.GetFiscalYearsAsync(uid), today);
+        var fiscalYears = await store.GetFiscalYearsAsync(uid);
+        var current = FiscalCalendar.FindPeriod(fiscalYears, today);
         return new MeResponse(
             profile.SetupCompleted,
             new ProfileDto(profile.DisplayName, profile.Email, profile.ProjectName, profile.Currency,
-                profile.Timezone, profile.FiscalStartMonth, profile.PaydayDay),
+                profile.Timezone, profile.FiscalStartMonth, profile.PaydayDay, profile.LastBankAccountId),
             current?.FiscalYear.Id,
             current?.Period.Key,
-            current is { } found ? PeriodDto.From(found.Period) : null);
+            current is { } found ? PeriodDto.From(found.Period) : null,
+            today,
+            fiscalYears.Count == 0 ? null : fiscalYears.Min(fiscalYear => fiscalYear.StartDate),
+            fiscalYears.Count == 0 ? null : fiscalYears.Max(fiscalYear => fiscalYear.EndDate));
     }
 }

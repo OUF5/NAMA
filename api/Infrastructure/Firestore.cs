@@ -130,6 +130,40 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
             .Select(document => FirestoreDocuments.ToIncome(document.Id, document.ConvertTo<IncomeDocument>()))
             .ToList();
     }
+
+    public async Task<IReadOnlyList<BankAccount>> GetBankAccountsAsync(string uid)
+    {
+        var snapshot = await User(uid).Collection("bankAccounts").GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => FirestoreDocuments.ToBankAccount(document.Id, document.ConvertTo<BankAccountDocument>()))
+            .ToList();
+    }
+
+    // Decision 5: the entry and the profile's lastBankAccountId are written together.
+    public Task AddEntryAsync(string uid, Entry entry)
+    {
+        var user = User(uid);
+        var batch = db.StartBatch();
+        batch.Create(user.Collection("entries").Document(entry.Id), FirestoreDocuments.ToDocument(entry));
+        batch.Update(user, new Dictionary<string, object>
+        {
+            ["lastBankAccountId"] = entry.BankAccountId,
+            ["updatedAt"] = FieldValue.ServerTimestamp,
+        });
+        return batch.CommitAsync();
+    }
+
+    // Equality filters only, so single-field indexes serve it (no composite index).
+    public async Task<IReadOnlyList<Entry>> GetEntriesAsync(string uid, string subCategoryId, string periodKey)
+    {
+        var snapshot = await User(uid).Collection("entries")
+            .WhereEqualTo("subCategoryId", subCategoryId)
+            .WhereEqualTo("periodKey", periodKey)
+            .GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => FirestoreDocuments.ToEntry(document.Id, document.ConvertTo<EntryDocument>()))
+            .ToList();
+    }
 }
 
 // PRD 7.4 documents: camelCase fields, long minor units, YYYY-MM-DD date strings,
@@ -230,6 +264,21 @@ public sealed class PlanDocument
     [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
 }
 
+[FirestoreData]
+public sealed class EntryDocument
+{
+    [FirestoreProperty("date")] public string Date { get; set; } = "";
+    [FirestoreProperty("periodKey")] public string PeriodKey { get; set; } = "";
+    [FirestoreProperty("fyId")] public string FyId { get; set; } = "";
+    [FirestoreProperty("categoryId")] public string CategoryId { get; set; } = "";
+    [FirestoreProperty("subCategoryId")] public string SubCategoryId { get; set; } = "";
+    [FirestoreProperty("bankAccountId")] public string BankAccountId { get; set; } = "";
+    [FirestoreProperty("amountMinor")] public long AmountMinor { get; set; }
+    [FirestoreProperty("note")] public string Note { get; set; } = "";
+    [FirestoreProperty("createdAt"), ServerTimestamp] public Timestamp CreatedAt { get; set; }
+    [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
+}
+
 // Domain ↔ document. Dates become YYYY-MM-DD strings only here (PRD 7.4).
 public static class FirestoreDocuments
 {
@@ -295,7 +344,27 @@ public static class FirestoreDocuments
     {
         Name = account.Name,
         NameLower = Names.Lower(account.Name),
+        Archived = account.Archived,
     };
+
+    public static BankAccount ToBankAccount(string id, BankAccountDocument document) =>
+        new(id, document.Name, document.Archived);
+
+    public static EntryDocument ToDocument(Entry entry) => new()
+    {
+        Date = ToDateString(entry.Date),
+        PeriodKey = entry.PeriodKey,
+        FyId = entry.FyId,
+        CategoryId = entry.CategoryId,
+        SubCategoryId = entry.SubCategoryId,
+        BankAccountId = entry.BankAccountId,
+        AmountMinor = entry.AmountMinor,
+        Note = entry.Note,
+    };
+
+    public static Entry ToEntry(string id, EntryDocument document) => new(
+        id, ToDate(document.Date), document.PeriodKey, document.FyId, document.CategoryId,
+        document.SubCategoryId, document.BankAccountId, document.AmountMinor, document.Note);
 
     public static IncomeItem ToIncome(string id, IncomeDocument document) => new(
         id, document.Kind == "salary" ? IncomeKind.Salary : IncomeKind.Additional, document.Label,

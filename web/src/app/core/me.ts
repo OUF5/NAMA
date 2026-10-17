@@ -11,6 +11,8 @@ export interface Profile {
   timezone: string;
   fiscalStartMonth: number;
   paydayDay: number;
+  // Decision 5: the Add form defaults to it; null before the first entry.
+  lastBankAccountId: string | null;
 }
 
 // GET /api/me (PRD 7.5). The current FY and month are null when no FY contains today.
@@ -20,6 +22,11 @@ export interface Me {
   currentFyId: string | null;
   currentPeriodKey: string | null;
   currentPeriod: PeriodInfo | null;
+  // YYYY-MM-DD. Today in the profile time zone (R-CAL-10), and the first and last day of the
+  // stored FYs (FY-03). Null before setup.
+  today: string | null;
+  firstDate: string | null;
+  lastDate: string | null;
 }
 
 // Loads /api/me once per sign-in.
@@ -43,6 +50,11 @@ export class MeService {
   // POST /api/setup answers with the new /api/me, so no second call is needed.
   set(me: Me): void {
     this.me.set(me);
+  }
+
+  // POST /api/entries also sets lastBankAccountId on the profile (decision 5).
+  setLastBankAccount(id: string): void {
+    this.me.update((me) => (me?.profile ? { ...me, profile: { ...me.profile, lastBankAccountId: id } } : me));
   }
 
   clear(): void {

@@ -26,8 +26,8 @@ public static class ApiCalls
     // A different user per test, so tests sharing the in-memory store don't meet.
     public static string NewSub() => "user-" + Guid.NewGuid().ToString("N");
 
-    // FY 2026 of the section 3 example (payday 27, Jan to Dec 2026), categories Food and Transport,
-    // and the given income items.
+    // FY 2026 of the section 3 example (payday 27, Jan to Dec 2026), bank accounts SNB and
+    // Al Rajhi, categories Food and Transport, and the given income items.
     public static async Task<string> SetUpUser(ApiFactory factory, IReadOnlyList<IncomeItem>? incomes = null, FiscalYear? fiscalYear = null)
     {
         var sub = NewSub();
@@ -36,7 +36,7 @@ public static class ApiCalls
             profile,
             fiscalYear ?? FiscalCalendar.FirstFiscalYear(new DateOnly(2026, 10, 17), 1, 27),
             incomes ?? [],
-            [new BankAccount("bank", "SNB")],
+            [new BankAccount("bank", "SNB"), new BankAccount("rajhi", "Al Rajhi")],
             [new Category("food", "Food", 0), new Category("transport", "Transport", 1)]));
         return sub;
     }

@@ -90,4 +90,26 @@ public class FirestoreMappingTests
         Assert.Equal(salary, FirestoreDocuments.ToIncome("a", FirestoreDocuments.ToDocument(salary)));
         Assert.Equal(once, FirestoreDocuments.ToIncome("b", FirestoreDocuments.ToDocument(once)));
     }
+
+    // PRD 7.4 entries: YYYY-MM-DD date, long minor units, periodKey and fyId set by the API.
+    [Fact]
+    public void Entry_comes_back_unchanged()
+    {
+        var entry = new Entry("e", new DateOnly(2026, 10, 17), "2026-09", "2026-01", "food", "groceries", "bank", 12_550, "Weekly shop");
+
+        var document = FirestoreDocuments.ToDocument(entry);
+
+        Assert.Equal(("2026-10-17", "2026-09", "2026-01", "food", "groceries", "bank", 12_550L, "Weekly shop"),
+            (document.Date, document.PeriodKey, document.FyId, document.CategoryId, document.SubCategoryId,
+             document.BankAccountId, document.AmountMinor, document.Note));
+        Assert.Equal(entry, FirestoreDocuments.ToEntry("e", document));
+    }
+
+    [Fact]
+    public void Bank_account_comes_back_unchanged()
+    {
+        var account = new BankAccount("a", "Al Rajhi", Archived: true);
+
+        Assert.Equal(account, FirestoreDocuments.ToBankAccount("a", FirestoreDocuments.ToDocument(account)));
+    }
 }

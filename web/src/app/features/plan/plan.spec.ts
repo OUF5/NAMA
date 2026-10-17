@@ -26,10 +26,13 @@ function plansResponse(amounts: Record<string, number> = {}): PlansResponse {
 describe('Plan (PRD 5.3)', () => {
   const me: Me = {
     setupCompleted: true,
-    profile: { displayName: 'Owner', email: 'o@example.com', projectName: 'Home', currency: 'SAR', timezone: 'Asia/Riyadh', fiscalStartMonth: 1, paydayDay: 27 },
+    profile: { displayName: 'Owner', email: 'o@example.com', projectName: 'Home', currency: 'SAR', timezone: 'Asia/Riyadh', fiscalStartMonth: 1, paydayDay: 27, lastBankAccountId: null },
     currentFyId: '2026-01',
     currentPeriodKey: '2026-09',
     currentPeriod: periods[8],
+    today: '2026-10-17',
+    firstDate: '2026-01-27',
+    lastDate: '2027-01-26',
   };
   const meService = { me: signal(me), load: async () => me };
   let http: HttpTestingController;

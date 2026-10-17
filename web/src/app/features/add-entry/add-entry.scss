@@ -1,0 +1,124 @@
+// docs/DESIGN.md "Add form (ENT)": one phone screen, Save always visible, one filled button,
+// outline inputs, tokens only.
+@use '@angular/material' as mat;
+
+h1 {
+  margin-bottom: 16px;
+}
+
+.card {
+  box-sizing: border-box;
+  max-width: 640px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+mat-form-field {
+  min-width: 0;
+}
+
+.indicator {
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+}
+
+.empty h2 {
+  margin-bottom: 8px;
+}
+
+.note,
+.error {
+  margin: 0;
+}
+
+.note {
+  color: var(--text-2);
+}
+
+.error {
+  color: var(--danger);
+}
+
+// Sticks to the bottom of the scrolling content, so Save never leaves the screen.
+.actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  background: var(--surface);
+}
+
+// ENT-02: color, icon and text, so color is never the only signal.
+.saved {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  color: var(--ok);
+
+  mat-icon {
+    flex: none;
+    color: var(--ok);
+  }
+}
+
+// Phones: large touch targets (ENT-03, UX-07) and a full-width Save under the thumb.
+@media (max-width: 767.98px) {
+  :host {
+    @include mat.form-field-overrides(
+      (
+        container-height: 44px,
+        container-vertical-padding: 10px,
+      )
+    );
+  }
+
+  h1 {
+    margin-bottom: 12px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  // The "Saved" line sits above a full-width Save.
+  .actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 4px 0 0;
+
+    button {
+      height: 44px;
+    }
+  }
+
+  .saved {
+    margin-bottom: 8px;
+  }
+
+  // Takes no space until something is saved, but stays in the page for screen readers.
+  .saved.empty {
+    height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+}

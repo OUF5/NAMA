@@ -23,3 +23,15 @@ export function formatDate(date: string): string {
 export function periodWithDates(period: PeriodInfo): string {
   return `${period.label} · ${formatDay(period.startDate)} to ${formatDay(period.endDate)}`;
 }
+
+// For the date picker: a local Date and a YYYY-MM-DD string, without time zone shifts.
+export function toDateString(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+export function fromDateString(date: string): Date {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}

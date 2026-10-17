@@ -1,0 +1,37 @@
+<div class="head">
+  <span class="caption">{{ periodText() }}</span>
+  @if (hasPlan()) {
+    <span class="chip" [class]="status()">{{ chip() }}</span>
+  }
+</div>
+
+@if (hasPlan()) {
+  <mat-progress-bar
+    mode="determinate"
+    [class]="status()"
+    [value]="barValue()"
+    [attr.aria-label]="'Share of the plan spent: ' + chip()"
+  />
+  <dl class="numbers">
+    <div>
+      <dt class="caption">Planned</dt>
+      <dd class="money">{{ money(planned()) }}</dd>
+    </div>
+    <div>
+      <dt class="caption">Spent so far</dt>
+      <dd class="money">{{ money(spent()) }}</dd>
+    </div>
+    <div>
+      <dt class="caption">Remaining</dt>
+      <dd class="money">{{ money(planned() - spent()) }}</dd>
+    </div>
+  </dl>
+  @if (pending() > 0) {
+    <p class="after money" [class]="status()">{{ after() }}</p>
+  }
+} @else {
+  <p class="no-plan">No plan for this month</p>
+  <p class="caption money">
+    Spent so far {{ money(spent()) }}@if (pending() > 0) {<span>, {{ money(total()) }} after this entry</span>}
+  </p>
+}

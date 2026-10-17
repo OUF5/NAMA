@@ -1,0 +1,130 @@
+<h1>Add entry</h1>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+} @else if (loaded()) {
+  @if (categoryOptions().length === 0) {
+    <!-- UX-03 -->
+    <section class="card empty">
+      <h2>Add a sub-category first</h2>
+      <p class="note">
+        Every entry belongs to a sub-category, for example Groceries under Food.
+        <a routerLink="/plan">Open Plan</a> to add one.
+      </p>
+    </section>
+  } @else if (accountOptions().length === 0) {
+    <section class="card empty">
+      <h2>No bank account</h2>
+      <p class="note">Every entry needs a bank account that is not archived.</p>
+    </section>
+  } @else {
+    <form class="card" [formGroup]="form" (ngSubmit)="save()" novalidate>
+      <div class="row">
+        <mat-form-field subscriptSizing="dynamic">
+          <mat-label>Category</mat-label>
+          <mat-select formControlName="categoryId">
+            @for (category of categoryOptions(); track category.id) {
+              <mat-option [value]="category.id">{{ category.name }}</mat-option>
+            }
+          </mat-select>
+          <mat-error>Choose a category.</mat-error>
+        </mat-form-field>
+
+        <mat-form-field subscriptSizing="dynamic">
+          <mat-label>Sub-category</mat-label>
+          <mat-select formControlName="subCategoryId">
+            @for (sub of subCategoryOptions(); track sub.id) {
+              <mat-option [value]="sub.id">{{ sub.name }}</mat-option>
+            }
+          </mat-select>
+          @if (form.controls.subCategoryId.hasError('server')) {
+            <mat-error>{{ form.controls.subCategoryId.getError('server') }}</mat-error>
+          } @else {
+            <mat-error>Choose a sub-category.</mat-error>
+          }
+        </mat-form-field>
+      </div>
+
+      <!-- ENT-03: the numeric keypad on phones. -->
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Amount ({{ currency() }})</mat-label>
+        <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
+        @if (form.controls.amount.hasError('server')) {
+          <mat-error>{{ form.controls.amount.getError('server') }}</mat-error>
+        } @else {
+          <mat-error>More than 0, at most 10,000,000, with up to 2 decimals.</mat-error>
+        }
+      </mat-form-field>
+
+      <div class="row">
+        <mat-form-field subscriptSizing="dynamic">
+          <mat-label>Bank account</mat-label>
+          <mat-select formControlName="bankAccountId">
+            @for (account of accountOptions(); track account.id) {
+              <mat-option [value]="account.id">{{ account.name }}</mat-option>
+            }
+          </mat-select>
+          @if (form.controls.bankAccountId.hasError('server')) {
+            <mat-error>{{ form.controls.bankAccountId.getError('server') }}</mat-error>
+          } @else {
+            <mat-error>Choose a bank account.</mat-error>
+          }
+        </mat-form-field>
+
+        <!-- FY-03: only dates inside the stored FYs. -->
+        <mat-form-field subscriptSizing="dynamic">
+          <mat-label>Date</mat-label>
+          <input matInput formControlName="date" [matDatepicker]="picker" [min]="minDate()" [max]="maxDate()" />
+          <mat-datepicker-toggle matIconSuffix [for]="picker" />
+          <mat-datepicker #picker />
+          @if (form.controls.date.hasError('server')) {
+            <mat-error>{{ form.controls.date.getError('server') }}</mat-error>
+          } @else if (form.controls.date.hasError('matDatepickerMin') || form.controls.date.hasError('matDatepickerMax')) {
+            <mat-error>Pick a date from {{ dateRange() }}.</mat-error>
+          } @else {
+            <mat-error>Pick a date.</mat-error>
+          }
+        </mat-form-field>
+      </div>
+
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Note (optional)</mat-label>
+        <input matInput formControlName="note" [maxlength]="noteMax" autocomplete="off" />
+        @if (noteLength() > 0) {
+          <mat-hint align="end">{{ noteLength() }}/{{ noteMax }}</mat-hint>
+        }
+        @if (form.controls.note.hasError('server')) {
+          <mat-error>{{ form.controls.note.getError('server') }}</mat-error>
+        } @else {
+          <mat-error>At most {{ noteMax }} characters.</mat-error>
+        }
+      </mat-form-field>
+
+      @if (indicator(); as current) {
+        <app-planned-indicator
+          class="indicator"
+          [period]="current.period"
+          [planned]="toMinor(current.planned)"
+          [spent]="toMinor(current.spent)"
+          [pending]="pending()"
+          [currency]="currency()"
+        />
+      }
+
+      @if (saveError()) {
+        <p class="error" role="alert">{{ saveError() }}</p>
+      }
+
+      <!-- docs/DESIGN.md "Add form": Save is always visible, and so is ENT-02 "Saved". -->
+      <div class="actions">
+        <p class="saved" role="status" [class.empty]="!saved()">
+          @if (saved()) {
+            <mat-icon aria-hidden="true">check_circle</mat-icon>
+            <span>{{ saved() }}</span>
+          }
+        </p>
+        <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+      </div>
+    </form>
+  }
+}

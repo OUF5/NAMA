@@ -14,7 +14,20 @@ public sealed record UserProfile(
     bool SetupCompleted,
     string? LastBankAccountId);
 
-public sealed record BankAccount(string Id, string Name);
+public sealed record BankAccount(string Id, string Name, bool Archived = false);
+
+// PRD 7.4 entry. PeriodKey and FyId are set by the API from Date (R-CAL-09); CategoryId is
+// copied from the sub-category for filtering.
+public sealed record Entry(
+    string Id,
+    DateOnly Date,
+    string PeriodKey,
+    string FyId,
+    string CategoryId,
+    string SubCategoryId,
+    string BankAccountId,
+    long AmountMinor,
+    string Note);
 
 public sealed record Category(string Id, string Name, int SortOrder, bool Archived = false);
 
@@ -60,4 +73,12 @@ public interface IUserStore
     Task SetPlanAsync(string uid, string fyId, PlanAmounts plan);
 
     Task<IReadOnlyList<IncomeItem>> GetIncomesAsync(string uid);
+
+    Task<IReadOnlyList<BankAccount>> GetBankAccountsAsync(string uid);
+
+    // Creates the entry and sets the profile's lastBankAccountId in one batch (decision 5).
+    Task AddEntryAsync(string uid, Entry entry);
+
+    // The entries of one sub-category in one month (ENT-01 "spent so far").
+    Task<IReadOnlyList<Entry>> GetEntriesAsync(string uid, string subCategoryId, string periodKey);
 }
