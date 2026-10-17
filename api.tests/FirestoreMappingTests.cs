@@ -53,4 +53,41 @@ public class FirestoreMappingTests
         Assert.Equal(("Bills & Utilities", "bills & utilities", 3, false),
             (category.Name, category.NameLower, category.SortOrder, category.Archived));
     }
+
+    [Fact]
+    public void Categories_and_sub_categories_come_back_unchanged()
+    {
+        var category = new Category("c", "Food", 2, Archived: true);
+        var sub = new SubCategory("s", "c", "Dining Out", 1);
+
+        var subDocument = FirestoreDocuments.ToDocument(sub);
+
+        Assert.Equal(("c", "dining out"), (subDocument.CategoryId, subDocument.NameLower));
+        Assert.Equal(category, FirestoreDocuments.ToCategory("c", FirestoreDocuments.ToDocument(category)));
+        Assert.Equal(sub, FirestoreDocuments.ToSubCategory("s", subDocument));
+    }
+
+    // PRD 7.4 plans/{fyId}_{subCategoryId}: amounts by month key in long minor units.
+    [Fact]
+    public void Plan_keeps_minor_units_by_month_key()
+    {
+        var plan = new PlanAmounts("s", "c", new Dictionary<string, long> { ["2026-01"] = 150_050 });
+
+        var document = FirestoreDocuments.ToDocument("2026-01", plan);
+
+        Assert.Equal(("2026-01", "s", "c", 150_050L), (document.FyId, document.SubCategoryId, document.CategoryId, document.Amounts["2026-01"]));
+        var back = FirestoreDocuments.ToPlan(document);
+        Assert.Equal((plan.SubCategoryId, plan.CategoryId), (back.SubCategoryId, back.CategoryId));
+        Assert.Equal(plan.Amounts, back.Amounts);
+    }
+
+    [Fact]
+    public void Income_comes_back_unchanged()
+    {
+        var salary = new IncomeItem("a", IncomeKind.Salary, "Salary", 1_500_050, "2026-01", null);
+        var once = new IncomeItem("b", IncomeKind.Additional, "Bonus", 50_025, "2026-09", "2026-09");
+
+        Assert.Equal(salary, FirestoreDocuments.ToIncome("a", FirestoreDocuments.ToDocument(salary)));
+        Assert.Equal(once, FirestoreDocuments.ToIncome("b", FirestoreDocuments.ToDocument(once)));
+    }
 }

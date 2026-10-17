@@ -69,6 +69,67 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
             return false;
         }
     }
+
+    public async Task<IReadOnlyList<Category>> GetCategoriesAsync(string uid)
+    {
+        var snapshot = await User(uid).Collection("categories").GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => FirestoreDocuments.ToCategory(document.Id, document.ConvertTo<CategoryDocument>()))
+            .ToList();
+    }
+
+    public async Task<IReadOnlyList<SubCategory>> GetSubCategoriesAsync(string uid)
+    {
+        var snapshot = await User(uid).Collection("subCategories").GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => FirestoreDocuments.ToSubCategory(document.Id, document.ConvertTo<SubCategoryDocument>()))
+            .ToList();
+    }
+
+    public Task AddCategoryAsync(string uid, Category category) =>
+        User(uid).Collection("categories").Document(category.Id).CreateAsync(FirestoreDocuments.ToDocument(category));
+
+    public Task AddSubCategoryAsync(string uid, SubCategory subCategory) =>
+        User(uid).Collection("subCategories").Document(subCategory.Id).CreateAsync(FirestoreDocuments.ToDocument(subCategory));
+
+    public async Task<IReadOnlyList<PlanAmounts>> GetPlansAsync(string uid, string fyId)
+    {
+        var snapshot = await User(uid).Collection("plans").WhereEqualTo("fyId", fyId).GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => FirestoreDocuments.ToPlan(document.ConvertTo<PlanDocument>()))
+            .ToList();
+    }
+
+    // PRD 7.4 plans/{fyId}_{subCategoryId}. An existing plan only gets new amounts and updatedAt,
+    // so createdAt is kept.
+    public Task SetPlanAsync(string uid, string fyId, PlanAmounts plan)
+    {
+        var reference = User(uid).Collection("plans").Document($"{fyId}_{plan.SubCategoryId}");
+        return db.RunTransactionAsync(async transaction =>
+        {
+            var snapshot = await transaction.GetSnapshotAsync(reference);
+            if (snapshot.Exists)
+            {
+                transaction.Update(reference, new Dictionary<string, object>
+                {
+                    ["amounts"] = plan.Amounts.ToDictionary(),
+                    ["updatedAt"] = FieldValue.ServerTimestamp,
+                });
+            }
+            else
+            {
+                transaction.Create(reference, FirestoreDocuments.ToDocument(fyId, plan));
+            }
+        });
+    }
+
+    public async Task<IReadOnlyList<IncomeItem>> GetIncomesAsync(string uid)
+    {
+        var snapshot = await User(uid).Collection("incomes").GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => FirestoreDocuments.ToIncome(document.Id, document.ConvertTo<IncomeDocument>()))
+            .ToList();
+    }
 }
 
 // PRD 7.4 documents: camelCase fields, long minor units, YYYY-MM-DD date strings,
@@ -145,6 +206,30 @@ public sealed class CategoryDocument
     [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
 }
 
+[FirestoreData]
+public sealed class SubCategoryDocument
+{
+    [FirestoreProperty("categoryId")] public string CategoryId { get; set; } = "";
+    [FirestoreProperty("name")] public string Name { get; set; } = "";
+    [FirestoreProperty("nameLower")] public string NameLower { get; set; } = "";
+    [FirestoreProperty("sortOrder")] public int SortOrder { get; set; }
+    [FirestoreProperty("archived")] public bool Archived { get; set; }
+    [FirestoreProperty("createdAt"), ServerTimestamp] public Timestamp CreatedAt { get; set; }
+    [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
+}
+
+[FirestoreData]
+public sealed class PlanDocument
+{
+    [FirestoreProperty("fyId")] public string FyId { get; set; } = "";
+    [FirestoreProperty("subCategoryId")] public string SubCategoryId { get; set; } = "";
+    [FirestoreProperty("categoryId")] public string CategoryId { get; set; } = "";
+    // Month key → amount in minor units (R-MON-01).
+    [FirestoreProperty("amounts")] public Dictionary<string, long> Amounts { get; set; } = [];
+    [FirestoreProperty("createdAt"), ServerTimestamp] public Timestamp CreatedAt { get; set; }
+    [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
+}
+
 // Domain ↔ document. Dates become YYYY-MM-DD strings only here (PRD 7.4).
 public static class FirestoreDocuments
 {
@@ -212,10 +297,41 @@ public static class FirestoreDocuments
         NameLower = Names.Lower(account.Name),
     };
 
+    public static IncomeItem ToIncome(string id, IncomeDocument document) => new(
+        id, document.Kind == "salary" ? IncomeKind.Salary : IncomeKind.Additional, document.Label,
+        document.AmountMinor, document.FromPeriodKey, document.ToPeriodKey);
+
     public static CategoryDocument ToDocument(Category category) => new()
     {
         Name = category.Name,
         NameLower = Names.Lower(category.Name),
         SortOrder = category.SortOrder,
+        Archived = category.Archived,
     };
+
+    public static Category ToCategory(string id, CategoryDocument document) =>
+        new(id, document.Name, document.SortOrder, document.Archived);
+
+    public static SubCategoryDocument ToDocument(SubCategory subCategory) => new()
+    {
+        CategoryId = subCategory.CategoryId,
+        Name = subCategory.Name,
+        NameLower = Names.Lower(subCategory.Name),
+        SortOrder = subCategory.SortOrder,
+        Archived = subCategory.Archived,
+    };
+
+    public static SubCategory ToSubCategory(string id, SubCategoryDocument document) =>
+        new(id, document.CategoryId, document.Name, document.SortOrder, document.Archived);
+
+    public static PlanDocument ToDocument(string fyId, PlanAmounts plan) => new()
+    {
+        FyId = fyId,
+        SubCategoryId = plan.SubCategoryId,
+        CategoryId = plan.CategoryId,
+        Amounts = plan.Amounts.ToDictionary(),
+    };
+
+    public static PlanAmounts ToPlan(PlanDocument document) =>
+        new(document.SubCategoryId, document.CategoryId, document.Amounts);
 }

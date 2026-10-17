@@ -1,3 +1,6 @@
+using Api.Features.Categories;
+using Api.Features.FiscalYears;
+using Api.Features.Plans;
 using Api.Features.Profile;
 using Api.Features.Setup;
 using Api.Infrastructure;
@@ -53,5 +56,8 @@ api.MapGet("/health", (IConfiguration config) =>
 
 api.MapMe();
 api.MapSetup();
+api.MapFiscalYears();
+api.MapCategories();
+api.MapPlans();
 
 app.Run();

@@ -8,17 +8,68 @@ namespace Api.Tests;
 // checked by hand against the emulator.
 public sealed class InMemoryUserStore : IUserStore
 {
-    private readonly ConcurrentDictionary<string, SetupData> _users = new();
+    private sealed class UserData(SetupData setup)
+    {
+        public SetupData Setup { get; } = setup;
+        public List<Category> Categories { get; } = [.. setup.Categories];
+        public List<SubCategory> SubCategories { get; } = [];
+        // Key: {fyId}_{subCategoryId}, as in Firestore (PRD 7.4).
+        public Dictionary<string, (string FyId, PlanAmounts Plan)> Plans { get; } = [];
+    }
 
-    public SetupData? Saved(string uid) => _users.GetValueOrDefault(uid);
+    private readonly ConcurrentDictionary<string, UserData> _users = new();
+
+    // What the wizard saved, unchanged by later adds.
+    public SetupData? Saved(string uid) => _users.GetValueOrDefault(uid)?.Setup;
 
     public Task<UserProfile?> GetProfileAsync(string uid) =>
-        Task.FromResult(_users.TryGetValue(uid, out var data) ? data.Profile : null);
+        Task.FromResult(_users.TryGetValue(uid, out var data) ? data.Setup.Profile : null);
 
     public Task<IReadOnlyList<FiscalYear>> GetFiscalYearsAsync(string uid) =>
-        Task.FromResult<IReadOnlyList<FiscalYear>>(_users.TryGetValue(uid, out var data) ? [data.FiscalYear] : []);
+        Task.FromResult<IReadOnlyList<FiscalYear>>(_users.TryGetValue(uid, out var data) ? [data.Setup.FiscalYear] : []);
 
-    public Task<bool> CreateSetupAsync(string uid, SetupData setup) => Task.FromResult(_users.TryAdd(uid, setup));
+    public Task<bool> CreateSetupAsync(string uid, SetupData setup) => Task.FromResult(_users.TryAdd(uid, new UserData(setup)));
+
+    public Task<IReadOnlyList<Category>> GetCategoriesAsync(string uid) =>
+        Read<Category>(uid, data => data.Categories);
+
+    public Task<IReadOnlyList<SubCategory>> GetSubCategoriesAsync(string uid) =>
+        Read<SubCategory>(uid, data => data.SubCategories);
+
+    public Task AddCategoryAsync(string uid, Category category) => Write(uid, data => data.Categories.Add(category));
+
+    public Task AddSubCategoryAsync(string uid, SubCategory subCategory) => Write(uid, data => data.SubCategories.Add(subCategory));
+
+    public Task<IReadOnlyList<PlanAmounts>> GetPlansAsync(string uid, string fyId) =>
+        Read<PlanAmounts>(uid, data => data.Plans.Values.Where(entry => entry.FyId == fyId).Select(entry => entry.Plan));
+
+    public Task SetPlanAsync(string uid, string fyId, PlanAmounts plan) =>
+        Write(uid, data => data.Plans[$"{fyId}_{plan.SubCategoryId}"] = (fyId, plan));
+
+    public Task<IReadOnlyList<IncomeItem>> GetIncomesAsync(string uid) =>
+        Read<IncomeItem>(uid, data => data.Setup.Incomes);
+
+    private Task<IReadOnlyList<T>> Read<T>(string uid, Func<UserData, IEnumerable<T>> select)
+    {
+        if (!_users.TryGetValue(uid, out var data))
+        {
+            return Task.FromResult<IReadOnlyList<T>>([]);
+        }
+        lock (data)
+        {
+            return Task.FromResult<IReadOnlyList<T>>(select(data).ToList());
+        }
+    }
+
+    private Task Write(string uid, Action<UserData> change)
+    {
+        var data = _users[uid];
+        lock (data)
+        {
+            change(data);
+        }
+        return Task.CompletedTask;
+    }
 }
 
 // A clock the test can set (R-CAL-10).

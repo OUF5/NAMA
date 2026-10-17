@@ -1,5 +1,5 @@
 import { FormControl } from '@angular/forms';
-import { amountValidator, formatMoney, parseAmount } from './money';
+import { amountValidator, formatMoney, minorToInput, parseAmount, toMinor } from './money';
 
 describe('money (R-MON-01, R-MON-02)', () => {
   it('parses typed amounts into minor units', () => {
@@ -30,5 +30,16 @@ describe('money (R-MON-01, R-MON-02)', () => {
     expect(formatMoney(124_000, 'SAR')).toBe('SAR 1,240');
     expect(formatMoney(12_550, 'SAR')).toBe('SAR 125.50');
     expect(formatMoney(0, 'USD')).toBe('USD 0');
+    expect(formatMoney(-25_075, 'SAR')).toBe('SAR -250.75');
+  });
+
+  it('turns API decimals into minor units and minor units into input text', () => {
+    expect(toMinor(1500.5)).toBe(150_050);
+    expect(toMinor(0.29)).toBe(29);
+    expect(toMinor(10_000_000)).toBe(1_000_000_000);
+    expect(minorToInput(150_050)).toBe('1500.50');
+    expect(minorToInput(150_000)).toBe('1500');
+    expect(minorToInput(5)).toBe('0.05');
+    expect(parseAmount(minorToInput(123_456_789))).toBe(123_456_789);
   });
 });

@@ -1,0 +1,229 @@
+// docs/DESIGN.md: section cards, outline inputs, one filled button (Save), tokens only.
+.fy {
+  margin: -16px 0 0;
+}
+
+.status {
+  min-height: 24px;
+  margin: 0 0 8px;
+  color: var(--text-2);
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.card-title {
+  margin: 0 0 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.category-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.note,
+.error {
+  margin: 0;
+}
+
+.note {
+  color: var(--text-2);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.ok {
+  color: var(--ok);
+}
+
+.danger {
+  color: var(--danger);
+}
+
+// PLN-03 totals: a table on desktop, one small card per month on phones.
+.totals {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    height: 48px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--divider);
+    text-align: left;
+    font-weight: 400;
+  }
+
+  thead th {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .num {
+    text-align: right;
+  }
+
+  .dates {
+    display: block;
+  }
+
+  tbody tr:hover {
+    background: var(--surface-2);
+  }
+}
+
+.subs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  > li {
+    border-bottom: 1px solid var(--divider);
+  }
+}
+
+.sub-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+
+  .sub-name {
+    flex: 1;
+    overflow-wrap: anywhere;
+  }
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 16px;
+}
+
+.months {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 12px;
+}
+
+.month {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+
+  mat-form-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .copy {
+    flex: none;
+    width: 44px;
+    margin-top: 4px;
+  }
+}
+
+.add-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding-top: 16px;
+
+  mat-form-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  button {
+    margin-top: 4px;
+  }
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+@media (max-width: 1023.98px) {
+  .months {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .cards {
+    gap: 12px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .months {
+    grid-template-columns: 1fr;
+  }
+
+  .totals {
+    thead {
+      display: none;
+    }
+
+    tr {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px 8px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--divider);
+    }
+
+    th,
+    td {
+      height: auto;
+      padding: 0;
+      border: 0;
+    }
+
+    th[scope='row'] {
+      grid-column: 1 / -1;
+      font-weight: 500;
+    }
+
+    .dates {
+      display: inline;
+      margin-left: 8px;
+    }
+
+    td.num {
+      text-align: left;
+    }
+
+    td::before {
+      content: attr(data-label);
+      display: block;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+  }
+}

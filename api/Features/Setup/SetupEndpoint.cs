@@ -59,11 +59,11 @@ public static class SetupEndpoint
 
         var incomes = new List<IncomeItem>
         {
-            new(NewId(), IncomeKind.Salary, IncomeCalculator.SalaryLabel, Money.ToMinor(request.Salary!.Value), fiscalYear.Id, null),
+            new(DocumentIds.New(), IncomeKind.Salary, IncomeCalculator.SalaryLabel, Money.ToMinor(request.Salary!.Value), fiscalYear.Id, null),
         };
         incomes.AddRange((request.AdditionalIncome ?? []).Select(item => item.Type == AdditionalIncomeRequest.Once
-            ? new IncomeItem(NewId(), IncomeKind.Additional, Names.Normalize(item.Label), Money.ToMinor(item.Amount!.Value), currentKey, currentKey)
-            : new IncomeItem(NewId(), IncomeKind.Additional, Names.Normalize(item.Label), Money.ToMinor(item.Amount!.Value), fiscalYear.Id, null)));
+            ? new IncomeItem(DocumentIds.New(), IncomeKind.Additional, Names.Normalize(item.Label), Money.ToMinor(item.Amount!.Value), currentKey, currentKey)
+            : new IncomeItem(DocumentIds.New(), IncomeKind.Additional, Names.Normalize(item.Label), Money.ToMinor(item.Amount!.Value), fiscalYear.Id, null)));
 
         var profile = new UserProfile(
             DisplayName: Names.Normalize(request.DisplayName),
@@ -80,9 +80,7 @@ public static class SetupEndpoint
             profile,
             fiscalYear,
             incomes,
-            request.BankAccounts!.Select(name => new BankAccount(NewId(), Names.Normalize(name))).ToList(),
-            request.Categories!.Select((name, i) => new Category(NewId(), Names.Normalize(name), i)).ToList());
+            request.BankAccounts!.Select(name => new BankAccount(DocumentIds.New(), Names.Normalize(name))).ToList(),
+            request.Categories!.Select((name, i) => new Category(DocumentIds.New(), Names.Normalize(name), i)).ToList());
     }
-
-    private static string NewId() => Guid.NewGuid().ToString("N");
 }

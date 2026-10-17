@@ -36,3 +36,15 @@ export function formatMoney(minor: number, currency: string): string {
   });
   return `${currency} ${number}`;
 }
+
+// API amounts are decimals with at most 2 decimals (R-MON-01); the browser works in minor units.
+export function toMinor(amount: number): number {
+  return Math.round(amount * 100);
+}
+
+// For an input: 150050 → "1500.50", 150000 → "1500".
+export function minorToInput(minor: number): string {
+  const whole = Math.trunc(minor / 100);
+  const cents = minor % 100;
+  return cents === 0 ? String(whole) : `${whole}.${String(cents).padStart(2, '0')}`;
+}
