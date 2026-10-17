@@ -1,0 +1,88 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.brand {
+  font-weight: 500;
+}
+
+.spacer {
+  flex: 1;
+}
+
+// Desktop: side bar on the left (UX-01).
+.layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: 'nav main';
+}
+
+.nav {
+  grid-area: nav;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 88px;
+  padding: 8px 0;
+  border-right: 1px solid var(--mat-sys-outline-variant);
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  margin: 0 8px;
+  border-radius: 12px;
+  color: var(--mat-sys-on-surface-variant);
+  font: var(--mat-sys-label-medium);
+  text-decoration: none;
+
+  &.active {
+    color: var(--mat-sys-on-secondary-container);
+    background: var(--mat-sys-secondary-container);
+  }
+}
+
+.nav-add mat-icon {
+  box-sizing: content-box;
+  padding: 6px;
+  border-radius: 50%;
+  color: var(--mat-sys-on-primary);
+  background: var(--mat-sys-primary);
+}
+
+.content {
+  grid-area: main;
+  overflow: auto;
+  padding: 16px;
+}
+
+// Phones (under 768 px): bottom bar (UX-01).
+@media (max-width: 767.98px) {
+  .layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    grid-template-areas: 'main' 'nav';
+  }
+
+  .nav {
+    flex-direction: row;
+    width: auto;
+    gap: 0;
+    padding: 4px 0 calc(4px + env(safe-area-inset-bottom));
+    border-right: 0;
+    border-top: 1px solid var(--mat-sys-outline-variant);
+  }
+
+  .nav-item {
+    flex: 1;
+    margin: 0 2px;
+  }
+}

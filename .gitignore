@@ -1,0 +1,20 @@
+# .NET
+bin/
+obj/
+*.user
+TestResults/
+
+# Node / Angular
+node_modules/
+dist/
+.angular/
+
+# Firebase
+.firebase/
+*-debug.log
+
+# OS / editors
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/

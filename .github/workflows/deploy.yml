@@ -1,0 +1,43 @@
+# PRD 7.9: every push to main deploys to production.
+name: deploy
+on:
+  push:
+    branches: [main]
+concurrency:
+  group: production
+  cancel-in-progress: false
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet test api.tests
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+      - run: npm ci && npm run build
+        working-directory: web
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOY_SA }}
+      - uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: nama-api
+          region: ${{ vars.GCP_REGION }}
+          source: ./api
+          flags: '--no-invoker-iam-check --cpu-boost --min-instances=0 --max-instances=1'
+          # ALLOWED_EMAILS is quoted because it contains commas, which this action treats as separators.
+          env_vars: |
+            FIREBASE_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}
+            ALLOWED_EMAILS="${{ vars.ALLOWED_EMAILS }}"
+            APP_VERSION=${{ github.sha }}
+      - run: npx firebase-tools@latest deploy --only hosting,firestore --project ${{ vars.GCP_PROJECT_ID }} --non-interactive
+      # Smoke test: the live API must answer through Hosting with this commit id.
+      - run: curl -fsS https://${{ vars.GCP_PROJECT_ID }}.web.app/api/health | tee /dev/stderr | grep -q "${{ github.sha }}"
