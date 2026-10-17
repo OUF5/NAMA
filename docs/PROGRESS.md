@@ -9,7 +9,9 @@
   - `/api/me` without a token returns 401 (CI smoke test and curl).
   - The first deploy was commit `b199650`; all CI steps passed.
 - **Design foundation: deployed (17 Oct 2026)**, commit `d4a552f`, approved by the owner. Dark theme only, near-black and monochrome, IBM Plex Sans, the Google sign-in button. Rules are in [docs/DESIGN.md](DESIGN.md).
-- **M2 Domain core: built (17 Oct 2026).** `api/Domain` has `FiscalCalendar`, `Money` and `IncomeCalculator`, with tests in `FiscalCalendarTests`, `MoneyTests` and `IncomeCalculatorTests`. Locally, `dotnet test api.tests` passes all 142 tests and `npm run build` passes. No endpoint, web or package changes. The "Done when" check (tests pass in CI) is confirmed by the CI run of the M2 push.
+- **M2 Domain core: done (17 Oct 2026).** `api/Domain` has `FiscalCalendar`, `Money` and `IncomeCalculator`, with tests in `FiscalCalendarTests`, `MoneyTests` and `IncomeCalculatorTests`. They cover every example in sections 3 and 4.1. No endpoint, web or package changes.
+  - "Done when": the CI run for commit `18b979c` passed all 142 tests ("Passed! - Failed: 0, Passed: 142"), and every later deploy and smoke-test step passed too.
+  - Locally, `dotnet test api.tests` also passed 142 of 142, and `npm run build` passed.
 - Next: M3 Setup wizard, in a fresh session.
 
 ## Decisions
