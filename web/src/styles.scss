@@ -1,33 +1,52 @@
-// Include theming for Angular Material with `mat.theme()`.
-// This Sass mixin will define CSS variables that are used for styling Angular Material
-// components according to the Material 3 design spec.
-// Learn more about theming and how to use it for your application's
-// custom components at https://material.angular.dev/guide/theming
+// Angular Material theme (Material 3 system variables, https://material.angular.dev/guide/theming).
+// The app is always dark gray (owner's decision, 17 Oct 2026, replaces the light theme of UX-05).
 @use '@angular/material' as mat;
 
 html {
   height: 100%;
+  color-scheme: dark;
   @include mat.theme(
     (
       color: (
         primary: mat.$azure-palette,
         tertiary: mat.$blue-palette,
+        theme-type: dark,
       ),
       typography: Roboto,
       density: 0,
     )
   );
+
+  // Neutral dark grays instead of Material's blue-tinted dark surfaces.
+  @include mat.theme-overrides(
+    (
+      background: #1c1d20,
+      surface: #1c1d20,
+      surface-dim: #1c1d20,
+      surface-bright: #3a3b3f,
+      surface-container-lowest: #151618,
+      surface-container-low: #202124,
+      surface-container: #25262a,
+      surface-container-high: #2d2e32,
+      surface-container-highest: #36373b,
+      on-surface: #e4e5e8,
+      on-surface-variant: #a9acb2,
+      outline: #72757b,
+      outline-variant: #3b3d42,
+    )
+  );
+
+  // The top bar sits one step above the page.
+  @include mat.toolbar-overrides(
+    (
+      container-background-color: var(--mat-sys-surface-container),
+    )
+  );
 }
 
 body {
-  // Default the application to a light color theme. This can be changed to
-  // `dark` to enable the dark color theme, or to `light dark` to defer to the
-  // user's system settings.
-  color-scheme: light;
-
-  // Set a default background, font and text colors for the application using
-  // Angular Material's system-level CSS variables. Learn more about these
-  // variables at https://material.angular.dev/guide/system-variables
+  // Background, font and text colors from the Material system variables
+  // (https://material.angular.dev/guide/system-variables).
   background-color: var(--mat-sys-surface);
   color: var(--mat-sys-on-surface);
   font: var(--mat-sys-body-medium);
@@ -36,4 +55,3 @@ body {
   margin: 0;
   height: 100%;
 }
-/* You can add global styles to this file, and also import other style files */

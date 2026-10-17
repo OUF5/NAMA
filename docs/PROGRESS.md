@@ -3,7 +3,9 @@
 ## Status
 
 - **M0 Skeleton and pipeline: done (17 Oct 2026).** A push to `main` deployed commit `c1205d6`. https://nama-b6bda.web.app returns 200, and `/api/health` returns `{"status":"ok","version":"c1205d60220e24b1d2ad98f025ce79fef2f75f1f"}`. One-time setup is complete: Firestore (default) database in `me-central1`, Workload Identity for `OUF5/NAMA`, 5 GitHub variables, and the Artifact Registry cleanup policy (keep 5 newest).
-- **M1 Sign-in: code done and checked locally (17 Oct 2026), not committed yet.** `dotnet test` 26/26, `npx ng test` 13/13, and `npm run build` pass. Locally, `GET /api/me` without a token returns 401 ProblemDetails with `no-store`. Waiting on: (1) the owner registers a Firebase Web app, so `web/src/environments/environment.ts` gets the real `apiKey` and `appId` (still empty); (2) the owner's browser checks (own email signs in and lands on `/setup`, another email sees no-access); (3) commit and push.
+- **M1 Sign-in: deployed (17 Oct 2026).** A push to `main` deployed commit `b199650`. All CI steps passed, including the new smoke check: `/api/me` without a token returns 401 on production. Checked locally in the owner's browser: own email signs in and lands on Setup (also after a reload), and another email sees "Access not allowed". Still to do: the owner repeats the two sign-in checks on https://nama-b6bda.web.app.
+- Dark gray theme (changes UX-05): built and tested locally, committed separately, push pending the owner's OK.
+- Next: M2 Domain core, in a fresh session.
 
 ## Decisions
 
@@ -28,6 +30,7 @@
 - 17 Oct 2026, M1: The interceptor and `setupGuard` wait for `authStateReady()`. Guards of one route run at the same time, so without this a page reload could call `/api/me` before Firebase restores the session, get 401 and sign the user out.
 - 17 Oct 2026, M1: The navigation and the Settings gear are hidden until setup is complete (owner's choice), because `setupGuard` sends every item back to Setup. They are hidden on sign-in, no-access and Setup. `/setup` also loads `/api/me` (`allowedGuard`), so reloading it still checks the allowlist (found in the owner's browser test).
 - 17 Oct 2026, M1: The smoke test also checks that `/api/me` without a token returns 401 (the M1 "Done when" check).
+- 17 Oct 2026: **Theme (changes UX-05, owner's decision).** The app is always dark gray, whatever the device setting, and has no light theme. `styles.scss` uses Material's dark theme with the azure primary, and overrides the surfaces with neutral grays (page `#1c1d20`, top bar one step lighter). This was built right after M1, as its own commit.
 - 17 Oct 2026: `firestore.indexes.json` starts empty. The `entries (fyId asc, date desc)` index is added with the entries work (M6).
 
 ## Open questions

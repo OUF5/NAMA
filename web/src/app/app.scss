@@ -4,8 +4,13 @@
   height: 100%;
 }
 
+.top-bar {
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
 .brand {
   font-weight: 500;
+  letter-spacing: 0.08em;
 }
 
 .spacer {
@@ -28,6 +33,7 @@
   gap: 4px;
   width: 88px;
   padding: 8px 0;
+  background: var(--mat-sys-surface-container-low);
   border-right: 1px solid var(--mat-sys-outline-variant);
 }
 
