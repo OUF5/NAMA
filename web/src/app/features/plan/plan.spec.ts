@@ -91,6 +91,10 @@ describe('Plan (PRD 5.3)', () => {
     expect(rows[0].textContent).toContain('Jan 2026');
     expect(rows[0].textContent).toContain('27 Jan to 26 Feb');
     expect(rows[0].textContent).toContain('SAR 17,000');
+    // R-PLN-03 "unplanned income" is labeled "Unassigned" (owner's choice, M6), on desktop and phones.
+    const headers = Array.from(root.querySelectorAll('.totals thead th')).map((th) => th.textContent?.trim());
+    expect(headers).toEqual(['Month', 'Planned', 'Income', 'Unassigned']);
+    expect(rows[0].querySelectorAll('td')[2].getAttribute('data-label')).toBe('Unassigned');
   });
 
   // PLN-02, PLN-04 (Jan 2026 is closed and editable)

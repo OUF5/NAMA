@@ -9,7 +9,7 @@
   <p class="status" aria-live="polite">{{ status() }}</p>
 
   <div class="cards">
-    <!-- PLN-03: planned, income and unplanned income per month (R-PLN-03). -->
+    <!-- PLN-03: planned, income and unplanned income per month (R-PLN-03), shown as "Unassigned". -->
     <section class="card">
       <h2 class="card-title">Totals per month</h2>
       <table class="totals">
@@ -18,7 +18,7 @@
             <th scope="col">Month</th>
             <th scope="col" class="num">Planned</th>
             <th scope="col" class="num">Income</th>
-            <th scope="col" class="num">Unplanned</th>
+            <th scope="col" class="num">Unassigned</th>
           </tr>
         </thead>
         <tbody>
@@ -32,7 +32,7 @@
               <td class="num money" data-label="Income">{{ money(row.totals?.income) }}</td>
               <td
                 class="num money"
-                data-label="Unplanned"
+                data-label="Unassigned"
                 [class.ok]="(row.totals?.unplanned ?? 0) >= 0"
                 [class.danger]="(row.totals?.unplanned ?? 0) < 0"
               >
