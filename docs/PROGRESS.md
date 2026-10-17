@@ -9,7 +9,8 @@
   - `/api/me` without a token returns 401 (CI smoke test and curl).
   - The first deploy was commit `b199650`; all CI steps passed.
 - **Design foundation: deployed (17 Oct 2026)**, commit `d4a552f`, approved by the owner. Dark theme only, near-black and monochrome, IBM Plex Sans, the Google sign-in button. Rules are in [docs/DESIGN.md](DESIGN.md).
-- Next: M2 Domain core, in a fresh session.
+- **M2 Domain core: built (17 Oct 2026).** `api/Domain` has `FiscalCalendar`, `Money` and `IncomeCalculator`, with tests in `FiscalCalendarTests`, `MoneyTests` and `IncomeCalculatorTests`. Locally, `dotnet test api.tests` passes all 142 tests and `npm run build` passes. No endpoint, web or package changes. The "Done when" check (tests pass in CI) is confirmed by the CI run of the M2 push.
+- Next: M3 Setup wizard, in a fresh session.
 
 ## Decisions
 
@@ -39,9 +40,19 @@
 - 17 Oct 2026: No blue (owner's request). Buttons, the active nav and the focus ring are neutral gray: a filled button is light gray `#e4e4e7` with dark text, and secondary buttons are gray outlined. Color is used only for status (ok, warn, danger). The sign-in button follows Google's branding (light variant): white, with the official "G" logo in `web/public/google-g.svg`. Its text stays "Sign in with Google".
 - 17 Oct 2026: The design work so far is the foundation only: tokens, Material overrides, typography, the shell, sign-in and no-access. Every screen built from M3 onwards must follow docs/DESIGN.md (chips, KPI cards, category rows, month cards, year grid, tables as cards on phones, the Add form).
 - 17 Oct 2026: `<mat-icon>` now uses the Material Symbols Outlined font that `index.html` loads (`MatIconRegistry.setDefaultFontSetClass`). Before, it asked for the "Material Icons" font, which was never loaded, so icons probably showed as words. Inputs default to the outline appearance (`MAT_FORM_FIELD_DEFAULT_OPTIONS`).
+- 17 Oct 2026, M2: **Salary change rule (R-INC-02)** (owner's choice). The new salary runs open-ended from the effective month. The salary item running into that month ends the month before. Salary items that start at or after the effective month are replaced. Example: 10,000 from Jan and 12,000 from Jun, then 11,000 from Mar, gives Jan–Feb 10,000 and Mar onward 11,000. The new item's label is "Salary".
+- 17 Oct 2026, M2: `FiscalCalendar.FindPeriod` (a date's FY and month, or null outside every FY) is built in M2 for R-CAL-09 and R-STA-03 (owner's choice).
+- 17 Oct 2026, M2: Inside `api/Domain`, dates are `DateOnly` and month keys are `YYYY-MM` strings. They become `YYYY-MM-DD` strings at the Firestore and DTO edge (M3).
+- 17 Oct 2026, M2: An FY stores the settings it was created with. A transition FY stores the new start month (for example 7 for the Jan to Jun 2027 transition) and `isTransition` true. R-CAL-06 is applied to transition FYs unchanged ("FY 2027").
+- 17 Oct 2026, M2: `Money.IsValidAmount` takes `allowZero`, because SET-01 allows a salary of 0. Which callers allow 0 is decided in M3 and M4. The decimals check uses `amount * 100` being whole, not `decimal.Scale`, so `1.500` counts as 2 decimals.
+- 17 Oct 2026, M2: The `Today` tests use a small `TimeProvider` subclass, not the `Microsoft.Extensions.TimeProvider.Testing` package (no new dependency).
 - 17 Oct 2026: `firestore.indexes.json` starts empty. The `entries (fyId asc, date desc)` index is added with the entries work (M6).
 
 ## Open questions
+
+- M4: can a plan amount be 0 (to clear a month), or must the month be removed? R-MON-02 says greater than 0, but R-PLN-01 counts a missing amount as 0.
+- M3: `FiscalCalendar.Today` uses IANA time zone ids, which need tzdata in the `aspnet:10.0` runtime image. Check this in production when "today" is first used.
+- Two FYs can share a label. Example: a transition FY "FY 2027" (Jan to Jun 2027), then the start month changes again before the next rollover, giving a second transition "FY 2027" (Jul to Sep 2027). The ids differ. Should the label get a suffix?
 
 - UX-02 (project name and current month label in the top bar) needs profile data, so it moves to M3. Until then the top bar shows only "NAMA".
 - Before setup is finished there is no way to sign out, because Settings is behind `setupGuard`. Should the M3 wizard show Sign out?
