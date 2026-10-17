@@ -273,3 +273,13 @@ h2 {
     );
   }
 }
+
+// docs/DESIGN.md "Dialogs": full screen on phones. The panel class is set when the dialog opens
+// (Entries edit dialog, TBL-02); the panel lives outside any component, so the rule is global.
+.full-screen-dialog {
+  @include mat.dialog-overrides(
+    (
+      container-shape: 0,
+    )
+  );
+}

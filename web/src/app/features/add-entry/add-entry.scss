@@ -1,6 +1,5 @@
 // docs/DESIGN.md "Add form (ENT)": one phone screen, Save always visible, one filled button,
-// outline inputs, tokens only.
-@use '@angular/material' as mat;
+// tokens only. The fields are styled in entry-fields.scss.
 
 h1 {
   margin-bottom: 16px;
@@ -19,21 +18,6 @@ form {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-mat-form-field {
-  min-width: 0;
-}
-
-.indicator {
-  padding-top: 12px;
-  border-top: 1px solid var(--divider);
 }
 
 .empty h2 {
@@ -80,17 +64,8 @@ mat-form-field {
   }
 }
 
-// Phones: large touch targets (ENT-03, UX-07) and a full-width Save under the thumb.
+// Phones: a full-width Save under the thumb (ENT-03, UX-07).
 @media (max-width: 767.98px) {
-  :host {
-    @include mat.form-field-overrides(
-      (
-        container-height: 44px,
-        container-vertical-padding: 10px,
-      )
-    );
-  }
-
   h1 {
     margin-bottom: 12px;
   }

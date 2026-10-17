@@ -1,0 +1,28 @@
+// docs/DESIGN.md "Dialogs": --surface, 12px radius, full screen on phones (Entries opens it).
+form {
+  display: contents;
+}
+
+p {
+  margin: 0 0 8px;
+}
+
+.error {
+  margin: 12px 0 0;
+  color: var(--danger);
+}
+
+mat-dialog-actions {
+  gap: 8px;
+}
+
+// Delete sits apart from Cancel and Save.
+.delete {
+  margin-right: auto;
+}
+
+@media (max-width: 767.98px) {
+  mat-dialog-actions button {
+    height: 44px;
+  }
+}

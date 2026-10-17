@@ -15,10 +15,13 @@ public static class BankAccountsEndpoint
         // Sorted by name ignoring case; the first active one is the default before any entry (M5).
         // Archived ones are included and flagged.
         api.MapGet("/bank-accounts", async (ClaimsPrincipal user, IUserStore store) =>
-            (await store.GetBankAccountsAsync(user.FindFirstValue("sub")!))
-                .OrderBy(account => Names.Lower(account.Name), StringComparer.Ordinal)
-                .Select(account => new BankAccountDto(account.Id, account.Name, account.Archived))
-                .ToList());
+            Sorted(await store.GetBankAccountsAsync(user.FindFirstValue("sub")!)));
         return api;
     }
+
+    // Also part of GET /api/entries (M6).
+    public static IReadOnlyList<BankAccountDto> Sorted(IEnumerable<BankAccount> accounts) => accounts
+        .OrderBy(account => Names.Lower(account.Name), StringComparer.Ordinal)
+        .Select(account => new BankAccountDto(account.Id, account.Name, account.Archived))
+        .ToList();
 }

@@ -81,4 +81,17 @@ public interface IUserStore
 
     // The entries of one sub-category in one month (ENT-01 "spent so far").
     Task<IReadOnlyList<Entry>> GetEntriesAsync(string uid, string subCategoryId, string periodKey);
+
+    // Null when the entry does not exist.
+    Task<Entry?> GetEntryAsync(string uid, string id);
+
+    // All entries of one FY, newest first (TBL-01): date descending, then the one added later first.
+    Task<IReadOnlyList<Entry>> GetFiscalYearEntriesAsync(string uid, string fyId);
+
+    // ENT-04: every field except createdAt. lastBankAccountId is not changed (M6 owner's choice).
+    // False when the entry no longer exists.
+    Task<bool> UpdateEntryAsync(string uid, Entry entry);
+
+    // TBL-03. False when the entry no longer exists.
+    Task<bool> DeleteEntryAsync(string uid, string id);
 }

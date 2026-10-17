@@ -164,6 +164,67 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
             .Select(document => FirestoreDocuments.ToEntry(document.Id, document.ConvertTo<EntryDocument>()))
             .ToList();
     }
+
+    public async Task<Entry?> GetEntryAsync(string uid, string id)
+    {
+        var snapshot = await User(uid).Collection("entries").Document(id).GetSnapshotAsync();
+        return snapshot.Exists ? FirestoreDocuments.ToEntry(snapshot.Id, snapshot.ConvertTo<EntryDocument>()) : null;
+    }
+
+    // PRD 7.4: one query per FY, served by the entries (fyId asc, date desc) index in
+    // firestore.indexes.json. Same-date entries come back added-later first.
+    public async Task<IReadOnlyList<Entry>> GetFiscalYearEntriesAsync(string uid, string fyId)
+    {
+        var snapshot = await User(uid).Collection("entries")
+            .WhereEqualTo("fyId", fyId)
+            .OrderByDescending("date")
+            .GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => (document.Id, Document: document.ConvertTo<EntryDocument>()))
+            .OrderByDescending(item => item.Document.Date, StringComparer.Ordinal)
+            .ThenByDescending(item => item.Document.CreatedAt)
+            .Select(item => FirestoreDocuments.ToEntry(item.Id, item.Document))
+            .ToList();
+    }
+
+    // UpdateAsync requires the document to exist (Precondition.MustExist), so createdAt is kept.
+    public async Task<bool> UpdateEntryAsync(string uid, Entry entry)
+    {
+        var document = FirestoreDocuments.ToDocument(entry);
+        try
+        {
+            await User(uid).Collection("entries").Document(entry.Id).UpdateAsync(new Dictionary<string, object>
+            {
+                ["date"] = document.Date,
+                ["periodKey"] = document.PeriodKey,
+                ["fyId"] = document.FyId,
+                ["categoryId"] = document.CategoryId,
+                ["subCategoryId"] = document.SubCategoryId,
+                ["bankAccountId"] = document.BankAccountId,
+                ["amountMinor"] = document.AmountMinor,
+                ["note"] = document.Note,
+                ["updatedAt"] = FieldValue.ServerTimestamp,
+            });
+            return true;
+        }
+        catch (RpcException e) when (e.StatusCode == StatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    public async Task<bool> DeleteEntryAsync(string uid, string id)
+    {
+        try
+        {
+            await User(uid).Collection("entries").Document(id).DeleteAsync(Precondition.MustExist);
+            return true;
+        }
+        catch (RpcException e) when (e.StatusCode == StatusCode.NotFound)
+        {
+            return false;
+        }
+    }
 }
 
 // PRD 7.4 documents: camelCase fields, long minor units, YYYY-MM-DD date strings,

@@ -38,7 +38,21 @@
   - "Done when", usable one-handed at 360 px: the owner checked the page locally (emulator) and approved the push. The first check found two UX problems, both fixed before the push: the "Saved" message was easy to miss, and the cleared amount showed an error after each save (see Decisions).
   - Commit `f0ddd39` deployed, and every CI step passed (`dotnet test`: 285 of 285).
   - On production, `/api/health` returns version `f0ddd39…`. `GET /api/bank-accounts`, `GET /api/indicator` and `POST /api/entries` return 401 without a token.
-- Next: M6 Entries, in a fresh session.
+- **M6 Entries: built locally (17 Oct 2026), not pushed yet.** The Entries page (TBL-01 to TBL-06), the edit dialog with the delete confirmation (ENT-04, TBL-02, TBL-03), `GET /api/entries`, `PUT` and `DELETE /api/entries/{id}`, `GET /api/entries/export.csv`, and the `entries (fyId asc, date desc)` index.
+  - Locally: `dotnet test api.tests` passed 343 of 343 (285 before). `npm run build` passed with no warnings: initial 532.43 kB (529.99 kB before), Entries chunk 49.91 kB lazy. `npx ng test --watch=false` passed 69 of 69 (53 before). The M5 `add-entry.spec.ts` is unchanged and passes, so the shared form changed nothing on Add. No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
+  - "Done when", edit and delete update totals everywhere. In M6 the totals are the Entries total and the planned indicator (Add form and edit dialog); Months and Dashboard come in M7 and M9. `EntriesEditTests.Edit_and_delete_update_the_totals` uses the M5 numbers:
+    - Groceries is planned at 1,500 in Sep, with 400 and 799.99 in Sep. Sep spent is 1,199.99, remaining 300.01, and the Sep entries total is 1,199.99.
+    - Moving the 400 to Fuel on 28 Oct gives Groceries Sep 799.99 spent and 700.01 remaining, Fuel Oct 400, and entries totals of 799.99 (Sep) and 400 (Oct).
+    - Deleting the 799.99 gives Groceries Sep 0 spent and 1,500 remaining, and a Sep total of 0. Deleting the moved entry clears Oct.
+  - A scratch program ran `FirestoreUserStore` against the emulator with a throwaway user, deleted afterwards. It found the following:
+    - The FY query returned b, c, a: newest first, and the same-date pair added-later first.
+    - The update moved the entry to `2027-01` in FY `2027-01`, kept `createdAt` and moved `updatedAt`. `lastBankAccountId` stayed on the last added account.
+    - Updating a missing id returned false and created nothing. Delete returned true, then false.
+  - The emulator does not enforce composite indexes. The index is checked on production after the push (Firebase console, Firestore, Indexes: "Enabled").
+  - "Done when", the owner's local check (emulator, FY 2026/27 with payday 27):
+    - The owner edited, deleted, exported and checked the page at phone width.
+    - The exported `nama-entries-2026-02.csv` had the BOM, the header, quoted fields, CRLF, `34.00`, and the rows newest first.
+    - The owner then moved the SAR 34 entry to 19 Nov 2026. The emulator showed `periodKey` `2026-10` (Oct 2026 runs 27 Oct to 26 Nov), `createdAt` unchanged and `updatedAt` moved (checked read-only).
 
 ## Decisions
 
@@ -142,6 +156,35 @@
   - The first version used a 2-second snackbar (PRD 7.7), and it was easy to miss.
   - Now the Save bar shows "Saved SAR 125.50 to Groceries" in `--ok`, with a check icon and `role="status"`. It stays until the next amount is typed, and it is always on screen because the bar is sticky. No snackbar is used.
 - 17 Oct 2026, M5: **No error right after a save** (found in the owner's test). Material shows field errors once a form has been submitted, so the cleared amount turned red after every save. The Add page now provides an `ErrorStateMatcher` that shows errors on touched fields only. Save on an invalid form still marks every field touched.
+- 17 Oct 2026, M6: **PUT does not change `lastBankAccountId`** (owner's choice). PRD 7.5 lists "Updates lastBankAccountId" on the POST/PUT/DELETE row, but only a new entry counts as "using" an account (decision 5); an edit is a correction.
+- 17 Oct 2026, M6: **Delete lives inside the edit dialog** (owner's choice). Every row and card has one Edit button. The dialog has Delete (outlined), Cancel and Save (the one filled button). Delete swaps the dialog's content for "Delete this entry?" with the amount, sub-category, date and account, plus Cancel and Delete. That is one dialog, never two (UX-04). An entry that is already gone (404) counts as deleted.
+- 17 Oct 2026, M6: **The Entries page makes 2 calls (NFR-01)**: `GET /api/categories` and `GET /api/entries`.
+  - The entries response is `{ fiscalYears, fyId, bankAccounts, entries, total }`, which extends PRD 7.5. The FYs (oldest first, with their stored months) feed the FY selector, the month filter and the month labels. The accounts feed the account filter and the edit form.
+  - Rows use the M5 `EntryDto` (ids only); the page looks up names by id.
+  - A filter change, a save or a delete makes 1 call.
+- 17 Oct 2026, M6: **Filtering and the total:**
+  - One Firestore query per FY: `entries where fyId == X orderBy date desc`, with the `entries (fyId asc, date desc)` index (format checked in the firebase-tools source).
+  - Month, category, sub-category, account and note search (trimmed, ignoring case) run in memory (PRD 7.4 "Reads"). Unknown ids just match nothing.
+  - The API sums the filtered rows as `long` and returns `total`; the browser only formats it.
+  - Same-date entries are ordered added-later first (by `createdAt`). An edit keeps `createdAt`, so it never reorders rows.
+- 17 Oct 2026, M6: **Status codes:**
+  - An unknown `fyId`, or an unknown or other user's entry id, gets 404.
+  - PUT reuses the POST checks: 400 for the fields and 422 for a date outside every FY. PUT re-runs `FiscalCalendar.FindPeriod`, so the month and FY follow the date (ENT-04), and `categoryId` is copied from the new sub-category.
+  - PUT answers 200 with the entry. DELETE answers 204.
+- 17 Oct 2026, M6: **Default FY:** the one that contains today, else the latest; the API picks it when `fyId` is left out. The FY selector is shown only with more than one FY (as MON-03); with one FY, the page shows "FY 2026 · 27 Jan 2026 to 26 Jan 2027". A new FY clears the month filter.
+- 17 Oct 2026, M6: **Filters in the URL**, with the API parameter names (`/entries?fyId=&periodKey=&categoryId=&subCategoryId=&bankAccountId=&q=`), so M7 can link a Year cell to Entries (MON-04).
+  - A URL with only `subCategoryId` shows its category too.
+  - Search waits 300 ms after typing.
+  - The filter options include archived items, marked "(archived)", because their history is kept.
+- 17 Oct 2026, M6: **Shared entry form:** `features/add-entry/entry-fields.*` holds the fields, the indicator, `TouchedErrorStateMatcher` and the server-error mapping. Add and the edit dialog both use it (TBL-02).
+  - An edited entry keeps its sub-category and account even when they are archived; the form offers them marked "(archived)". The API accepts an archived sub-category or account on PUT only when it is the entry's current one.
+  - The dialog shows the indicator without the "after this entry" preview, because "spent so far" already includes the entry.
+- 17 Oct 2026, M6: **Edit dialog layout:** full screen on phones (`BreakpointObserver` at open time, the global `.full-screen-dialog` panel class with radius 0) and 640 px wide on desktop. Phones show one card per entry (TBL-05): sub-category and amount, then category, date, month and account, then the note, with a 44 px Edit button.
+- 17 Oct 2026, M6: **CSV export (TBL-06):**
+  - The browser fetches the file with `HttpClient` (`responseType: 'blob'`, so the interceptor adds the token) and saves it with a temporary `<a download>`. The file is `nama-entries-<fyId>.csv`.
+  - It has the same filters and order as the list. The columns follow TBL-01: Date (YYYY-MM-DD), Month (label), Category, Sub-category, "Amount (SAR)" as `125.50` (2 decimals, dot, no thousands separator), Bank account, Note.
+  - Every field is quoted, quotes are doubled, lines end with CRLF, and the file starts with a UTF-8 BOM (for Excel).
+  - Text that starts with `=`, `+`, `-`, `@`, a tab or a CR gets a leading `'` (OWASP "CSV Injection").
 
 ## Open questions
 
@@ -155,3 +198,6 @@
 - Run the Firestore emulator in CI (Java and firebase-tools in the workflow), so the Firestore store is tested automatically?
 - The Angular CLI added an `analytics` id to `web/angular.json` during a local run. It is not committed. Keep it out of the repo (and turn it off with `ng analytics disable`)?
 - Open sign-up instead of the allowlist? Anyone with a Google account could then use the app, which would change AUTH-02. The owner wants to revisit this later. If so, it needs abuse and cost protection at the same time (for example a user cap), because the site is public and the budget alert never stops spending. Until then, people are added through the `ALLOWED_EMAILS` GitHub variable.
+- M6: Every filter change reads all entries of the FY again (about 1,000 reads late in an FY). If the Firestore usage page shows daily reads near 50,000, add PRD 7.4's 5-minute cache.
+- M6: The edit dialog has no "after this entry" preview. Should it show the change from the saved amount?
+- M6: The Entries list has no paging. Is that fine at personal scale (about 1,000 rows per FY)?

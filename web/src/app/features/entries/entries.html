@@ -1,0 +1,163 @@
+<h1>Entries</h1>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+} @else if (data(); as d) {
+  @if (d.fiscalYears.length === 1 && fiscalYear(); as fy) {
+    <p class="caption fy">{{ fy.label }} · {{ formatDate(fy.startDate) }} to {{ formatDate(fy.endDate) }}</p>
+  }
+
+  <!-- TBL-04 -->
+  <section class="card filters" aria-label="Filters">
+    <div class="filter-grid">
+      <!-- TBL-01 "selected FY": shown when there is more than one, as in MON-03. -->
+      @if (d.fiscalYears.length > 1) {
+        <mat-form-field subscriptSizing="dynamic">
+          <mat-label>Fiscal year</mat-label>
+          <mat-select [value]="d.fyId" (selectionChange)="setFilter('fyId', $event.value)">
+            @for (fy of d.fiscalYears; track fy.id) {
+              <mat-option [value]="fy.id">{{ fy.label }} · {{ formatDate(fy.startDate) }} to {{ formatDate(fy.endDate) }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+      }
+
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Month</mat-label>
+        <mat-select [value]="filters().periodKey ?? ''" (selectionChange)="setFilter('periodKey', $event.value)">
+          <mat-option value="">All months</mat-option>
+          @for (period of fiscalYear()?.periods ?? []; track period.key) {
+            <mat-option [value]="period.key">{{ periodWithDates(period) }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Category</mat-label>
+        <mat-select [value]="categoryId()" (selectionChange)="setFilter('categoryId', $event.value)">
+          <mat-option value="">All categories</mat-option>
+          @for (category of categories() ?? []; track category.id) {
+            <mat-option [value]="category.id">{{ category.name }}@if (category.archived) { (archived)}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Sub-category</mat-label>
+        <mat-select
+          [value]="filters().subCategoryId ?? ''"
+          [disabled]="!categoryId()"
+          (selectionChange)="setFilter('subCategoryId', $event.value)"
+        >
+          <mat-option value="">All sub-categories</mat-option>
+          @for (sub of subCategoryOptions(); track sub.id) {
+            <mat-option [value]="sub.id">{{ sub.name }}@if (sub.archived) { (archived)}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Bank account</mat-label>
+        <mat-select [value]="filters().bankAccountId ?? ''" (selectionChange)="setFilter('bankAccountId', $event.value)">
+          <mat-option value="">All accounts</mat-option>
+          @for (account of d.bankAccounts; track account.id) {
+            <mat-option [value]="account.id">{{ account.name }}@if (account.archived) { (archived)}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field subscriptSizing="dynamic" class="search">
+        <mat-label>Search notes</mat-label>
+        <input matInput type="search" [formControl]="search" [maxlength]="noteMax" autocomplete="off" />
+        <mat-icon matIconSuffix aria-hidden="true">search</mat-icon>
+      </mat-form-field>
+    </div>
+  </section>
+
+  <div class="summary">
+    <p class="money">{{ summary() }}</p>
+    <div class="summary-actions">
+      @if (hasFilters()) {
+        <button mat-button type="button" (click)="clearFilters()">Clear filters</button>
+      }
+      <!-- TBL-06. Outlined: the page has no filled button; Save in the dialog is the one. -->
+      <button mat-stroked-button type="button" [disabled]="exporting() || d.entries.length === 0" (click)="exportCsv()">
+        <mat-icon aria-hidden="true">download</mat-icon>
+        Export CSV
+      </button>
+    </div>
+  </div>
+  @if (exportError()) {
+    <p class="error" role="alert">{{ exportError() }}</p>
+  }
+  <p class="status" aria-live="polite">{{ status() }}</p>
+
+  @if (d.entries.length === 0) {
+    <!-- UX-03 -->
+    <section class="card empty">
+      @if (hasFilters()) {
+        <h2>No entries match these filters</h2>
+        <p class="note">Change the filters above, or clear them.</p>
+      } @else {
+        <h2>No entries in {{ fiscalYear()?.label }} yet</h2>
+        <p class="note">Every spend you add shows up here. <a routerLink="/add">Add an entry</a>.</p>
+      }
+    </section>
+  } @else if (phone()) {
+    <!-- TBL-05: one card per entry on phones. -->
+    <ul class="entry-cards">
+      @for (row of rows(); track row.entry.id) {
+        <li class="card entry-card">
+          <div class="entry-main">
+            <div class="entry-line">
+              <span class="name">{{ row.sub }}</span>
+              <span class="money">{{ row.amount }}</span>
+            </div>
+            <p class="caption">{{ row.category }} · {{ row.date }} · {{ row.month }} · {{ row.account }}</p>
+            @if (row.entry.note) {
+              <p class="entry-note">{{ row.entry.note }}</p>
+            }
+          </div>
+          <button mat-icon-button type="button" (click)="edit(row.entry)" [attr.aria-label]="row.editLabel">
+            <mat-icon>edit</mat-icon>
+          </button>
+        </li>
+      }
+    </ul>
+  } @else {
+    <section class="card table-card">
+      <table class="entries">
+        <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col">Month</th>
+            <th scope="col">Category</th>
+            <th scope="col">Sub-category</th>
+            <th scope="col" class="num">Amount</th>
+            <th scope="col">Bank account</th>
+            <th scope="col">Note</th>
+            <th scope="col" aria-label="Edit"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.entry.id) {
+            <tr>
+              <td class="nowrap">{{ row.date }}</td>
+              <td class="nowrap">{{ row.month }}</td>
+              <td>{{ row.category }}</td>
+              <td>{{ row.sub }}</td>
+              <td class="num money nowrap">{{ row.amount }}</td>
+              <td>{{ row.account }}</td>
+              <td class="note-cell">{{ row.entry.note }}</td>
+              <td class="edit-cell">
+                <button mat-icon-button type="button" (click)="edit(row.entry)" [attr.aria-label]="row.editLabel">
+                  <mat-icon>edit</mat-icon>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+}

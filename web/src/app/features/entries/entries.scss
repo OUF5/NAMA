@@ -1,0 +1,204 @@
+// docs/DESIGN.md: section cards, tables with 48px rows and --divider lines (cards on phones,
+// TBL-05), money right-aligned with .money, no filled button on the page, tokens only.
+@use '@angular/material' as mat;
+
+h1 {
+  margin-bottom: 16px;
+}
+
+.fy {
+  margin: -8px 0 16px;
+}
+
+.card {
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+mat-form-field {
+  min-width: 0;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin-top: 16px;
+
+  p {
+    margin: 0;
+    font-weight: 500;
+  }
+}
+
+.summary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status {
+  min-height: 24px;
+  margin: 4px 0;
+  color: var(--text-2);
+}
+
+.note,
+.error {
+  margin: 0;
+}
+
+.note {
+  color: var(--text-2);
+}
+
+.error {
+  margin-top: 8px;
+  color: var(--danger);
+}
+
+.empty h2 {
+  margin-bottom: 8px;
+}
+
+// Desktop table. It scrolls inside its card on narrow screens; the page never does.
+.table-card {
+  padding: 8px 16px;
+  overflow-x: auto;
+}
+
+.entries {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    height: 48px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--divider);
+    text-align: left;
+    font-weight: 400;
+  }
+
+  thead th {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  tbody tr:hover {
+    background: var(--surface-2);
+  }
+
+  .num {
+    text-align: right;
+  }
+
+  .nowrap {
+    white-space: nowrap;
+  }
+
+  .note-cell {
+    max-width: 240px;
+    overflow-wrap: anywhere;
+    color: var(--text-2);
+  }
+
+  .edit-cell {
+    width: 48px;
+    padding: 0;
+  }
+}
+
+// TBL-05: one card per entry on phones.
+.entry-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.entry-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 4px 12px 16px;
+}
+
+.entry-main {
+  flex: 1;
+  min-width: 0;
+
+  p {
+    margin: 4px 0 0;
+  }
+}
+
+.entry-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+
+  .name {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  .money {
+    flex: none;
+  }
+}
+
+.entry-note {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767.98px) {
+  :host {
+    @include mat.form-field-overrides(
+      (
+        container-height: 44px,
+        container-vertical-padding: 10px,
+      )
+    );
+  }
+
+  h1 {
+    margin-bottom: 12px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  // Two filters per row; search takes the full width.
+  .filter-grid {
+    grid-template-columns: 1fr 1fr;
+
+    .search {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .summary-actions button {
+    height: 44px;
+  }
+}

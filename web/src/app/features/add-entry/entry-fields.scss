@@ -1,0 +1,35 @@
+// docs/DESIGN.md "Add form (ENT)": outline inputs, tokens only. Used by Add and the edit dialog.
+@use '@angular/material' as mat;
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+mat-form-field {
+  min-width: 0;
+}
+
+.indicator {
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+}
+
+// Phones: large touch targets (ENT-03, UX-07).
+@media (max-width: 767.98px) {
+  :host {
+    @include mat.form-field-overrides(
+      (
+        container-height: 44px,
+        container-vertical-padding: 10px,
+      )
+    );
+  }
+}

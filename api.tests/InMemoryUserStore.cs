@@ -13,6 +13,7 @@ public sealed class InMemoryUserStore : IUserStore
         public SetupData Setup { get; } = setup;
         // lastBankAccountId changes with every entry (decision 5).
         public UserProfile Profile { get; set; } = setup.Profile;
+        public List<FiscalYear> FiscalYears { get; } = [setup.FiscalYear];
         public List<BankAccount> BankAccounts { get; } = [.. setup.BankAccounts];
         public List<Entry> Entries { get; } = [];
         public List<Category> Categories { get; } = [.. setup.Categories];
@@ -35,8 +36,10 @@ public sealed class InMemoryUserStore : IUserStore
     // Every entry of a user, as stored.
     public IReadOnlyList<Entry> Entries(string uid) => Read<Entry>(uid, data => data.Entries).Result;
 
-    public Task<IReadOnlyList<FiscalYear>> GetFiscalYearsAsync(string uid) =>
-        Task.FromResult<IReadOnlyList<FiscalYear>>(_users.TryGetValue(uid, out var data) ? [data.Setup.FiscalYear] : []);
+    // Starting the next FY comes with M8 (FY-02); tests add FYs here.
+    public Task AddFiscalYear(string uid, FiscalYear fiscalYear) => Write(uid, data => data.FiscalYears.Add(fiscalYear));
+
+    public Task<IReadOnlyList<FiscalYear>> GetFiscalYearsAsync(string uid) => Read<FiscalYear>(uid, data => data.FiscalYears);
 
     public Task<bool> CreateSetupAsync(string uid, SetupData setup) => Task.FromResult(_users.TryAdd(uid, new UserData(setup)));
 
@@ -71,6 +74,33 @@ public sealed class InMemoryUserStore : IUserStore
     public Task<IReadOnlyList<Entry>> GetEntriesAsync(string uid, string subCategoryId, string periodKey) =>
         Read<Entry>(uid, data => data.Entries.Where(entry => entry.SubCategoryId == subCategoryId && entry.PeriodKey == periodKey));
 
+    public async Task<Entry?> GetEntryAsync(string uid, string id) =>
+        (await Read<Entry>(uid, data => data.Entries.Where(entry => entry.Id == id))).SingleOrDefault();
+
+    // Newest first; Entries keeps the order they were added in, which stands in for createdAt.
+    public Task<IReadOnlyList<Entry>> GetFiscalYearEntriesAsync(string uid, string fyId) =>
+        Read<Entry>(uid, data => data.Entries
+            .Select((entry, added) => (entry, added))
+            .Where(item => item.entry.FyId == fyId)
+            .OrderByDescending(item => item.entry.Date)
+            .ThenByDescending(item => item.added)
+            .Select(item => item.entry));
+
+    // The entry keeps its place in Entries, as createdAt is kept in Firestore.
+    public Task<bool> UpdateEntryAsync(string uid, Entry entry) => Change(uid, data =>
+    {
+        var index = data.Entries.FindIndex(stored => stored.Id == entry.Id);
+        if (index < 0)
+        {
+            return false;
+        }
+        data.Entries[index] = entry;
+        return true;
+    });
+
+    public Task<bool> DeleteEntryAsync(string uid, string id) =>
+        Change(uid, data => data.Entries.RemoveAll(entry => entry.Id == id) > 0);
+
     private Task<IReadOnlyList<T>> Read<T>(string uid, Func<UserData, IEnumerable<T>> select)
     {
         if (!_users.TryGetValue(uid, out var data))
@@ -91,6 +121,19 @@ public sealed class InMemoryUserStore : IUserStore
             change(data);
         }
         return Task.CompletedTask;
+    }
+
+    // A write that may find nothing to change (an unknown user also finds nothing).
+    private Task<bool> Change(string uid, Func<UserData, bool> change)
+    {
+        if (!_users.TryGetValue(uid, out var data))
+        {
+            return Task.FromResult(false);
+        }
+        lock (data)
+        {
+            return Task.FromResult(change(data));
+        }
     }
 }
 
