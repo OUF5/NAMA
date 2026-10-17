@@ -1,11 +1,11 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Api.Tests;
 
-public class HealthTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+// No token is sent: /api/health is the only endpoint without auth (NFR-03).
+public class HealthTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     private record HealthResponse(string Status, string Version);
 

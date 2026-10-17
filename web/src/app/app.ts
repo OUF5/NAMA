@@ -1,8 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
+import { MeService } from './core/me';
 
 interface NavItem {
   path: string;
@@ -18,6 +19,12 @@ interface NavItem {
   templateUrl: './app.html',
 })
 export class App {
+  private readonly me = inject(MeService);
+
+  // Navigation only works once setup is complete (setupGuard), so it is hidden on sign-in,
+  // no-access and setup.
+  protected readonly showNav = computed(() => this.me.me()?.setupCompleted === true);
+
   // UX-01: five always-visible items, Add is prominent. Settings lives in the top bar.
   protected readonly navItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: 'dashboard' },

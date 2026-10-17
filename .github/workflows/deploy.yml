@@ -41,3 +41,5 @@ jobs:
       - run: npx firebase-tools@latest deploy --only hosting,firestore --project ${{ vars.GCP_PROJECT_ID }} --non-interactive
       # Smoke test: the live API must answer through Hosting with this commit id.
       - run: curl -fsS https://${{ vars.GCP_PROJECT_ID }}.web.app/api/health | tee /dev/stderr | grep -q "${{ github.sha }}"
+      # Smoke test: calls without a token are refused (M1, NFR-03).
+      - run: test "$(curl -sS -o /dev/null -w '%{http_code}' https://${{ vars.GCP_PROJECT_ID }}.web.app/api/me)" = 401
