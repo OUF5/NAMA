@@ -96,7 +96,7 @@ Use at most 3 sizes per screen, not counting KPIs.
 - **Month status (MON-01):**
   - Closed: plain `--text-2` text.
   - In progress: a 2px `--primary-text` border, the label, and a `--primary-soft` chip.
-  - Yet to come: a dashed `--border` border.
+  - Upcoming (R-STA-01 "Yet to come"): a dashed `--border` border.
 - **Year grid (MON-02):** it scrolls sideways inside its card, with the first column sticky. The page itself never scrolls sideways.
 - **Dialogs:** `--surface`, 12px radius, `--shadow-overlay`. Full screen on phones. Never stacked (UX-04).
 - **Add form (ENT):** it fits on one phone screen without scrolling, and Save is always visible at the bottom.

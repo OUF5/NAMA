@@ -1,5 +1,5 @@
 // ENT-01 colors with docs/DESIGN.md chips and progress bars. Tokens only.
-@use '@angular/material' as mat;
+@use 'plan-status';
 
 :host {
   display: flex;
@@ -14,40 +14,7 @@
   gap: 8px;
 }
 
-.chip {
-  flex: none;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.chip.ok {
-  color: var(--ok);
-  background: var(--ok-bg);
-}
-
-.chip.warn {
-  color: var(--warn);
-  background: var(--warn-bg);
-}
-
-.chip.danger {
-  color: var(--danger);
-  background: var(--danger-bg);
-}
-
-mat-progress-bar.ok {
-  @include mat.progress-bar-overrides((active-indicator-color: var(--ok)));
-}
-
-mat-progress-bar.warn {
-  @include mat.progress-bar-overrides((active-indicator-color: var(--warn)));
-}
-
-mat-progress-bar.danger {
-  @include mat.progress-bar-overrides((active-indicator-color: var(--danger)));
-}
+@include plan-status.styles;
 
 .numbers {
   display: grid;

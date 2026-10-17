@@ -13,6 +13,24 @@ export function planStatus(planned: number, spent: number): PlanStatus {
   return spent <= planned ? 'warn' : 'danger';
 }
 
+// Months (M7): null when nothing is planned and nothing is spent. Spending without a plan is
+// over plan, because a missing plan counts as 0 (R-PLN-01, owner's choice).
+export function spendStatus(planned: number, spent: number): PlanStatus | null {
+  return planned === 0 && spent === 0 ? null : planStatus(planned, spent);
+}
+
+// docs/DESIGN.md chips: always a text label, never color alone.
+export function planStatusLabel(status: PlanStatus, planned: number, spent: number, currency: string): string {
+  switch (status) {
+    case 'ok':
+      return 'Within plan';
+    case 'warn':
+      return 'Near limit';
+    default:
+      return `Over by ${formatMoney(spent - planned, currency)}`;
+  }
+}
+
 // ENT-01 planned indicator (PRD 7.3 shared/): planned, spent so far, remaining and a progress bar
 // for one sub-category in one month. The numbers come from GET /api/indicator; `pending` is the
 // amount being typed, for the "after this entry" preview. All amounts are minor units.
@@ -37,17 +55,7 @@ export class PlannedIndicator {
   protected readonly status = computed(() => planStatus(this.planned(), this.total()));
   protected readonly barValue = computed(() => Math.min(100, (this.total() * 100) / this.planned()));
 
-  // docs/DESIGN.md chips: always a text label, never color alone.
-  protected readonly chip = computed(() => {
-    switch (this.status()) {
-      case 'ok':
-        return 'Within plan';
-      case 'warn':
-        return 'Near limit';
-      default:
-        return `Over by ${this.money(this.total() - this.planned())}`;
-    }
-  });
+  protected readonly chip = computed(() => planStatusLabel(this.status(), this.planned(), this.total(), this.currency()));
 
   protected readonly after = computed(() => {
     const left = this.planned() - this.total();

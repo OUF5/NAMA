@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { formatMoney, minorToInput, parseAmount, toMinor } from '../../shared/money';
 import { formatDate, fromDateString, toDateString } from '../../shared/month-label';
 import { Category } from '../plan/plan-api';
@@ -20,6 +20,14 @@ export interface EntryDialogData {
 }
 
 export type EntryDialogResult = 'saved' | 'deleted';
+
+// docs/DESIGN.md "Dialogs": full screen on phones, 640px wide on desktop. Used by Entries and Months.
+export function openEntryDialog(dialog: MatDialog, phone: boolean, data: EntryDialogData): MatDialogRef<EntryDialog, EntryDialogResult> {
+  const size = phone
+    ? { width: '100vw', maxWidth: '100vw', height: '100dvh', panelClass: 'full-screen-dialog' }
+    : { width: '640px', maxWidth: 'calc(100vw - 32px)' };
+  return dialog.open<EntryDialog, EntryDialogData, EntryDialogResult>(EntryDialog, { ...size, data });
+}
 
 // TBL-02 edit with the Add form, and TBL-03 delete after a confirmation. The confirmation replaces
 // the form inside this dialog, so dialogs are never stacked (UX-04).

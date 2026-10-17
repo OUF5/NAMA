@@ -62,7 +62,7 @@ public static class CategoriesEndpoint
         return api;
     }
 
-    private static CategoryDto ToDto(Category category, IEnumerable<SubCategory> subCategories) => new(
+    public static CategoryDto ToDto(Category category, IEnumerable<SubCategory> subCategories) => new(
         category.Id, category.Name, category.SortOrder, category.Archived,
         subCategories.Where(sub => sub.CategoryId == category.Id).OrderBy(sub => sub.SortOrder).Select(ToSubDto).ToList());
 

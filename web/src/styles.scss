@@ -202,6 +202,36 @@ html {
     )
   );
 
+  // Months (MON-02): the month details are a flat part of the card, not a card of their own.
+  @include mat.expansion-overrides(
+    (
+      container-background-color: transparent,
+      container-elevation-shadow: none,
+      container-shape: 0,
+      container-text-color: var(--text),
+      header-text-color: var(--text-2),
+      header-text-size: 14px,
+      header-text-weight: 500,
+      header-indicator-color: var(--text-2),
+      header-hover-state-layer-color: var(--surface-2),
+      header-focus-state-layer-color: var(--surface-2),
+      header-collapsed-state-height: 48px,
+      header-expanded-state-height: 48px,
+    )
+  );
+
+  @include mat.button-toggle-overrides(
+    (
+      height: 40px,
+      shape: 8px,
+      divider-color: var(--border),
+      text-color: var(--text-2),
+      background-color: var(--surface),
+      selected-state-background-color: var(--primary-soft),
+      selected-state-text-color: var(--primary-text),
+    )
+  );
+
   @include mat.toolbar-overrides(
     (
       container-background-color: var(--surface),
@@ -269,6 +299,13 @@ h2 {
     @include mat.form-field-overrides(
       (
         container-text-size: 16px,
+      )
+    );
+
+    // 44px touch targets (UX-07), e.g. the Months view toggle.
+    @include mat.button-toggle-overrides(
+      (
+        height: 44px,
       )
     );
   }

@@ -29,12 +29,16 @@ export function amountValidator(allowZero = false): ValidatorFn {
 
 // docs/DESIGN.md: "SAR 1,240", never more than 2 decimals.
 export function formatMoney(minor: number, currency: string): string {
+  return `${currency} ${formatAmount(minor)}`;
+}
+
+// The number alone, for "SAR 1,240 of 2,000" (docs/DESIGN.md category rows).
+export function formatAmount(minor: number): string {
   const decimals = minor % 100 === 0 ? 0 : 2;
-  const number = (minor / 100).toLocaleString('en-US', {
+  return (minor / 100).toLocaleString('en-US', {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   });
-  return `${currency} ${number}`;
 }
 
 // API amounts are decimals with at most 2 decimals (R-MON-01); the browser works in minor units.

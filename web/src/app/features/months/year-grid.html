@@ -1,0 +1,100 @@
+@let g = grid();
+@if (g.rows.length === 0) {
+  <!-- UX-03 -->
+  <section class="card empty">
+    <h2>Nothing planned or spent in {{ fiscalYearLabel() }} yet</h2>
+    <p class="note">
+      Plan amounts on <a routerLink="/plan">Plan</a>, and add spending on
+      <a routerLink="/add">Add</a>.
+    </p>
+  </section>
+} @else {
+  <p class="caption hint">Each cell shows spent of planned. Tap a cell to see its entries.</p>
+  <!-- MON-02: scrolls sideways inside its card with the first column fixed; the page never does. -->
+  <section class="card grid-card" aria-label="Year">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th scope="col" class="sticky">Category</th>
+          @for (month of g.months; track month.period.key) {
+            <th scope="col" class="month-col" [class]="month.status">
+              <span class="month-label">{{ month.period.label }}</span>
+              @if (month.status === 'inProgress') {
+                <span class="now-chip">{{ statusLabels.inProgress }}</span>
+              } @else {
+                <span class="status-text">{{ statusLabels[month.status] }}</span>
+              }
+            </th>
+          }
+          <th scope="col" class="fy-col">FY total</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of g.rows; track row.id) {
+          @let open = openCategories().has(row.id);
+          <tr class="category-row">
+            <th scope="row" class="sticky">
+              <button
+                type="button"
+                class="toggle"
+                [attr.aria-expanded]="open"
+                [attr.aria-label]="
+                  (open ? 'Hide sub-categories of ' : 'Show sub-categories of ') + row.name
+                "
+                (click)="toggleCategory(row.id)"
+              >
+                <mat-icon aria-hidden="true">{{ open ? 'expand_more' : 'chevron_right' }}</mat-icon>
+                <span>{{ row.name }}</span>
+              </button>
+            </th>
+            @for (cell of row.cells; track $index) {
+              <ng-container
+                *ngTemplateOutlet="gridCell; context: { cell, i: $index, last: $last }"
+              />
+            }
+          </tr>
+          @if (open) {
+            @for (sub of row.subs; track sub.id) {
+              <tr class="sub-row">
+                <th scope="row" class="sticky sub-name">{{ sub.name }}</th>
+                @for (cell of sub.cells; track $index) {
+                  <ng-container
+                    *ngTemplateOutlet="gridCell; context: { cell, i: $index, last: $last }"
+                  />
+                }
+              </tr>
+            }
+          }
+        }
+      </tbody>
+      <tfoot>
+        <tr class="total-row">
+          <th scope="row" class="sticky">Total</th>
+          @for (cell of g.total; track $index) {
+            <ng-container *ngTemplateOutlet="gridCell; context: { cell, i: $index, last: $last }" />
+          }
+        </tr>
+      </tfoot>
+    </table>
+  </section>
+
+  <!-- MON-04: each cell opens Entries filtered by its sub-category or category and month. -->
+  <ng-template #gridCell let-cell="cell" let-i="i" let-last="last">
+    <td [class.now]="!last && g.months[i].status === 'inProgress'" [class.fy-col]="last">
+      <a
+        class="cell"
+        [class]="cell.status"
+        routerLink="/entries"
+        [queryParams]="cell.query"
+        [attr.aria-label]="cell.label"
+      >
+        @if (cell.status) {
+          <span class="money spent">{{ cell.spent }}</span>
+          <span class="caption money">{{ cell.of }}</span>
+        } @else {
+          <span class="nothing" aria-hidden="true">–</span>
+        }
+      </a>
+    </td>
+  </ng-template>
+}

@@ -56,7 +56,22 @@
   - Commit `766f490` deployed, and every CI step passed (`dotnet test`: 343 of 343).
   - On production, `/api/health` returns version `766f490…`. `GET /api/entries`, `GET /api/entries/export.csv`, `PUT /api/entries/x` and `DELETE /api/entries/x` return 401 without a token.
   - The `entries (fyId asc, date desc)` index went from `CREATING` to `READY` about 7 minutes after the deploy (`gcloud firestore indexes composite list`, read-only).
-- Next: M7 Months and year, in a fresh session.
+- **M7 Months and year: built locally (17 Oct 2026), waiting for the owner's local check and push.** The Months page (MON-01 to MON-04) and `GET /api/fiscal-years/{fyId}/overview`. FY-01 (the rollover banner) is M8.
+  - Locally: `dotnet test api.tests` passed 358 of 358 (343 before; 15 new in `OverviewTests`). `npm run build` passed with no warnings: initial 533.96 kB (532.43 kB before), Months chunk 71.11 kB lazy. `npx ng test --watch=false` passed 86 of 86 (69 before). No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
+  - One `ng test` run, started straight after `dotnet test` and `ng build` in the same command, had 2 failures in 2 spec files. The test names were not captured. It did not happen again in 12 later runs, 3 of them with a web build and an API build running at the same time.
+  - `dotnet run` answers 401 with `Cache-Control: no-store` for the overview without a token.
+  - "Done when", statuses match today's date. `OverviewTests.Statuses_follow_today_in_the_profile_time_zone` fakes today:
+    - 17 Oct 2026 gives Jan–Aug Closed, Sep In progress, Oct–Dec Yet to come.
+    - 26 Oct 23:59:59 Riyadh (20:59:59 UTC) is still Sep. 27 Oct 00:00 Riyadh (21:00 UTC on 26 Oct) is Oct.
+    - The first and last days of the FY are covered, and so are the days before and after it.
+    - Still to do: the owner's local check (Sep 2026 In progress, expanded and scrolled into view) and the production check after the push.
+  - "Done when", grid totals equal the Entries totals. `OverviewTests.Grid_totals_equal_the_entries_totals` compares every value with `GET /api/entries` `total` under the same MON-04 filters:
+    - every sub-category × month and category × month cell;
+    - every month, and every sub-category and category FY total;
+    - the FY total.
+    - It ran 60 cell checks plus the FY totals. Still to do: the owner taps cells locally and compares them with the Entries totals.
+  - Hand check (`Months_and_totals_match_the_hand_check`, the M4 incomes and plans with the M5 entries): Sep has income 17,500.25, planned 1,900, spent 1,299.99 and remaining 600.01. The FY totals are 204,500.25 / 19,600 / 1,349.99 / 18,250.01.
+- Next: the owner checks M7 locally (360, 390 and 430 px and desktop), then commit and push. After that, M8 Settings and FY rollover, in a fresh session.
 
 ## Decisions
 
@@ -190,6 +205,47 @@
   - Every field is quoted, quotes are doubled, lines end with CRLF, and the file starts with a UTF-8 BOM (for Excel).
   - Text that starts with `=`, `+`, `-`, `@`, a tab or a CR gets a leading `'` (OWASP "CSV Injection").
 - 17 Oct 2026, after M6: **The Plan column "Unplanned" is now "Unassigned"** (owner's choice). On its own, "Unplanned" read like unplanned spending. The number is still R-PLN-03 "unplanned income": income minus planned, green at 0 or more and red below 0. Only the label changed (the desktop header and the phone card label); the API field stays `unplanned`, and the column order is unchanged.
+- 17 Oct 2026, M7: **Overview contract** (extends PRD 7.5): `{ fiscalYears, fyId, months, categories, rows, totals }`.
+  - `months[]` holds `period`, `status` (`closed` | `inProgress` | `yetToCome`), `income`, `planned`, `spent` and `remaining`.
+  - `rows[]` are categories with sub-categories, each with `months[]` cells (`periodKey`, `planned`, `spent`) and FY `planned` and `spent`.
+  - `categories` is exactly `GET /api/categories`. It gives the names, the archived flag and the edit dialog's pickers, so Months makes no `/api/categories` call.
+  - Status uses `FiscalCalendar.Status` with today in the profile time zone. Income uses `IncomeCalculator.TotalsForPeriods`, and planned uses `PlanCalculator`. Spent comes from the Entries FY query (`GetFiscalYearEntriesAsync`), summed in memory as `long`.
+  - Month and FY spent count every entry, so they equal the Entries totals.
+  - An unknown fyId, or another user's, gets 404 (as M4).
+- 17 Oct 2026, M7: **Remaining = planned − spent** (owner's choice), the same as the indicator (`PlanCalculator.Remaining`). Dashboard's "saved" (income − spent, DSH-02) is a separate number in M9.
+- 17 Oct 2026, M7: **Rows shown** (owner's choice): a sub-category appears when it has a plan or spending in the FY, archived or not. Archived ones are marked "(archived)". A category appears when one of its sub-categories does. A month card lists only what has a plan or spending in that month. Rows follow `sortOrder`.
+- 17 Oct 2026, M7: **Spending without a plan is red, "Over by X"** (owner's choice; a missing plan counts as 0, R-PLN-01). A cell with nothing planned and nothing spent shows "–" with no color. Otherwise `planStatus` applies. `spendStatus` and `planStatusLabel` live in `shared/planned-indicator.ts`, and the indicator's chip uses the same label.
+- 17 Oct 2026, M7: **Months makes 1 or 2 calls (NFR-01)** (owner's choice): the overview, plus `GET /api/entries?fyId=&periodKey=` (M6, unchanged) for each expanded card.
+  - The in-progress card opens expanded and scrolls into view, once per FY, in the Months view only. If no month is in progress, nothing opens.
+  - Each month's entries are cached while the page is open.
+  - After an edit or delete in the dialog, the overview and every open card's entries reload. An edit can move an entry to another month.
+  - If `/api/me` has no current FY and the URL has none, the page calls `GET /api/fiscal-years` first and uses the latest FY (Plan's pattern).
+  - Firestore reads about 2N per visit (N = entries in the FY). There is no cache.
+- 17 Oct 2026, M7: **MON-02 memory:** `localStorage` key `nama.months.view` (`months` | `year`). It is one key for every account, because it is only a display preference. Every read and write is guarded; without storage the page opens on Months. The view is not in the URL. The selected FY is in the URL (`/months?fyId=`, `replaceUrl`), as on Entries.
+- 17 Oct 2026, M7: **Month cards (MON-01):**
+  - Closed: the normal border, the label in `--text-2`, and "Closed".
+  - In progress: a 2px `--primary-text` border and a `--primary-soft` "In progress" chip.
+  - Yet to come: a dashed border and "Upcoming".
+  - Numbers: Income, Planned, Spent and Remaining in one row on desktop. Phones follow "KPI on phones": Remaining at 28/600, then the bar, then 3 columns.
+  - Details: a flat `mat-expansion-panel` titled "Categories and entries" holds the category rows (DESIGN 3-line form) and the month's entries. Edit opens the M6 `EntryDialog` through the new shared `openEntryDialog` (Entries uses it too).
+- 17 Oct 2026, M7: **Year grid (MON-02, MON-04):**
+  - The grid is the `YearGrid` child component. It was split out because one stylesheet for both views went over the 4 kB per-component style budget.
+  - The table scrolls inside its card, and the first column is sticky.
+  - The header shows each month's status: "Closed", the "In progress" chip with a 2px column border, and "Upcoming" with a dashed box.
+  - Cells show "SAR 1,240" over "of 2,000".
+  - Category rows expand with an `aria-expanded` chevron. A Total row sits at the bottom, and "FY total" is the last column.
+  - Every cell is a link to Entries:
+    - sub-category × month: `periodKey` + `subCategoryId`;
+    - category × month: `periodKey` + `categoryId`;
+    - FY total: no `periodKey`;
+    - Total row: `periodKey` only, or `fyId` only for the FY total.
+  - Each cell's aria-label says the numbers and the status. Cells are not underlined (deviates from DESIGN's link rule). A caption says "Tap a cell to see its entries", and hover and focus show it.
+- 17 Oct 2026, M7: The expansion and button-toggle Material overrides are in `styles.scss`, with the other overrides. The chip and bar status rules moved to `shared/_plan-status.scss`, used by the indicator and Months. `formatAmount` (the number without the currency) is in `shared/money.ts`. No new packages: `MatExpansionModule` and `MatButtonToggleModule` are part of `@angular/material` 22.2.3.
+- 17 Oct 2026, M7: **A month card lists only its 5 newest entries** (owner's choice, after the local check; a busy month can have 100 or more). Each one can still be edited (MON-02). With more than 5, the link "See all 83 entries in Sep 2026" opens `/entries?fyId=&periodKey=`, which has the filters, search, total and CSV export. The card still loads the whole month (`GET /api/entries` has no limit), so Firestore reads are unchanged.
+  - Each entry is one compact line, 44 px high (owner's request): day ("17 Oct"), sub-category (cut with "…"), amount, and the Edit button. Category, account and note are in the edit dialog and on Entries.
+- 17 Oct 2026, M7: **Remaining takes the plan status color** (owner's choice, after the local check): green within plan, amber near the limit, red when over, and neutral when nothing is planned or spent. It matches the bar and the chip. Income, Planned and Spent stay neutral, because DESIGN.md uses color only for status, so no number gets a fixed color of its own.
+- 17 Oct 2026, M7: **"Upcoming" instead of "Yet to come"** (owner's choice, after the local check). It is only the label on screen (month cards and the Year grid header) and in docs/DESIGN.md. The PRD term (R-STA-01, MON-01) and the API value `yetToCome` are unchanged.
+- 17 Oct 2026, M7: **FY-01 is M8.** The banner's action, `POST /api/fiscal-years/next`, is the M8 rollover, so M8 adds the banner to Months.
 
 ## Open questions
 
@@ -206,3 +262,7 @@
 - M6: Every filter change reads all entries of the FY again (about 1,000 reads late in an FY). If the Firestore usage page shows daily reads near 50,000, add PRD 7.4's 5-minute cache.
 - M6: The edit dialog has no "after this entry" preview. Should it show the change from the saved amount?
 - M6: The Entries list has no paging. Is that fine at personal scale (about 1,000 rows per FY)?
+- M7: Should the Year grid scroll sideways to the in-progress column when it opens?
+- M7: `GET /api/entries?periodKey=` could query `fyId == X && periodKey == Y` (equality filters only, so no new index). That would cut each opened Months card from N reads to about N/12.
+- M7: Dashboard (M9) will get `categories` and `rows` from the overview, which it may not need. Is that fine at personal scale?
+- M7: Should docs/DESIGN.md get the Year grid cell rule (not underlined, with a "Tap a cell" caption)?

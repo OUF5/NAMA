@@ -3,6 +3,7 @@ using Api.Features.Categories;
 using Api.Features.Entries;
 using Api.Features.FiscalYears;
 using Api.Features.Indicator;
+using Api.Features.Overview;
 using Api.Features.Plans;
 using Api.Features.Profile;
 using Api.Features.Setup;
@@ -65,5 +66,6 @@ api.MapPlans();
 api.MapBankAccounts();
 api.MapEntries();
 api.MapIndicator();
+api.MapOverview();
 
 app.Run();

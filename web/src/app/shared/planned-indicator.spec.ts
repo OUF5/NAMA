@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { PlannedIndicator, planStatus } from './planned-indicator';
+import { PlannedIndicator, planStatus, planStatusLabel, spendStatus } from './planned-indicator';
 
 const sep = { key: '2026-09', label: 'Sep 2026', startDate: '2026-09-27', endDate: '2026-10-26' };
 
@@ -10,6 +10,21 @@ describe('planned indicator (ENT-01)', () => {
     expect(planStatus(150_000, 120_000)).toBe('warn'); // 80%
     expect(planStatus(150_000, 150_000)).toBe('warn'); // 100%
     expect(planStatus(150_000, 150_001)).toBe('danger'); // 100.0007%
+  });
+
+  // Months (M7): nothing at all has no status; spending without a plan is over plan (R-PLN-01).
+  it('gives no status when nothing is planned or spent, and red for spending without a plan', () => {
+    expect(spendStatus(0, 0)).toBeNull();
+    expect(spendStatus(0, 3_000)).toBe('danger');
+    expect(spendStatus(150_000, 0)).toBe('ok');
+    expect(spendStatus(150_000, 120_000)).toBe('warn');
+  });
+
+  it('labels every status with text', () => {
+    expect(planStatusLabel('ok', 150_000, 0, 'SAR')).toBe('Within plan');
+    expect(planStatusLabel('warn', 150_000, 150_000, 'SAR')).toBe('Near limit');
+    expect(planStatusLabel('danger', 150_000, 160_050, 'SAR')).toBe('Over by SAR 100.50');
+    expect(planStatusLabel('danger', 0, 3_000, 'SAR')).toBe('Over by SAR 30');
   });
 
   async function render(planned: number, spent: number, pending = 0): Promise<ComponentFixture<PlannedIndicator>> {

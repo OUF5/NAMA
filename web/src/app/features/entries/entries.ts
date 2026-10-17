@@ -18,7 +18,7 @@ import { formatDate, periodWithDates } from '../../shared/month-label';
 import { Category, PlanApi } from '../plan/plan-api';
 import { Entry, EntriesResponse, EntryApi, EntryFilters } from '../add-entry/entry-api';
 import { NOTE_MAX_LENGTH } from '../add-entry/entry-fields';
-import { EntryDialog, EntryDialogData, EntryDialogResult } from './entry-dialog';
+import { openEntryDialog } from './entry-dialog';
 
 const PHONE = '(max-width: 767.98px)';
 
@@ -174,19 +174,13 @@ export class Entries {
   // TBL-02, TBL-03: edit and delete in one dialog, full screen on phones (docs/DESIGN.md).
   protected edit(entry: Entry): void {
     const me = this.meService.me();
-    const size = this.breakpoints.isMatched(PHONE)
-      ? { width: '100vw', maxWidth: '100vw', height: '100dvh', panelClass: 'full-screen-dialog' }
-      : { width: '640px', maxWidth: 'calc(100vw - 32px)' };
-    const dialog = this.dialog.open<EntryDialog, EntryDialogData, EntryDialogResult>(EntryDialog, {
-      ...size,
-      data: {
-        entry,
-        categories: this.categories() ?? [],
-        accounts: this.data()?.bankAccounts ?? [],
-        currency: this.currency(),
-        firstDate: me?.firstDate ?? null,
-        lastDate: me?.lastDate ?? null,
-      },
+    const dialog = openEntryDialog(this.dialog, this.breakpoints.isMatched(PHONE), {
+      entry,
+      categories: this.categories() ?? [],
+      accounts: this.data()?.bankAccounts ?? [],
+      currency: this.currency(),
+      firstDate: me?.firstDate ?? null,
+      lastDate: me?.lastDate ?? null,
     });
     dialog.afterClosed().subscribe((result) => {
       if (result) {
