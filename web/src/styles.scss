@@ -3,13 +3,13 @@
 @use '@angular/material' as mat;
 
 :root {
-  // Surfaces: depth comes from these steps, not from shadows.
-  --bg: #0f1218;
-  --surface: #171b22;
-  --surface-2: #1e232c;
-  --border: #2a303b;
-  --divider: #222831;
-  --track: #262c36;
+  // Surfaces: neutral near-black, never #000. Depth comes from these steps, not from shadows.
+  --bg: #0a0a0b;
+  --surface: #121214;
+  --surface-2: #1a1a1d;
+  --border: #27272b;
+  --divider: #1e1e21;
+  --track: #232327;
 
   // Text. Never pure white.
   --text: #e6e8ec;
