@@ -18,7 +18,15 @@
   - Locally: `npm run build` passed (with the bundle budget warning below), and `npx ng test --watch=false` passed 32 of 32 (including a wizard spec for the Add buttons, after the owner found that Add reloaded the page).
   - The `aspnet:10.0` image is Ubuntu 24.04 with `tzdata` and `tzdata-legacy` 2026c (checked with `docker run`). Production "today" works: `/api/me` returned the current month.
   - The owner ran `./infra/setup.sh firestore` before the deploy (`roles/datastore.user` confirmed on the Compute Engine default service account).
-- Next: M4 Plan, in a fresh session.
+- **M4 Plan: built and checked locally (17 Oct 2026), not pushed yet.** The Plan page (PLN-01 to PLN-06), `GET /api/fiscal-years`, `GET`/`POST /api/categories`, `POST /api/sub-categories`, and `GET`/`PUT /api/fiscal-years/{fyId}/plans[/{subCategoryId}]`. The new `PlanCalculator` in `api/Domain` handles R-PLN-01 to R-PLN-03.
+  - Locally: `dotnet test api.tests` passed 232 of 232 (184 before). `npm run build` passed with no warnings: initial 513.87 kB, Plan chunk 16.72 kB lazy. `npx ng test --watch=false` passed 38 of 38. No hex colors in `web/src/app`, and no `double`/`float` in `api/`.
+  - "Done when", amounts save: `PlansTests` (PUT then GET in minor units, 0 and blank clear a month, closed months editable). A scratch program ran `FirestoreUserStore` against the emulator:
+    - Categories, sub-categories and incomes read back unchanged.
+    - A second PUT replaced the `amounts` map.
+    - `createdAt` was kept and `updatedAt` moved.
+    - The `fyId` query found the plan.
+  - "Done when", totals match a manual check. Worked out by hand: salary 15,000 + rent 2,000 monthly + a once bonus of 500.25 in Sep; Groceries 1,500 every month, Fuel 400 from Sep. That gives Jan planned 1,500, income 17,000, unplanned 15,500, and Sep planned 1,900, income 17,500.25, unplanned 15,600.25. `PlanCalculatorTests` and `PlansTests` assert exactly these numbers.
+  - Still to do by the owner: the on-screen check (sign in locally against the emulator, add a sub-category, save amounts, reload), then the push that deploys.
 
 ## Decisions
 
@@ -73,14 +81,34 @@
 - 17 Oct 2026, M3: The outline input default moved from `app.config.ts` to `web/src/app/shared/form-field.ts` (`OUTLINE_FORM_FIELDS`), provided by each page with inputs. Importing the token in `app.config.ts` put all of form-field and `@angular/forms` (about 125 kB) into the initial bundle.
 - 17 Oct 2026, M3: Cloud Run runs as the Compute Engine default service account, which had only `roles/run.builder` (the org enforces `iam.automaticIamGrantsForDefaultServiceAccounts`). `./infra/setup.sh firestore` grants it `roles/datastore.user`; the owner runs it before the first M3 deploy.
 - 17 Oct 2026, M3: Endpoint tests use an in-memory `IUserStore` (CI has no emulator). The Firestore store is checked by hand against the emulator.
+- 17 Oct 2026, M4: **A plan amount of 0** (owner's choice): the PUT accepts 0 to 10,000,000. Both 0 and an empty month remove that month from the stored `amounts` map, so stored amounts stay above 0 (R-MON-02) and a missing month counts as 0 (R-PLN-01). A PUT replaces all months of one sub-category; the months left out are cleared.
+- 17 Oct 2026, M4: **Plan makes 2 calls (NFR-01)** (owner's choice): `GET /api/categories` and `GET /api/fiscal-years/{fyId}/plans`.
+  - The plans response (an addition to PRD 7.5) also carries the FY with its stored months (R-CAL-09), each plan's FY total, `categoryTotals` (FY total per category), and `totals` per month (planned, income, unplanned).
+  - The income comes from `IncomeCalculator.TotalsForPeriods`, and the sums from `PlanCalculator`, so the browser does no money arithmetic.
+  - The PUT answers with the same body.
+  - `GET /api/fiscal-years` is called only when `/api/me` has no current FY. `/api/income` waits for M8.
+- 17 Oct 2026, M4: **PLN-05 without DELETE:** `POST /api/categories` and `POST /api/sub-categories` only.
+  - Names follow 4.7 and are unique ignoring case (per user for categories, per category for sub-categories). A duplicate or an unknown `categoryId` gets 400 ValidationProblem on `Name` or `CategoryId`.
+  - New items go last (`sortOrder` = max + 1).
+  - Rename and archive come in M8 (STG-05).
+  - Uniqueness is checked by reading first, not in a transaction (one user, max one instance; the Add buttons are disabled while busy).
+- 17 Oct 2026, M4: Plans are stored at `plans/{fyId}_{subCategoryId}`. `SetPlanAsync` runs in a transaction that creates the document or updates only `amounts` and `updatedAt`, so `createdAt` is kept. `categoryId` is copied from the sub-category.
+- 17 Oct 2026, M4: An unknown `fyId` or `subCategoryId` on the plans endpoints gets 404, as does another user's.
+- 17 Oct 2026, M4: **Bundle budget** (owner's choice): the initial `maximumWarning` went from 500 kB to 550 kB; the error limit stays 1 MB.
+- 17 Oct 2026, M4: The Plan page layout:
+  - Totals per month come first (a table on desktop, one card per month on phones).
+  - Then the empty state (PLN-06), one card per category with its sub-categories and an "add sub-category" row, and an "Add a category" card.
+  - Adding a sub-category opens its month editor straight away.
+  - The editor has 12 inputs labeled with the stored month label and dates, "Same amount for all months" with "Apply to all", and a "Copy from <previous month>" icon button on months 2 to 12.
+  - Save is the only filled button. Archived categories and sub-categories are hidden.
+- 17 Oct 2026, M4: `DocumentIds.New()` (in `UserStore.cs`) now makes every document id; setup uses it too.
 
 ## Open questions
 
-- M4: can a plan amount be 0 (to clear a month), or must the month be removed? R-MON-02 says greater than 0, but R-PLN-01 counts a missing amount as 0.
+- Plan has no FY selector. It shows the FY that contains today, or the latest FY after that ends. Once M8 can start the next FY, should Plan get a selector (like MON-03) so the next FY can be planned before it starts?
 - Two FYs can share a label. Example: a transition FY "FY 2027" (Jan to Jun 2027), then the start month changes again before the next rollover, giving a second transition "FY 2027" (Jul to Sep 2027). The ids differ. Should the label get a suffix?
 
 - The Angular specs (interceptor, guards, app) run locally with `npx ng test --watch=false`, but CI only builds. Add `npm test` to the workflow?
-- The initial bundle is 513.27 kB raw (130.98 kB transferred), over the 500 kB warning budget; the error budget is 1 MB. It was 474.88 kB in M2. The growth is shared Angular core and CDK code that the wizard uses, which stays in modules the initial bundle already loads. Raise the warning budget, or accept the warning?
 - The wizard has no cap on the number of accounts, categories or income items. Firestore allows 500 writes per batch, so a setup with more than about 490 items would fail. Add a cap?
 - Run the Firestore emulator in CI (Java and firebase-tools in the workflow), so the Firestore store is tested automatically?
 - Open sign-up instead of the allowlist? Anyone with a Google account could then use the app, which would change AUTH-02. The owner wants to revisit this later. If so, it needs abuse and cost protection at the same time (for example a user cap), because the site is public and the budget alert never stops spending. Until then, people are added through the `ALLOWED_EMAILS` GitHub variable.
