@@ -1,57 +1,236 @@
-// Angular Material theme (Material 3 system variables, https://material.angular.dev/guide/theming).
-// The app is always dark gray (owner's decision, 17 Oct 2026, replaces the light theme of UX-05).
+// NAMA theme: dark only (replaces UX-05). The only file with color values.
+// Components use the tokens below, never hex values. Rules: docs/DESIGN.md.
 @use '@angular/material' as mat;
+
+:root {
+  // Surfaces: depth comes from these steps, not from shadows.
+  --bg: #0f1218;
+  --surface: #171b22;
+  --surface-2: #1e232c;
+  --border: #2a303b;
+  --divider: #222831;
+  --track: #262c36;
+
+  // Text. Never pure white.
+  --text: #e6e8ec;
+  --text-2: #a7afbc;
+  --text-muted: #8a93a2;
+
+  // Accent. --primary only for filled buttons; --primary-text for links, active nav, focus ring.
+  --primary: #3e5ee8;
+  --on-primary: #ffffff;
+  --primary-text: #8ea6ff;
+  --primary-soft: #1f2a4d;
+
+  // Status, each with its soft background.
+  --ok: #3cc8a8;
+  --ok-bg: #12342e;
+  --warn: #f0a44b;
+  --warn-bg: #3a2a14;
+  --danger: #f47a70;
+  --danger-bg: #3d1c1b;
+
+  // The only shadow: menus and dialogs.
+  --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.4);
+
+  --font: 'IBM Plex Sans', system-ui, sans-serif;
+}
 
 html {
   height: 100%;
   color-scheme: dark;
+
+  // The palette is only Material's required base; every visible color is overridden below.
   @include mat.theme(
     (
       color: (
-        primary: mat.$azure-palette,
-        tertiary: mat.$blue-palette,
+        primary: mat.$blue-palette,
         theme-type: dark,
       ),
-      typography: Roboto,
+      typography: (
+        plain-family: ('IBM Plex Sans', system-ui, sans-serif),
+        brand-family: ('IBM Plex Sans', system-ui, sans-serif),
+        bold-weight: 600,
+        medium-weight: 500,
+        regular-weight: 400,
+      ),
       density: 0,
     )
   );
 
-  // Neutral dark grays instead of Material's blue-tinted dark surfaces.
   @include mat.theme-overrides(
     (
-      background: #1c1d20,
-      surface: #1c1d20,
-      surface-dim: #1c1d20,
-      surface-bright: #3a3b3f,
-      surface-container-lowest: #151618,
-      surface-container-low: #202124,
-      surface-container: #25262a,
-      surface-container-high: #2d2e32,
-      surface-container-highest: #36373b,
-      on-surface: #e4e5e8,
-      on-surface-variant: #a9acb2,
-      outline: #72757b,
-      outline-variant: #3b3d42,
+      background: var(--bg),
+      surface: var(--bg),
+      surface-dim: var(--bg),
+      surface-bright: var(--surface-2),
+      surface-container-lowest: var(--bg),
+      surface-container-low: var(--surface),
+      surface-container: var(--surface),
+      surface-container-high: var(--surface-2),
+      surface-container-highest: var(--surface-2),
+      on-surface: var(--text),
+      on-surface-variant: var(--text-2),
+      outline: var(--border),
+      outline-variant: var(--divider),
+      primary: var(--primary),
+      on-primary: var(--on-primary),
+      error: var(--danger),
     )
   );
 
-  // The top bar sits one step above the page.
+  // Buttons: 40px, radius 8. Filled = the one primary action. Outlined = secondary.
+  @include mat.button-overrides(
+    (
+      filled-container-height: 40px,
+      filled-container-shape: 8px,
+      filled-container-color: var(--primary),
+      filled-label-text-color: var(--on-primary),
+      filled-label-text-weight: 500,
+      outlined-container-height: 40px,
+      outlined-container-shape: 8px,
+      outlined-outline-color: var(--border),
+      outlined-label-text-color: var(--text),
+      outlined-label-text-weight: 500,
+      text-container-height: 40px,
+      text-container-shape: 8px,
+      text-label-text-color: var(--primary-text),
+    )
+  );
+
+  @include mat.icon-button-overrides(
+    (
+      state-layer-size: 44px,
+      icon-color: var(--text-2),
+    )
+  );
+
+  // Inputs: outline appearance (default set in app.config.ts), same height as buttons.
+  @include mat.form-field-overrides(
+    (
+      container-height: 40px,
+      container-vertical-padding: 8px,
+      outlined-container-shape: 8px,
+      outlined-outline-color: var(--border),
+      outlined-hover-outline-color: var(--text-muted),
+      outlined-focus-outline-color: var(--primary-text),
+      outlined-label-text-color: var(--text-muted),
+      outlined-focus-label-text-color: var(--primary-text),
+      outlined-input-text-color: var(--text),
+    )
+  );
+
+  @include mat.progress-bar-overrides(
+    (
+      track-height: 8px,
+      active-indicator-height: 8px,
+      track-shape: 999px,
+      track-color: var(--track),
+      active-indicator-color: var(--primary-text),
+    )
+  );
+
+  @include mat.table-overrides(
+    (
+      background-color: var(--surface),
+      header-container-height: 48px,
+      header-headline-color: var(--text-muted),
+      header-headline-size: 13px,
+      header-headline-weight: 500,
+      row-item-container-height: 48px,
+      row-item-label-text-color: var(--text),
+      row-item-outline-color: var(--divider),
+    )
+  );
+
+  @include mat.dialog-overrides(
+    (
+      container-color: var(--surface),
+      container-shape: 12px,
+      container-elevation-shadow: var(--shadow-overlay),
+      subhead-color: var(--text),
+      supporting-text-color: var(--text-2),
+    )
+  );
+
+  @include mat.menu-overrides(
+    (
+      container-color: var(--surface),
+      container-shape: 8px,
+      container-elevation-shadow: var(--shadow-overlay),
+      item-label-text-color: var(--text),
+      item-icon-color: var(--text-2),
+    )
+  );
+
   @include mat.toolbar-overrides(
     (
-      container-background-color: var(--mat-sys-surface-container),
+      container-background-color: var(--surface),
+      container-text-color: var(--text),
     )
   );
 }
 
 body {
-  // Background, font and text colors from the Material system variables
-  // (https://material.angular.dev/guide/system-variables).
-  background-color: var(--mat-sys-surface);
-  color: var(--mat-sys-on-surface);
-  font: var(--mat-sys-body-medium);
-
-  // Reset the user agent margin.
   margin: 0;
   height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font: 400 14px/1.5 var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+// Type scale: page title, section title, body, label/caption.
+h1 {
+  margin: 0 0 24px;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.33;
+}
+
+h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.caption {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+// All money: tabular figures, so columns line up.
+.money {
+  font-variant-numeric: tabular-nums;
+}
+
+// The secondary button sits on a surface, not on the page.
+.mat-mdc-outlined-button {
+  background: var(--surface);
+}
+
+.mat-icon {
+  font-size: 20px;
+  width: 20px;
+  height: 20px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary-text);
+  outline-offset: 2px;
+}
+
+// Phones: larger body text, and 16px inputs so iPhone does not zoom on focus.
+@media (max-width: 767.98px) {
+  body {
+    font-size: 15px;
+  }
+
+  html {
+    @include mat.form-field-overrides(
+      (
+        container-text-size: 16px,
+      )
+    );
+  }
 }

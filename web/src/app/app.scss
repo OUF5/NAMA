@@ -1,15 +1,21 @@
+// Shell layout (UX-01). Colors come only from the tokens in styles.scss.
 :host {
   display: flex;
   flex-direction: column;
   height: 100%;
 }
 
+// Top bar, which is also the page header on phones.
 .top-bar {
-  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  flex: none;
+  height: 56px;
+  padding: 0 12px 0 24px;
+  border-bottom: 1px solid var(--border);
 }
 
 .brand {
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   letter-spacing: 0.08em;
 }
 
@@ -17,7 +23,6 @@
   flex: 1;
 }
 
-// Desktop: side bar on the left (UX-01).
 .layout {
   flex: 1;
   min-height: 0;
@@ -26,52 +31,73 @@
   grid-template-areas: 'nav main';
 }
 
+// Desktop: side bar.
 .nav {
   grid-area: nav;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  width: 88px;
-  padding: 8px 0;
-  background: var(--mat-sys-surface-container-low);
-  border-right: 1px solid var(--mat-sys-outline-variant);
+  box-sizing: border-box;
+  width: 240px;
+  padding: 16px 12px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
 }
 
 .nav-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
-  min-height: 56px;
-  margin: 0 8px;
-  border-radius: 12px;
-  color: var(--mat-sys-on-surface-variant);
-  font: var(--mat-sys-label-medium);
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 8px;
+  color: var(--text-2);
   text-decoration: none;
 
+  &:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
   &.active {
-    color: var(--mat-sys-on-secondary-container);
-    background: var(--mat-sys-secondary-container);
+    background: var(--primary-soft);
+    color: var(--primary-text);
+    font-weight: 500;
   }
 }
 
+// The circle grows outward (negative margin), so the Add label lines up with the others.
 .nav-add mat-icon {
   box-sizing: content-box;
-  padding: 6px;
+  margin: -4px;
+  padding: 4px;
   border-radius: 50%;
-  color: var(--mat-sys-on-primary);
-  background: var(--mat-sys-primary);
+  color: var(--on-primary);
+  background: var(--primary);
 }
 
 .content {
   grid-area: main;
   overflow: auto;
-  padding: 16px;
 }
 
-// Phones (under 768 px): bottom bar (UX-01).
+.page {
+  box-sizing: border-box;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+// Phones (under 768 px): bottom bar with Add in the center.
 @media (max-width: 767.98px) {
+  .top-bar {
+    padding: 0 4px 0 16px;
+  }
+
+  .brand {
+    font-size: 17px;
+  }
+
   .layout {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr auto;
@@ -80,15 +106,58 @@
 
   .nav {
     flex-direction: row;
-    width: auto;
+    align-items: center;
     gap: 0;
-    padding: 4px 0 calc(4px + env(safe-area-inset-bottom));
+    width: auto;
+    padding: 4px 4px env(safe-area-inset-bottom);
     border-right: 0;
-    border-top: 1px solid var(--mat-sys-outline-variant);
+    border-top: 1px solid var(--border);
   }
 
   .nav-item {
     flex: 1;
-    margin: 0 2px;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    min-width: 44px;
+    min-height: 56px;
+    padding: 0;
+    font-size: 12px;
+
+    &:hover,
+    &.active {
+      background: none;
+    }
+
+    &.active {
+      color: var(--primary-text);
+      font-weight: 600;
+    }
+  }
+
+  .nav-add mat-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 52px;
+    height: 52px;
+    margin: 0;
+    padding: 0;
+    font-size: 28px;
+  }
+
+  // The round button is the label; the text stays for screen readers.
+  .nav-add span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .page {
+    padding: 16px;
   }
 }

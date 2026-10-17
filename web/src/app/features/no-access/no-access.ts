@@ -20,13 +20,35 @@ import { AuthService } from '../../core/auth';
     </section>
   `,
   styles: `
+    :host {
+      display: flex;
+      justify-content: center;
+      padding-top: 12vh;
+    }
+
     .page {
+      box-sizing: border-box;
       display: flex;
       flex-direction: column;
       align-items: center;
       gap: 16px;
-      padding-top: 15vh;
+      width: 100%;
+      max-width: 400px;
+      padding: 32px 24px;
       text-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    h1,
+    p {
+      margin: 0;
+    }
+
+    p {
+      color: var(--text-2);
+      overflow-wrap: anywhere;
     }
   `,
 })
