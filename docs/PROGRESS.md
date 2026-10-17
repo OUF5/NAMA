@@ -28,7 +28,7 @@
   - "Done when", totals match a manual check. Worked out by hand: salary 15,000 + rent 2,000 monthly + a once bonus of 500.25 in Sep; Groceries 1,500 every month, Fuel 400 from Sep. That gives Jan planned 1,500, income 17,000, unplanned 15,500, and Sep planned 1,900, income 17,500.25, unplanned 15,600.25. `PlanCalculatorTests` and `PlansTests` assert exactly these numbers.
   - The owner checked the page locally and approved the push. Commit `fdd8d06` deployed, and every CI step passed (`dotnet test`: 232 of 232).
   - On production, `/api/health` returns version `fdd8d06…`, and `/api/categories`, `/api/fiscal-years` and `/api/fiscal-years/2026-01/plans` return 401 without a token.
-- **M5 Add entry: built locally (17 Oct 2026).** The Add page (ENT-01 to ENT-03, FY-03, R-STA-03), `GET /api/bank-accounts`, `GET /api/indicator`, `POST /api/entries`, the shared planned indicator, and the desktop top-bar Add button (PRD 5.4).
+- **M5 Add entry: done (17 Oct 2026).** The Add page (ENT-01 to ENT-03, FY-03, R-STA-03), `GET /api/bank-accounts`, `GET /api/indicator`, `POST /api/entries`, the shared planned indicator, and the desktop top-bar Add button (PRD 5.4).
   - Locally: `dotnet test api.tests` passed 285 of 285 (232 before). `npm run build` passed with no warnings: initial 529.99 kB (513.87 kB before; the shell now uses the outlined `MatButton` for the top-bar Add), Add chunk 142.70 kB lazy. `npx ng test --watch=false` passed 53 of 53 (38 before). No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
   - "Done when", each entry gets the right month: `EntriesTests` post 17 Oct, 26 Oct, 27 Oct, 27 Jan and 26 Jan 2027 and get `2026-09`, `2026-09`, `2026-10`, `2026-01` and `2026-12`, all in FY `2026-01`. 26 Jan 2026 and 27 Jan 2027 get 422. A scratch program ran `FirestoreUserStore` against the emulator with a throwaway user, deleted afterwards. It found the following:
     - The entry was stored with `date` 2026-10-17, `periodKey` 2026-09, `fyId` 2026-01 and `amountMinor` 79999, plus `createdAt` and `updatedAt`.
@@ -36,6 +36,9 @@
     - The (subCategoryId, periodKey) query returned only that sub-category's entries in that month.
   - "Done when", indicator numbers match a hand check. Groceries is planned at 1,500 in Sep. Entries are 400 and 799.99 in Sep, 50 in Aug, and 100 on Fuel. That gives planned 1,500, spent 1,199.99, remaining 300.01 and 79%; Aug gives 1,000 / 50 / 950 / 5%. `IndicatorTests` assert exactly these numbers, and the emulator query summed 119999 (Sep) and 5000 (Aug).
   - "Done when", usable one-handed at 360 px: the owner checked the page locally (emulator) and approved the push. The first check found two UX problems, both fixed before the push: the "Saved" message was easy to miss, and the cleared amount showed an error after each save (see Decisions).
+  - Commit `f0ddd39` deployed, and every CI step passed (`dotnet test`: 285 of 285).
+  - On production, `/api/health` returns version `f0ddd39…`. `GET /api/bank-accounts`, `GET /api/indicator` and `POST /api/entries` return 401 without a token.
+- Next: M6 Entries, in a fresh session.
 
 ## Decisions
 
