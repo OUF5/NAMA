@@ -56,7 +56,7 @@
   - Commit `766f490` deployed, and every CI step passed (`dotnet test`: 343 of 343).
   - On production, `/api/health` returns version `766f490…`. `GET /api/entries`, `GET /api/entries/export.csv`, `PUT /api/entries/x` and `DELETE /api/entries/x` return 401 without a token.
   - The `entries (fyId asc, date desc)` index went from `CREATING` to `READY` about 7 minutes after the deploy (`gcloud firestore indexes composite list`, read-only).
-- **M7 Months and year: built locally (17 Oct 2026), waiting for the owner's local check and push.** The Months page (MON-01 to MON-04) and `GET /api/fiscal-years/{fyId}/overview`. FY-01 (the rollover banner) is M8.
+- **M7 Months and year: done (17 Oct 2026).** The Months page (MON-01 to MON-04) and `GET /api/fiscal-years/{fyId}/overview`. FY-01 (the rollover banner) is M8.
   - Locally: `dotnet test api.tests` passed 358 of 358 (343 before; 15 new in `OverviewTests`). `npm run build` passed with no warnings: initial 533.96 kB (532.43 kB before), Months chunk 71.11 kB lazy. `npx ng test --watch=false` passed 86 of 86 (69 before). No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
   - One `ng test` run, started straight after `dotnet test` and `ng build` in the same command, had 2 failures in 2 spec files. The test names were not captured. It did not happen again in 12 later runs, 3 of them with a web build and an API build running at the same time.
   - `dotnet run` answers 401 with `Cache-Control: no-store` for the overview without a token.
@@ -71,7 +71,11 @@
     - the FY total.
     - It ran 60 cell checks plus the FY totals. Still to do: the owner taps cells locally and compares them with the Entries totals.
   - Hand check (`Months_and_totals_match_the_hand_check`, the M4 incomes and plans with the M5 entries): Sep has income 17,500.25, planned 1,900, spent 1,299.99 and remaining 600.01. The FY totals are 204,500.25 / 19,600 / 1,349.99 / 18,250.01.
-- Next: the owner checks M7 locally (360, 390 and 430 px and desktop), then commit and push. After that, M8 Settings and FY rollover, in a fresh session.
+  - The owner checked the page locally (emulator) and approved the push. That check led to four changes before the push: the "Upcoming" label, 5 entries per card with a link to Entries, one-line entries, and Remaining in the status color (see Decisions).
+  - Commit `42be360` deployed, and every CI step passed (`dotnet test`: 358 of 358).
+  - On production, `/api/health` returns version `42be360…`. `GET /api/fiscal-years/2026-01/overview` returns 401 with `Cache-Control: no-store` without a token, and `/months` returns 200.
+  - Still open: the owner's production check that Sep 2026 shows In progress on `/months` and that a few Year cells match their Entries totals.
+- Next: M8 Settings and FY rollover, in a fresh session. M8 also adds the FY-01 banner to Months.
 
 ## Decisions
 
