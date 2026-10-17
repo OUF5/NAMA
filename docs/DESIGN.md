@@ -1,6 +1,6 @@
 # NAMA design rules
 
-A dark, calm, professional finance app (benchmarks: Mercury, the Stripe dashboard, IBM Carbon Gray). **Dark theme only** (replaces UX-05). Every screen built from M3 onwards follows this page. If a screen needs something this page doesn't cover, ask before inventing it.
+A dark, calm, professional finance app (benchmarks: Mercury, the Stripe dashboard, IBM Carbon Gray). **Dark theme only** (replaces UX-05), near-black and monochrome: buttons and highlights are neutral gray, never blue. Color is used only for status (ok, warn, danger). Every screen built from M3 onwards follows this page. If a screen needs something this page doesn't cover, ask before inventing it.
 
 ## Tokens
 
@@ -17,13 +17,14 @@ The tokens are defined once in `web/src/styles.scss`, the only file with color v
 | `--text` | Main text (never pure white) |
 | `--text-2` | Secondary text, icons |
 | `--text-muted` | Labels, captions, table headers |
-| `--primary` | **Filled buttons only**, with `--on-primary` text |
-| `--primary-text` | Links, active nav, focus ring |
+| `--primary` | **Filled buttons only** (neutral light gray, no blue), with `--on-primary` dark text |
+| `--primary-text` | Links (always underlined, since they are not colored), active nav, focus ring |
 | `--primary-soft` | Active nav background, "In progress" chip |
 | `--ok` / `--ok-bg` | Within plan |
 | `--warn` / `--warn-bg` | Near limit (80–100%) |
 | `--danger` / `--danger-bg` | Over plan, errors |
 | `--shadow-overlay` | The only shadow: menus and dialogs |
+| `--google-*` | Only the "Sign in with Google" button |
 
 **Depth comes from the surface steps** (`--bg`, then `--surface`, then `--surface-2`), not from shadows. There are no gradients, glows or neon. Backgrounds are never `#000`, and body text is never `#FFF`.
 
@@ -99,11 +100,12 @@ Use at most 3 sizes per screen, not counting KPIs.
 - **Year grid (MON-02):** it scrolls sideways inside its card, with the first column sticky. The page itself never scrolls sideways.
 - **Dialogs:** `--surface`, 12px radius, `--shadow-overlay`. Full screen on phones. Never stacked (UX-04).
 - **Add form (ENT):** it fits on one phone screen without scrolling, and Save is always visible at the bottom.
+- **Sign in with Google:** follows Google's branding guidelines (light variant): a white button with a 1px `--google-border`, 4px radius, the official multicolor "G" logo (`web/public/google-g.svg`, the only file allowed to contain those brand colors) and dark text. It is the only white button in the app.
 - **Icons:** Material Symbols Outlined only (the app default), 20px, `--text-2`.
 
 ## Accessibility (UX-07)
 
-- Text contrast is at least 4.5:1. `--primary` is not used as text color, because it is only about 3.5:1 on `--bg`.
+- Text contrast is at least 4.5:1. The accent is neutral (no blue), so color alone never marks a link or an action; links are underlined.
 - The focus ring is visible: 2px `--primary-text` on `:focus-visible`.
 - Touch targets are at least 44×44px on phones: buttons, nav items, icon buttons, and chips you can tap.
 - Color is never the only signal; there is always a text label or an icon.

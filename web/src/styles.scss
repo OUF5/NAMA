@@ -16,11 +16,18 @@
   --text-2: #a7afbc;
   --text-muted: #8a93a2;
 
-  // Accent. --primary only for filled buttons; --primary-text for links, active nav, focus ring.
-  --primary: #3e5ee8;
-  --on-primary: #ffffff;
-  --primary-text: #8ea6ff;
-  --primary-soft: #1f2a4d;
+  // Accent: neutral, no blue (owner's choice). --primary only for filled buttons;
+  // --primary-text for links (underlined), active nav and the focus ring.
+  --primary: #e4e4e7;
+  --on-primary: #0a0a0b;
+  --primary-text: #f4f4f5;
+  --primary-soft: #26262a;
+
+  // "Sign in with Google" button, light variant of Google's branding guidelines.
+  --google-bg: #ffffff;
+  --google-bg-hover: #f2f2f2;
+  --google-text: #1f1f1f;
+  --google-border: #747775;
 
   // Status, each with its soft background.
   --ok: #3cc8a8;

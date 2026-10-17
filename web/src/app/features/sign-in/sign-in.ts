@@ -1,17 +1,17 @@
 import { Component, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../core/auth';
 
 // AUTH-01: Google sign-in only. Afterwards the guards pick Setup or Dashboard (AUTH-05).
+// The button follows Google's sign-in branding (light variant, official "G" logo).
 @Component({
   selector: 'app-sign-in',
-  imports: [MatButtonModule],
   template: `
     <section class="page">
       <h1>Sign in to NAMA</h1>
-      <button mat-flat-button type="button" [disabled]="busy()" (click)="signIn()">
-        Sign in with Google
+      <button class="google" type="button" [disabled]="busy()" (click)="signIn()">
+        <img src="google-g.svg" alt="" width="18" height="18" />
+        <span>Sign in with Google</span>
       </button>
       @if (error()) {
         <p class="error" role="alert">{{ error() }}</p>
@@ -42,6 +42,29 @@ import { AuthService } from '../../core/auth';
 
     h1 {
       margin: 0;
+    }
+
+    .google {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--google-border);
+      border-radius: 4px;
+      background: var(--google-bg);
+      color: var(--google-text);
+      font: 500 14px var(--font);
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        background: var(--google-bg-hover);
+      }
+
+      &:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
     }
 
     .error {
