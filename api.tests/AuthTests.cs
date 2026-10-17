@@ -74,7 +74,7 @@ public class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
         Assert.Equal(
-            """{"setupCompleted":false,"profile":null,"currentFyId":null,"currentPeriodKey":null}""",
+            """{"setupCompleted":false,"profile":null,"currentFyId":null,"currentPeriodKey":null,"currentPeriod":null}""",
             await response.Content.ReadAsStringAsync());
     }
 }

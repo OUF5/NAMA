@@ -1,13 +1,25 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
+import { PeriodInfo } from '../shared/month-label';
 
-// GET /api/me (PRD 7.5). Profile, current FY and current month are filled in from M3.
+export interface Profile {
+  displayName: string;
+  email: string;
+  projectName: string;
+  currency: string;
+  timezone: string;
+  fiscalStartMonth: number;
+  paydayDay: number;
+}
+
+// GET /api/me (PRD 7.5). The current FY and month are null when no FY contains today.
 export interface Me {
   setupCompleted: boolean;
-  profile: null;
+  profile: Profile | null;
   currentFyId: string | null;
   currentPeriodKey: string | null;
+  currentPeriod: PeriodInfo | null;
 }
 
 // Loads /api/me once per sign-in.
@@ -26,6 +38,11 @@ export class MeService {
     const me = await firstValueFrom(this.http.get<Me>('/api/me'));
     this.me.set(me);
     return me;
+  }
+
+  // POST /api/setup answers with the new /api/me, so no second call is needed.
+  set(me: Me): void {
+    this.me.set(me);
   }
 
   clear(): void {

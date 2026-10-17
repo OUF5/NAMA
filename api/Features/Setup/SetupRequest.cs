@@ -1,0 +1,115 @@
+using System.ComponentModel.DataAnnotations;
+using Api.Domain;
+
+namespace Api.Features.Setup;
+
+// PRD 5.2 wizard, sent once on Finish. Amounts are decimal (R-MON-01).
+public sealed class SetupRequest : IValidatableObject
+{
+    public string? ProjectName { get; init; }
+    public string? DisplayName { get; init; }
+    public string? Currency { get; init; }
+
+    // SET-04: detected in the browser. An IANA id, for example "Asia/Riyadh".
+    public string? Timezone { get; init; }
+
+    [Range(1, 12)]
+    public int FiscalStartMonth { get; init; }
+
+    [Range(1, 31)]
+    public int PaydayDay { get; init; }
+
+    [Required]
+    public decimal? Salary { get; init; }
+
+    public List<AdditionalIncomeRequest>? AdditionalIncome { get; init; }
+    public List<string?>? BankAccounts { get; init; }
+    public List<string?>? Categories { get; init; }
+
+    // SET-01, PRD 4.7, R-MON-02. Everything that the attributes above cannot express.
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (!Names.IsValid(ProjectName))
+        {
+            yield return Error(nameof(ProjectName), "Project name is 1 to 40 characters.");
+        }
+        if (!Names.IsValid(DisplayName))
+        {
+            yield return Error(nameof(DisplayName), "Your name is 1 to 40 characters.");
+        }
+        if (Currency is null || !Money.Currencies.Contains(Currency))
+        {
+            yield return Error(nameof(Currency), $"Currency is one of {string.Join(", ", Money.Currencies)}.");
+        }
+        if (string.IsNullOrEmpty(Timezone) || !TimeZoneInfo.TryFindSystemTimeZoneById(Timezone, out _))
+        {
+            yield return Error(nameof(Timezone), "Time zone is unknown.");
+        }
+        // SET-01: a salary of 0 is allowed.
+        if (Salary is { } salary && !Money.IsValidAmount(salary, allowZero: true))
+        {
+            yield return Error(nameof(Salary), "Salary is 0 to 10,000,000 with at most 2 decimals.");
+        }
+
+        var items = AdditionalIncome ?? [];
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            // A label is not a name in 4.7, so two items may share one (owner's choice, M3).
+            if (!Names.IsValid(item.Label))
+            {
+                yield return Error($"{nameof(AdditionalIncome)}[{i}].{nameof(item.Label)}", "Label is 1 to 40 characters.");
+            }
+            if (item.Amount is not { } amount || !Money.IsValidAmount(amount))
+            {
+                yield return Error($"{nameof(AdditionalIncome)}[{i}].{nameof(item.Amount)}", "Amount is more than 0 and at most 10,000,000, with at most 2 decimals.");
+            }
+            if (item.Type is not (AdditionalIncomeRequest.Once or AdditionalIncomeRequest.Monthly))
+            {
+                yield return Error($"{nameof(AdditionalIncome)}[{i}].{nameof(item.Type)}", "Type is once or monthly.");
+            }
+        }
+
+        foreach (var error in ValidateNames(nameof(BankAccounts), "bank account", BankAccounts))
+        {
+            yield return error;
+        }
+        foreach (var error in ValidateNames(nameof(Categories), "category", Categories))
+        {
+            yield return error;
+        }
+    }
+
+    private static IEnumerable<ValidationResult> ValidateNames(string member, string what, List<string?>? names)
+    {
+        names ??= [];
+        if (names.Count == 0)
+        {
+            yield return Error(member, $"Add at least one {what}.");
+        }
+        for (var i = 0; i < names.Count; i++)
+        {
+            if (!Names.IsValid(names[i]))
+            {
+                yield return Error($"{member}[{i}]", "Name is 1 to 40 characters.");
+            }
+        }
+        if (!Names.AreUnique(names))
+        {
+            yield return Error(member, $"Each {what} name is used once (ignoring case).");
+        }
+    }
+
+    private static ValidationResult Error(string member, string message) => new(message, [member]);
+}
+
+// R-INC-03: Once is one month, Monthly runs on from a month.
+public sealed class AdditionalIncomeRequest
+{
+    public const string Once = "once";
+    public const string Monthly = "monthly";
+
+    public string? Label { get; init; }
+    public decimal? Amount { get; init; }
+    public string? Type { get; init; }
+}

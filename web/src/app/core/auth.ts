@@ -10,6 +10,7 @@ import {
   signOut,
 } from 'firebase/auth';
 import { environment } from '../../environments/environment';
+import { clearAllDrafts } from '../features/setup/setup-draft';
 import { MeService } from './me';
 
 // AUTH-01: Google sign-in with the Firebase Auth popup (PRD 7.6). Only firebase/auth is used.
@@ -39,10 +40,11 @@ export class AuthService {
     await signInWithPopup(this.auth, provider);
   }
 
-  // AUTH-04
+  // AUTH-04. Also drops any unfinished setup wizard (SET-03).
   async signOut(): Promise<void> {
     await signOut(this.auth);
     this.me.clear();
+    clearAllDrafts();
     await this.router.navigate(['/sign-in']);
   }
 

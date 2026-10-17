@@ -11,6 +11,7 @@
 #   gcloud auth login
 #   GITHUB_REPO=your-github-user/nama ./infra/setup.sh            # steps 4 to 7
 #   ./infra/setup.sh cleanup                                       # step 9, after the first deploy
+#   ./infra/setup.sh firestore                                     # before the first Firestore deploy (M3)
 set -euo pipefail
 
 PROJECT_ID="nama-b6bda"
@@ -36,6 +37,19 @@ JSON
     --no-dry-run
   rm -f "$POLICY_FILE"
   echo "Cleanup policy set on cloud-run-source-deploy."
+  exit 0
+fi
+
+# M3: the API reads and writes Firestore. Cloud Run runs as the Compute Engine default service
+# account, which gets no roles automatically here (iam.automaticIamGrantsForDefaultServiceAccounts
+# is enforced), so it needs Cloud Datastore User.
+if [[ "${1:-}" == "firestore" ]]; then
+  PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+  gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+    --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" \
+    --role="roles/datastore.user" \
+    --condition=None
+  echo "Cloud Run can now use Firestore."
   exit 0
 fi
 

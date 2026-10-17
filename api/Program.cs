@@ -1,4 +1,5 @@
 using Api.Features.Profile;
+using Api.Features.Setup;
 using Api.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,11 @@ if (!string.IsNullOrEmpty(port))
 
 builder.Services.AddProblemDetails();
 builder.Services.AddFirebaseAuth();
+// PRD 7.2: built-in Minimal API validation; errors come back as ProblemDetails.
+builder.Services.AddValidation();
+// R-CAL-10: tests replace it to fake "today".
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddFirestore();
 
 var app = builder.Build();
 
@@ -46,5 +52,6 @@ api.MapGet("/health", (IConfiguration config) =>
     .AllowAnonymous();
 
 api.MapMe();
+api.MapSetup();
 
 app.Run();

@@ -5,6 +5,9 @@ public static class Money
 {
     public const decimal MaxAmount = 10_000_000m;
 
+    // R-MON-03: chosen in the wizard, formatting only. The list is the owner's choice (M3).
+    public static readonly IReadOnlyList<string> Currencies = ["SAR", "QAR", "AED", "USD", "EUR", "GBP"];
+
     public static long ToMinor(decimal amount)
     {
         if (!HasAtMostTwoDecimals(amount))

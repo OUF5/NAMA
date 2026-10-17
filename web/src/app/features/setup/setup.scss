@@ -1,0 +1,136 @@
+// docs/DESIGN.md: one card, outline inputs, one filled button per step. Tokens only.
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 8px 16px;
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 560px;
+  padding-top: 16px;
+}
+
+h2 {
+  margin: 16px 0 0;
+}
+
+.note {
+  margin: 0;
+  color: var(--text-2);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.income-row {
+  display: grid;
+  grid-template-columns: 1fr 140px 130px 44px;
+  gap: 8px;
+  align-items: start;
+}
+
+.add-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+
+  mat-form-field {
+    flex: 1;
+  }
+
+  button {
+    margin-top: 4px;
+  }
+}
+
+.names {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 48px;
+    border-bottom: 1px solid var(--divider);
+  }
+}
+
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+  font-weight: 600;
+}
+
+.caption {
+  margin: 0;
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px 16px;
+  margin: 0;
+
+  dt {
+    color: var(--text-muted);
+  }
+
+  dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.sign-out {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+}
+
+@media (max-width: 767.98px) {
+  .card {
+    padding: 0 0 16px;
+  }
+
+  .income-row {
+    grid-template-columns: 1fr 1fr 44px;
+
+    mat-form-field:first-child {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .summary {
+    grid-template-columns: 1fr;
+    gap: 4px;
+
+    dd {
+      margin-bottom: 8px;
+    }
+  }
+}

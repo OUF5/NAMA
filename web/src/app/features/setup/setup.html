@@ -1,0 +1,272 @@
+<h1>Set up NAMA</h1>
+
+<section class="card">
+  <mat-stepper linear [orientation]="vertical() ? 'vertical' : 'horizontal'" labelPosition="bottom" #stepper>
+    <!-- 1. Project -->
+    <mat-step [stepControl]="project" label="Project">
+      <form [formGroup]="project" class="step">
+        <mat-form-field>
+          <mat-label>Project name</mat-label>
+          <input matInput formControlName="projectName" [maxlength]="nameMax" autocomplete="off" />
+          @if (project.controls.projectName.invalid) {
+            <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>Your name</mat-label>
+          <input matInput formControlName="displayName" [maxlength]="nameMax" autocomplete="name" />
+          @if (project.controls.displayName.invalid) {
+            <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>Currency</mat-label>
+          <mat-select formControlName="currency">
+            @for (code of currencies; track code) {
+              <mat-option [value]="code">{{ code }}</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <div class="actions">
+          <button mat-flat-button type="submit" matStepperNext>Next</button>
+        </div>
+      </form>
+    </mat-step>
+
+    <!-- 2. Fiscal year -->
+    <mat-step [stepControl]="calendar" label="Fiscal year">
+      <form [formGroup]="calendar" class="step">
+        <mat-form-field>
+          <mat-label>Fiscal year starts in</mat-label>
+          <mat-select formControlName="fiscalStartMonth">
+            @for (name of monthNames; track name; let i = $index) {
+              <mat-option [value]="i + 1">{{ name }}</mat-option>
+            }
+          </mat-select>
+          @if (calendar.controls.fiscalStartMonth.invalid) {
+            <mat-error>Choose a month.</mat-error>
+          }
+        </mat-form-field>
+        <mat-form-field>
+          <mat-label>Payday (day of the month)</mat-label>
+          <input matInput formControlName="paydayDay" type="number" inputmode="numeric" min="1" max="31" />
+          <mat-hint>1 = calendar months</mat-hint>
+          @if (calendar.controls.paydayDay.invalid) {
+            <mat-error>Enter a day from 1 to 31.</mat-error>
+          }
+        </mat-form-field>
+        @if (preview(); as p) {
+          <p class="note" aria-live="polite">
+            {{ p.fiscalYear.label }}: {{ formatDate(p.fiscalYear.startDate) }} to {{ formatDate(p.fiscalYear.endDate) }}.
+            You are in {{ p.currentPeriod.label }} ({{ formatDay(p.currentPeriod.startDate) }} to
+            {{ formatDay(p.currentPeriod.endDate) }}).
+          </p>
+        }
+        <div class="actions">
+          <button mat-stroked-button type="button" matStepperPrevious>Back</button>
+          <button mat-flat-button type="submit" matStepperNext>Next</button>
+        </div>
+      </form>
+    </mat-step>
+
+    <!-- 3. Income -->
+    <mat-step [stepControl]="income" label="Income">
+      <form [formGroup]="income" class="step">
+        <mat-form-field>
+          <mat-label>Monthly salary</mat-label>
+          <span matTextPrefix>{{ currency() }}&nbsp;</span>
+          <input matInput formControlName="salary" inputmode="decimal" autocomplete="off" />
+          <mat-hint>0 is allowed</mat-hint>
+          @if (income.controls.salary.invalid) {
+            <mat-error>Enter 0 to 10,000,000 with at most 2 decimals.</mat-error>
+          }
+        </mat-form-field>
+
+        <h2>Additional income</h2>
+        <div formArrayName="additional" class="rows">
+          @for (item of additional.controls; track item; let i = $index) {
+            <div class="income-row" [formGroupName]="i">
+              <mat-form-field>
+                <mat-label>Label</mat-label>
+                <input matInput formControlName="label" [maxlength]="nameMax" autocomplete="off" />
+                @if (item.controls['label'].invalid) {
+                  <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
+                }
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Amount</mat-label>
+                <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
+                @if (item.controls['amount'].invalid) {
+                  <mat-error>More than 0, at most 10,000,000, 2 decimals.</mat-error>
+                }
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Type</mat-label>
+                <mat-select formControlName="type">
+                  <mat-option value="monthly">Monthly</mat-option>
+                  <mat-option value="once">Once</mat-option>
+                </mat-select>
+              </mat-form-field>
+              <button mat-icon-button type="button" (click)="removeIncomeItem(i)" [attr.aria-label]="'Remove income item ' + (i + 1)">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          }
+        </div>
+        <div>
+          <button mat-stroked-button type="button" (click)="addIncomeItem()">
+            <mat-icon>add</mat-icon>
+            Add income item
+          </button>
+        </div>
+
+        <p class="total">
+          <span class="caption">Total monthly income</span>
+          <span class="money">{{ money(totalMonthlyMinor()) }}</span>
+        </p>
+        @for (item of onceItems(); track $index) {
+          <p class="caption">
+            + <span class="money">{{ money(item.minor) }}</span> once ({{ item.label }})@if (preview(); as p) { in {{ p.currentPeriod.label }}}
+          </p>
+        }
+
+        <div class="actions">
+          <button mat-stroked-button type="button" matStepperPrevious>Back</button>
+          <button mat-flat-button type="submit" matStepperNext>Next</button>
+        </div>
+      </form>
+    </mat-step>
+
+    <!-- 4. Bank accounts -->
+    <mat-step [stepControl]="bankAccounts" label="Bank accounts">
+      <div class="step">
+        <p class="note">Add at least one account. Entries are saved against an account.</p>
+        <div class="add-row">
+          <mat-form-field>
+            <mat-label>Account name</mat-label>
+            <input
+              matInput
+              [formControl]="newAccount"
+              [maxlength]="nameMax"
+              autocomplete="off"
+              (keydown.enter)="$event.preventDefault(); addAccount()"
+            />
+            @if (newAccount.hasError('duplicate')) {
+              <mat-error>This account is already in the list.</mat-error>
+            } @else if (newAccount.hasError('name')) {
+              <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
+            }
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="addAccount()">Add</button>
+        </div>
+        <ul class="names">
+          @for (name of bankAccounts.value; track $index; let i = $index) {
+            <li>
+              <span>{{ name }}</span>
+              <button mat-icon-button type="button" (click)="removeAt(bankAccounts, i)" [attr.aria-label]="'Remove ' + name">
+                <mat-icon>close</mat-icon>
+              </button>
+            </li>
+          }
+        </ul>
+        @if (accountsTried() && bankAccounts.invalid) {
+          <p class="error" role="alert">Add at least one bank account.</p>
+        }
+        <div class="actions">
+          <button mat-stroked-button type="button" matStepperPrevious>Back</button>
+          <button mat-flat-button type="button" matStepperNext (click)="accountsTried.set(true)">Next</button>
+        </div>
+      </div>
+    </mat-step>
+
+    <!-- 5. General categories -->
+    <mat-step [stepControl]="categories" label="Categories">
+      <div class="step">
+        <p class="note">Add your general categories. Sub-categories and amounts come next, on Plan.</p>
+        @if (unusedSuggestions().length) {
+          <mat-chip-listbox aria-label="Suggested categories, tap to add">
+            @for (name of unusedSuggestions(); track name) {
+              <mat-chip-option (selectionChange)="$event.selected && addSuggestion(name)">
+                <mat-icon matChipAvatar>add</mat-icon>
+                {{ name }}
+              </mat-chip-option>
+            }
+          </mat-chip-listbox>
+        }
+        <div class="add-row">
+          <mat-form-field>
+            <mat-label>Category name</mat-label>
+            <input
+              matInput
+              [formControl]="newCategory"
+              [maxlength]="nameMax"
+              autocomplete="off"
+              (keydown.enter)="$event.preventDefault(); addCategory()"
+            />
+            @if (newCategory.hasError('duplicate')) {
+              <mat-error>This category is already in the list.</mat-error>
+            } @else if (newCategory.hasError('name')) {
+              <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
+            }
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="addCategory()">Add</button>
+        </div>
+        <ul class="names">
+          @for (name of categories.value; track $index; let i = $index) {
+            <li>
+              <span>{{ name }}</span>
+              <button mat-icon-button type="button" (click)="removeAt(categories, i)" [attr.aria-label]="'Remove ' + name">
+                <mat-icon>close</mat-icon>
+              </button>
+            </li>
+          }
+        </ul>
+        @if (categoriesTried() && categories.invalid) {
+          <p class="error" role="alert">Add at least one category.</p>
+        }
+        <div class="actions">
+          <button mat-stroked-button type="button" matStepperPrevious>Back</button>
+          <button mat-flat-button type="button" matStepperNext (click)="categoriesTried.set(true)">Next</button>
+        </div>
+      </div>
+    </mat-step>
+
+    <!-- 6. Review and finish -->
+    <mat-step label="Review">
+      <div class="step">
+        <dl class="summary">
+          <dt>Project</dt>
+          <dd>{{ project.value.projectName }} · {{ project.value.displayName }} · {{ currency() }}</dd>
+          <dt>Fiscal year</dt>
+          <dd>
+            Starts in {{ monthName(calendar.value.fiscalStartMonth) }}, payday {{ calendar.value.paydayDay }}
+            @if (preview(); as p) {
+              <br />{{ p.fiscalYear.label }}: {{ formatDate(p.fiscalYear.startDate) }} to {{ formatDate(p.fiscalYear.endDate) }}
+              <br />You are in {{ periodWithDates(p.currentPeriod) }}
+            }
+          </dd>
+          <dt>Time zone</dt>
+          <dd>{{ timezone }}</dd>
+          <dt>Total monthly income</dt>
+          <dd class="money">{{ money(totalMonthlyMinor()) }}</dd>
+          <dt>Bank accounts</dt>
+          <dd>{{ bankAccounts.value.join(', ') }}</dd>
+          <dt>Categories</dt>
+          <dd>{{ categories.value.join(', ') }}</dd>
+        </dl>
+        @if (error()) {
+          <p class="error" role="alert">{{ error() }}</p>
+        }
+        <div class="actions">
+          <button mat-stroked-button type="button" matStepperPrevious>Back</button>
+          <button mat-flat-button type="button" [disabled]="busy()" (click)="finish()">Finish</button>
+        </div>
+      </div>
+    </mat-step>
+  </mat-stepper>
+
+  <!-- Settings is not reachable before setup, so the wizard has its own Sign out (owner's choice, M3). -->
+  <div class="sign-out">
+    <button mat-button type="button" (click)="signOut()">Sign out</button>
+  </div>
+</section>

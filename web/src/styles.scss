@@ -170,6 +170,38 @@ html {
     )
   );
 
+  // Setup wizard (PRD 5.2): the current and finished steps use the neutral accent.
+  @include mat.stepper-overrides(
+    (
+      container-color: transparent,
+      line-color: var(--border),
+      header-label-text-color: var(--text-muted),
+      header-selected-state-label-text-color: var(--text),
+      header-icon-background-color: var(--surface-2),
+      header-icon-foreground-color: var(--text-2),
+      header-selected-state-icon-background-color: var(--primary),
+      header-selected-state-icon-foreground-color: var(--on-primary),
+      header-done-state-icon-background-color: var(--primary),
+      header-done-state-icon-foreground-color: var(--on-primary),
+      header-edit-state-icon-background-color: var(--primary),
+      header-edit-state-icon-foreground-color: var(--on-primary),
+      header-error-state-label-text-color: var(--danger),
+      header-error-state-icon-foreground-color: var(--danger),
+      header-hover-state-layer-color: var(--surface-2),
+      header-focus-state-layer-color: var(--surface-2),
+    )
+  );
+
+  // Chips you can tap: outlined on the card, text in --text-2.
+  @include mat.chips-overrides(
+    (
+      outline-color: var(--border),
+      label-text-color: var(--text-2),
+      with-icon-icon-color: var(--text-2),
+      elevated-container-color: transparent,
+    )
+  );
+
   @include mat.toolbar-overrides(
     (
       container-background-color: var(--surface),

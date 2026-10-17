@@ -12,7 +12,10 @@
 - **M2 Domain core: done (17 Oct 2026).** `api/Domain` has `FiscalCalendar`, `Money` and `IncomeCalculator`, with tests in `FiscalCalendarTests`, `MoneyTests` and `IncomeCalculatorTests`. They cover every example in sections 3 and 4.1. No endpoint, web or package changes.
   - "Done when": the CI run for commit `18b979c` passed all 142 tests ("Passed! - Failed: 0, Passed: 142"), and every later deploy and smoke-test step passed too.
   - Locally, `dotnet test api.tests` also passed 142 of 142, and `npm run build` passed.
-- Next: M3 Setup wizard, in a fresh session.
+- **M3 Setup wizard: built, not yet deployed (17 Oct 2026).** The 6-step wizard, `GET /api/setup/preview`, `POST /api/setup` (one Firestore batch) and the full `GET /api/me` with the UX-02 top bar.
+  - `dotnet test api.tests`: 184 of 184 passed. `npm run build` passed (with the bundle budget warning below). `npx ng test --watch=false`: 32 of 32 passed (including a wizard spec for the Add buttons, after the owner found that Add reloaded the page).
+  - `mcr.microsoft.com/dotnet/aspnet:10.0` is Ubuntu 24.04 with `tzdata` and `tzdata-legacy` 2026c, and has `/usr/share/zoneinfo/Asia/Riyadh` (checked with `docker run`).
+  - Still open: the owner's wizard run against the emulator, `./infra/setup.sh firestore` (owner), the push, and the "Done when" check on production.
 
 ## Decisions
 
@@ -50,14 +53,31 @@
 - 17 Oct 2026, M2: The `Today` tests use a small `TimeProvider` subclass, not the `Microsoft.Extensions.TimeProvider.Testing` package (no new dependency).
 - 17 Oct 2026: `firestore.indexes.json` starts empty. The `entries (fyId asc, date desc)` index is added with the entries work (M6).
 
+- 17 Oct 2026, M3: New library `Google.Cloud.Firestore` 4.5.0 (PRD 7.2 data access). The `FirestoreDb` is built on first use with `EmulatorDetection.EmulatorOrProduction`; `launchSettings.json` sets `FIRESTORE_EMULATOR_HOST=localhost:8080`, so `dotnet run` never touches production.
+- 17 Oct 2026, M3: **Live preview endpoint** (owner's choice, adds to PRD 7.5): `GET /api/setup/preview?fiscalStartMonth=&paydayDay=&timezone=` returns the first FY and the current month from `FiscalCalendar`, so the month and FY rules exist only in `api/Domain`. The Review step reuses it.
+- 17 Oct 2026, M3: **Wizard income months** (owner's choice): salary and Monthly items run from the FY's first month, open ended; Once items are in the current month. There are no month pickers in the wizard. "Total monthly income" = salary + Monthly items; Once items are listed on their own.
+- 17 Oct 2026, M3: `allowZero: true` only for the wizard salary (SET-01). Additional income items must be more than 0. The salary change in M8 decides for itself.
+- 17 Oct 2026, M3: **Currency list** (owner's choice): SAR (default), QAR, AED, USD, EUR, GBP. `Money.Currencies` in the API and `CURRENCIES` in `web/src/app/shared/money.ts` must stay equal.
+- 17 Oct 2026, M3: An additional income label is trimmed and 1 to 40 characters; duplicates are allowed (owner's choice). Names (4.7) live in `api/Domain/Names.cs`.
+- 17 Oct 2026, M3: **Sign out in the wizard** (owner's choice): a text button under the wizard card, because Settings is not reachable before setup. AUTH-04 is unchanged.
+- 17 Oct 2026, M3: **UX-02 top bar** (owner's choice): desktop shows `NAMA · project name` and then "Sep 2026 · 27 Sep to 26 Oct"; phones show the same on two lines (the first line is cut with "…"). Only "NAMA" before setup. The month part is hidden when no FY contains today.
+- 17 Oct 2026, M3: `/api/me` also returns `currentPeriod` (key, label, start and end date) for UX-02. `POST /api/setup` answers 201 with the same body, so the web app needs no second call.
+- 17 Oct 2026, M3: The setup handler checks for an existing profile first, and the batch *creates* the profile document, so a second setup fails as a whole (409) even in a race.
+- 17 Oct 2026, M3: Document ids for incomes, bank accounts and categories are GUIDs (32 hex characters) made by the API. `lastBankAccountId` is null after setup (the Add form in M5 picks the default).
+- 17 Oct 2026, M3: Validation errors use the C# property names (`ProjectName`, `BankAccounts[0]`), because the built-in validation reports `[Range]` and `[Required]` errors that way.
+- 17 Oct 2026, M3: The wizard draft (SET-03) is in `localStorage` under `nama.setup.<uid>`, removed on Finish and on sign-out. FY start month and payday have no defaults, so both are chosen on purpose.
+- 17 Oct 2026, M3: `/setup` sends a user who is already set up to the Dashboard (`allowedGuard`).
+- 17 Oct 2026, M3: The outline input default moved from `app.config.ts` to `web/src/app/shared/form-field.ts` (`OUTLINE_FORM_FIELDS`), provided by each page with inputs. Importing the token in `app.config.ts` put all of form-field and `@angular/forms` (about 125 kB) into the initial bundle.
+- 17 Oct 2026, M3: Cloud Run runs as the Compute Engine default service account, which had only `roles/run.builder` (the org enforces `iam.automaticIamGrantsForDefaultServiceAccounts`). `./infra/setup.sh firestore` grants it `roles/datastore.user`; the owner runs it before the first M3 deploy.
+- 17 Oct 2026, M3: Endpoint tests use an in-memory `IUserStore` (CI has no emulator). The Firestore store is checked by hand against the emulator.
+
 ## Open questions
 
 - M4: can a plan amount be 0 (to clear a month), or must the month be removed? R-MON-02 says greater than 0, but R-PLN-01 counts a missing amount as 0.
-- M3: `FiscalCalendar.Today` uses IANA time zone ids, which need tzdata in the `aspnet:10.0` runtime image. Check this in production when "today" is first used.
 - Two FYs can share a label. Example: a transition FY "FY 2027" (Jan to Jun 2027), then the start month changes again before the next rollover, giving a second transition "FY 2027" (Jul to Sep 2027). The ids differ. Should the label get a suffix?
 
-- UX-02 (project name and current month label in the top bar) needs profile data, so it moves to M3. Until then the top bar shows only "NAMA".
-- Before setup is finished there is no way to sign out, because Settings is behind `setupGuard`. Should the M3 wizard show Sign out?
 - The Angular specs (interceptor, guards, app) run locally with `npx ng test --watch=false`, but CI only builds. Add `npm test` to the workflow?
-- The initial bundle is 474.88 kB raw, close to the 500 kB warning budget, because `firebase/auth` is in it. Later milestones may cross the warning.
+- The initial bundle is 513.27 kB raw (130.98 kB transferred), over the 500 kB warning budget; the error budget is 1 MB. It was 474.88 kB in M2. The growth is shared Angular core and CDK code that the wizard uses, which stays in modules the initial bundle already loads. Raise the warning budget, or accept the warning?
+- The wizard has no cap on the number of accounts, categories or income items. Firestore allows 500 writes per batch, so a setup with more than about 490 items would fail. Add a cap?
+- Run the Firestore emulator in CI (Java and firebase-tools in the workflow), so the Firestore store is tested automatically?
 - Open sign-up instead of the allowlist? Anyone with a Google account could then use the app, which would change AUTH-02. The owner wants to revisit this later. If so, it needs abuse and cost protection at the same time (for example a user cap), because the site is public and the budget alert never stops spending. Until then, people are added through the `ALLOWED_EMAILS` GitHub variable.

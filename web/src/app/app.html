@@ -1,5 +1,12 @@
 <mat-toolbar class="top-bar">
-  <span class="brand">NAMA</span>
+  <div class="title">
+    <span class="brand"
+      >NAMA@if (projectName(); as name) {<span class="project"> · {{ name }}</span>}</span
+    >
+    @if (currentMonth(); as month) {
+      <span class="month">{{ month }}</span>
+    }
+  </div>
   <span class="spacer"></span>
   @if (showNav()) {
     <a mat-icon-button routerLink="/settings" routerLinkActive="active" aria-label="Settings">

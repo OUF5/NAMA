@@ -12,9 +12,14 @@ export const authGuard: CanActivateFn = async () => {
 };
 
 // AUTH-02: for /setup. Loads /api/me, so a reload of /setup also checks the allowlist.
+// Once setup is complete, /setup sends you to the Dashboard (AUTH-05).
 export const allowedGuard: CanActivateFn = async () => {
-  const result = await loadMe(inject(AuthService), inject(MeService), inject(Router));
-  return isMe(result) ? true : result;
+  const router = inject(Router);
+  const result = await loadMe(inject(AuthService), inject(MeService), router);
+  if (!isMe(result)) {
+    return result;
+  }
+  return result.setupCompleted ? router.createUrlTree(['/']) : true;
 };
 
 // PRD 7.7, AUTH-05: until setup is complete, every page sends you to /setup.

@@ -61,6 +61,12 @@ describe('guards (PRD 7.7, AUTH-05)', () => {
     expect(me.load).toHaveBeenCalledOnce();
   });
 
+  it('allowedGuard sends you to the Dashboard once setup is complete (AUTH-05)', async () => {
+    user.set({ uid: 'user-1' });
+    me.load.mockResolvedValue({ setupCompleted: true });
+    expect(urlOf(await run(allowedGuard))).toBe('/');
+  });
+
   it('allowedGuard sends you to /sign-in without calling the API when signed out', async () => {
     expect(urlOf(await run(allowedGuard))).toBe('/sign-in');
     expect(me.load).not.toHaveBeenCalled();

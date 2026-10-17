@@ -1,3 +1,4 @@
+using Api.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -8,22 +9,29 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 namespace Api.Tests;
 
 // The API with test settings. Tokens are checked against TestTokens.SigningKey,
-// so tests never fetch Google's public keys.
+// so tests never fetch Google's public keys. Data lives in memory and "today" is TestTime.
 public class ApiFactory : WebApplicationFactory<Program>
 {
     public const string ProjectId = "nama-test";
     public const string AllowedEmail = "owner@example.com";
     public const string SecondAllowedEmail = "second@example.com";
 
+    public InMemoryUserStore Store { get; } = new();
+    public TestTime Time { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("FIREBASE_PROJECT_ID", ProjectId);
         builder.UseSetting("ALLOWED_EMAILS", $" {AllowedEmail} , {SecondAllowedEmail},");
         builder.ConfigureTestServices(services =>
+        {
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
             {
                 options.Configuration = new OpenIdConnectConfiguration();
                 options.Configuration.SigningKeys.Add(TestTokens.SigningKey);
-            }));
+            });
+            services.AddSingleton<IUserStore>(Store);
+            services.AddSingleton<TimeProvider>(Time);
+        });
     }
 }
