@@ -12,10 +12,13 @@
 - **M2 Domain core: done (17 Oct 2026).** `api/Domain` has `FiscalCalendar`, `Money` and `IncomeCalculator`, with tests in `FiscalCalendarTests`, `MoneyTests` and `IncomeCalculatorTests`. They cover every example in sections 3 and 4.1. No endpoint, web or package changes.
   - "Done when": the CI run for commit `18b979c` passed all 142 tests ("Passed! - Failed: 0, Passed: 142"), and every later deploy and smoke-test step passed too.
   - Locally, `dotnet test api.tests` also passed 142 of 142, and `npm run build` passed.
-- **M3 Setup wizard: built, not yet deployed (17 Oct 2026).** The 6-step wizard, `GET /api/setup/preview`, `POST /api/setup` (one Firestore batch) and the full `GET /api/me` with the UX-02 top bar.
-  - `dotnet test api.tests`: 184 of 184 passed. `npm run build` passed (with the bundle budget warning below). `npx ng test --watch=false`: 32 of 32 passed (including a wizard spec for the Add buttons, after the owner found that Add reloaded the page).
-  - `mcr.microsoft.com/dotnet/aspnet:10.0` is Ubuntu 24.04 with `tzdata` and `tzdata-legacy` 2026c, and has `/usr/share/zoneinfo/Asia/Riyadh` (checked with `docker run`).
-  - Still open: the owner's wizard run against the emulator, `./infra/setup.sh firestore` (owner), the push, and the "Done when" check on production.
+- **M3 Setup wizard: done (17 Oct 2026).** The 6-step wizard, `GET /api/setup/preview`, `POST /api/setup` (one Firestore batch) and the full `GET /api/me` with the UX-02 top bar. Commit `013388c` deployed; all CI steps passed (`dotnet test`: 184 of 184).
+  - "Done when", locally (emulator): the owner finished the wizard and landed on Plan; the emulator held the profile, FY 2026 with 12 months, 2 income items, 2 accounts and 2 categories.
+  - "Done when", production (https://nama-b6bda.web.app): the owner finished the wizard and landed on Plan, with the top bar showing the project and the current month. The Cloud Run logs show the preview calls (200), `POST /api/setup` 201 in 0.64 s and `GET /api/me` 200. Firestore holds the profile, `fiscalYears/2026-01` "FY 2026" (25 Jan 2026 to 24 Jan 2027, 12 months), the salary and one additional income item from `2026-01`, 2 bank accounts and 4 categories, all with `createdAt`/`updatedAt` (checked read-only).
+  - Locally: `npm run build` passed (with the bundle budget warning below), and `npx ng test --watch=false` passed 32 of 32 (including a wizard spec for the Add buttons, after the owner found that Add reloaded the page).
+  - The `aspnet:10.0` image is Ubuntu 24.04 with `tzdata` and `tzdata-legacy` 2026c (checked with `docker run`). Production "today" works: `/api/me` returned the current month.
+  - The owner ran `./infra/setup.sh firestore` before the deploy (`roles/datastore.user` confirmed on the Compute Engine default service account).
+- Next: M4 Plan, in a fresh session.
 
 ## Decisions
 
