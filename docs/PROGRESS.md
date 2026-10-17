@@ -38,7 +38,7 @@
   - "Done when", usable one-handed at 360 px: the owner checked the page locally (emulator) and approved the push. The first check found two UX problems, both fixed before the push: the "Saved" message was easy to miss, and the cleared amount showed an error after each save (see Decisions).
   - Commit `f0ddd39` deployed, and every CI step passed (`dotnet test`: 285 of 285).
   - On production, `/api/health` returns version `f0ddd39…`. `GET /api/bank-accounts`, `GET /api/indicator` and `POST /api/entries` return 401 without a token.
-- **M6 Entries: built locally (17 Oct 2026), not pushed yet.** The Entries page (TBL-01 to TBL-06), the edit dialog with the delete confirmation (ENT-04, TBL-02, TBL-03), `GET /api/entries`, `PUT` and `DELETE /api/entries/{id}`, `GET /api/entries/export.csv`, and the `entries (fyId asc, date desc)` index.
+- **M6 Entries: done (17 Oct 2026).** The Entries page (TBL-01 to TBL-06), the edit dialog with the delete confirmation (ENT-04, TBL-02, TBL-03), `GET /api/entries`, `PUT` and `DELETE /api/entries/{id}`, `GET /api/entries/export.csv`, and the `entries (fyId asc, date desc)` index.
   - Locally: `dotnet test api.tests` passed 343 of 343 (285 before). `npm run build` passed with no warnings: initial 532.43 kB (529.99 kB before), Entries chunk 49.91 kB lazy. `npx ng test --watch=false` passed 69 of 69 (53 before). The M5 `add-entry.spec.ts` is unchanged and passes, so the shared form changed nothing on Add. No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
   - "Done when", edit and delete update totals everywhere. In M6 the totals are the Entries total and the planned indicator (Add form and edit dialog); Months and Dashboard come in M7 and M9. `EntriesEditTests.Edit_and_delete_update_the_totals` uses the M5 numbers:
     - Groceries is planned at 1,500 in Sep, with 400 and 799.99 in Sep. Sep spent is 1,199.99, remaining 300.01, and the Sep entries total is 1,199.99.
@@ -48,11 +48,15 @@
     - The FY query returned b, c, a: newest first, and the same-date pair added-later first.
     - The update moved the entry to `2027-01` in FY `2027-01`, kept `createdAt` and moved `updatedAt`. `lastBankAccountId` stayed on the last added account.
     - Updating a missing id returned false and created nothing. Delete returned true, then false.
-  - The emulator does not enforce composite indexes. The index is checked on production after the push (Firebase console, Firestore, Indexes: "Enabled").
+  - The emulator does not enforce composite indexes, so the index was checked on production after the push.
   - "Done when", the owner's local check (emulator, FY 2026/27 with payday 27):
     - The owner edited, deleted, exported and checked the page at phone width.
     - The exported `nama-entries-2026-02.csv` had the BOM, the header, quoted fields, CRLF, `34.00`, and the rows newest first.
     - The owner then moved the SAR 34 entry to 19 Nov 2026. The emulator showed `periodKey` `2026-10` (Oct 2026 runs 27 Oct to 26 Nov), `createdAt` unchanged and `updatedAt` moved (checked read-only).
+  - Commit `766f490` deployed, and every CI step passed (`dotnet test`: 343 of 343).
+  - On production, `/api/health` returns version `766f490…`. `GET /api/entries`, `GET /api/entries/export.csv`, `PUT /api/entries/x` and `DELETE /api/entries/x` return 401 without a token.
+  - The `entries (fyId asc, date desc)` index went from `CREATING` to `READY` about 7 minutes after the deploy (`gcloud firestore indexes composite list`, read-only).
+- Next: M7 Months and year, in a fresh session.
 
 ## Decisions
 
@@ -185,6 +189,7 @@
   - It has the same filters and order as the list. The columns follow TBL-01: Date (YYYY-MM-DD), Month (label), Category, Sub-category, "Amount (SAR)" as `125.50` (2 decimals, dot, no thousands separator), Bank account, Note.
   - Every field is quoted, quotes are doubled, lines end with CRLF, and the file starts with a UTF-8 BOM (for Excel).
   - Text that starts with `=`, `+`, `-`, `@`, a tab or a CR gets a leading `'` (OWASP "CSV Injection").
+- 17 Oct 2026, after M6: **The Plan column "Unplanned" is now "Unassigned"** (owner's choice). On its own, "Unplanned" read like unplanned spending. The number is still R-PLN-03 "unplanned income": income minus planned, green at 0 or more and red below 0. Only the label changed (the desktop header and the phone card label); the API field stays `unplanned`, and the column order is unchanged.
 
 ## Open questions
 
