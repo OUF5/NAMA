@@ -3,8 +3,12 @@
 ## Status
 
 - **M0 Skeleton and pipeline: done (17 Oct 2026).** A push to `main` deployed commit `c1205d6`. https://nama-b6bda.web.app returns 200, and `/api/health` returns `{"status":"ok","version":"c1205d60220e24b1d2ad98f025ce79fef2f75f1f"}`. One-time setup is complete: Firestore (default) database in `me-central1`, Workload Identity for `OUF5/NAMA`, 5 GitHub variables, and the Artifact Registry cleanup policy (keep 5 newest).
-- **M1 Sign-in: deployed (17 Oct 2026).** A push to `main` deployed commit `b199650`. All CI steps passed, including the new smoke check: `/api/me` without a token returns 401 on production. Checked locally in the owner's browser: own email signs in and lands on Setup (also after a reload), and another email sees "Access not allowed". Still to do: the owner repeats the two sign-in checks on https://nama-b6bda.web.app.
-- Design foundation (dark theme only, replaces UX-05): built and checked locally in two commits (the first dark gray theme, then the redesign). Push pending the owner's OK.
+- **M1 Sign-in: done (17 Oct 2026).** All three "Done when" checks pass on production (https://nama-b6bda.web.app):
+  - The owner's email signs in and lands on Setup (owner confirmed).
+  - Another email sees "Access not allowed" (owner confirmed).
+  - `/api/me` without a token returns 401 (CI smoke test and curl).
+  - The first deploy was commit `b199650`; all CI steps passed.
+- **Design foundation: deployed (17 Oct 2026)**, commit `d4a552f`, approved by the owner. Dark theme only, near-black and monochrome, IBM Plex Sans, the Google sign-in button. Rules are in [docs/DESIGN.md](DESIGN.md).
 - Next: M2 Domain core, in a fresh session.
 
 ## Decisions
@@ -42,4 +46,5 @@
 - UX-02 (project name and current month label in the top bar) needs profile data, so it moves to M3. Until then the top bar shows only "NAMA".
 - Before setup is finished there is no way to sign out, because Settings is behind `setupGuard`. Should the M3 wizard show Sign out?
 - The Angular specs (interceptor, guards, app) run locally with `npx ng test --watch=false`, but CI only builds. Add `npm test` to the workflow?
-- The initial bundle is 469.68 kB raw, close to the 500 kB warning budget, because `firebase/auth` is in it. Later milestones may cross the warning.
+- The initial bundle is 474.88 kB raw, close to the 500 kB warning budget, because `firebase/auth` is in it. Later milestones may cross the warning.
+- Open sign-up instead of the allowlist? Anyone with a Google account could then use the app, which would change AUTH-02. The owner wants to revisit this later. If so, it needs abuse and cost protection at the same time (for example a user cap), because the site is public and the budget alert never stops spending. Until then, people are added through the `ALLOWED_EMAILS` GitHub variable.
