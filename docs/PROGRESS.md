@@ -18,7 +18,7 @@
   - Locally: `npm run build` passed (with the bundle budget warning below), and `npx ng test --watch=false` passed 32 of 32 (including a wizard spec for the Add buttons, after the owner found that Add reloaded the page).
   - The `aspnet:10.0` image is Ubuntu 24.04 with `tzdata` and `tzdata-legacy` 2026c (checked with `docker run`). Production "today" works: `/api/me` returned the current month.
   - The owner ran `./infra/setup.sh firestore` before the deploy (`roles/datastore.user` confirmed on the Compute Engine default service account).
-- **M4 Plan: built and checked locally (17 Oct 2026), not pushed yet.** The Plan page (PLN-01 to PLN-06), `GET /api/fiscal-years`, `GET`/`POST /api/categories`, `POST /api/sub-categories`, and `GET`/`PUT /api/fiscal-years/{fyId}/plans[/{subCategoryId}]`. The new `PlanCalculator` in `api/Domain` handles R-PLN-01 to R-PLN-03.
+- **M4 Plan: done (17 Oct 2026).** The Plan page (PLN-01 to PLN-06), `GET /api/fiscal-years`, `GET`/`POST /api/categories`, `POST /api/sub-categories`, and `GET`/`PUT /api/fiscal-years/{fyId}/plans[/{subCategoryId}]`. The new `PlanCalculator` in `api/Domain` handles R-PLN-01 to R-PLN-03.
   - Locally: `dotnet test api.tests` passed 232 of 232 (184 before). `npm run build` passed with no warnings: initial 513.87 kB, Plan chunk 16.72 kB lazy. `npx ng test --watch=false` passed 38 of 38. No hex colors in `web/src/app`, and no `double`/`float` in `api/`.
   - "Done when", amounts save: `PlansTests` (PUT then GET in minor units, 0 and blank clear a month, closed months editable). A scratch program ran `FirestoreUserStore` against the emulator:
     - Categories, sub-categories and incomes read back unchanged.
@@ -26,7 +26,9 @@
     - `createdAt` was kept and `updatedAt` moved.
     - The `fyId` query found the plan.
   - "Done when", totals match a manual check. Worked out by hand: salary 15,000 + rent 2,000 monthly + a once bonus of 500.25 in Sep; Groceries 1,500 every month, Fuel 400 from Sep. That gives Jan planned 1,500, income 17,000, unplanned 15,500, and Sep planned 1,900, income 17,500.25, unplanned 15,600.25. `PlanCalculatorTests` and `PlansTests` assert exactly these numbers.
-  - Still to do by the owner: the on-screen check (sign in locally against the emulator, add a sub-category, save amounts, reload), then the push that deploys.
+  - The owner checked the page locally and approved the push. Commit `fdd8d06` deployed, and every CI step passed (`dotnet test`: 232 of 232).
+  - On production, `/api/health` returns version `fdd8d06…`, and `/api/categories`, `/api/fiscal-years` and `/api/fiscal-years/2026-01/plans` return 401 without a token.
+- Next: M5 Add entry, in a fresh session.
 
 ## Decisions
 
@@ -111,4 +113,5 @@
 - The Angular specs (interceptor, guards, app) run locally with `npx ng test --watch=false`, but CI only builds. Add `npm test` to the workflow?
 - The wizard has no cap on the number of accounts, categories or income items. Firestore allows 500 writes per batch, so a setup with more than about 490 items would fail. Add a cap?
 - Run the Firestore emulator in CI (Java and firebase-tools in the workflow), so the Firestore store is tested automatically?
+- The Angular CLI added an `analytics` id to `web/angular.json` during a local run. It is not committed. Keep it out of the repo (and turn it off with `ng analytics disable`)?
 - Open sign-up instead of the allowlist? Anyone with a Google account could then use the app, which would change AUTH-02. The owner wants to revisit this later. If so, it needs abuse and cost protection at the same time (for example a user cap), because the site is public and the budget alert never stops spending. Until then, people are added through the `ALLOWED_EMAILS` GitHub variable.
