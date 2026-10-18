@@ -93,7 +93,7 @@
   - Commit `90b0534` deployed, and every CI step passed (`dotnet test`: 434 of 434).
   - On production, `/api/health` returns version `90b0534…`. All 13 new routes return 401 with `Cache-Control: no-store` without a token, and `/settings`, `/settings/income` and `/plan` return 200.
   - Still open: the owner's production check of Settings and Plan (and the M7 one above).
-- **M9 Dashboard preview and polish: built locally (18 Oct 2026), waiting for the owner's local check and the push.** Dashboard (DSH-01 to DSH-03) with the FY-01 banner, UX-03 empty states, UX-06 PWA (manifest and icons, no service worker). The overview response gets `toDate` (DSH-02).
+- **M9 Dashboard preview and polish: deployed (18 Oct 2026).** Dashboard (DSH-01 to DSH-03) with the FY-01 banner, UX-03 empty states, UX-06 PWA (manifest and icons, no service worker). The overview response gets `toDate` (DSH-02).
   - Locally: `dotnet test api.tests` passed 449 of 449 (434 before; 15 new). `npm run build` passed with no warnings: initial 539.98 kB (540.26 kB before), Dashboard chunk 14.37 kB lazy. `npx ng test --watch=false` passed 119 of 119 (105 before). No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
   - Hand check (`OverviewTests`, the M7 data, today 17 Oct 2026). FY to date covers Jan to Sep 2026:
     - Income 8 × 17,000 + 17,500.25 = 153,500.25. Spent: Aug 50 + Sep 1,299.99 = 1,349.99. Saved 152,150.26.
@@ -102,13 +102,19 @@
     - At 27 Oct 00:00 Riyadh, Oct's income joins (170,500.25 / 169,150.26).
     - After the FY ends: 204,500.25 / 1,349.99 / 203,150.26. Before it starts: 0 / 0 / 0.
   - Current month card (`dashboard.spec.ts`): Sep 2026 · 27 Sep to 26 Oct, Remaining 600.01, Income 17,500.25, Planned 1,900, Spent 1,299.99, bar 68%, "Within plan".
-  - Still to do: the owner's local check (360/390/430 px and desktop, the banner with the M8 recipe, the icons), then the push, the production checks and the Definition of Done below.
+  - The owner checked it locally and approved the push. That check led to the column chart, the NAMA mark and the sign-in redesign (see Decisions).
+  - Commit `678ffcb` deployed, and every CI step passed (https://github.com/OUF5/NAMA/actions/runs/39111983259; `dotnet test`: 449 of 449; initial bundle 539.98 kB).
+  - On production:
+    - `/api/health` returns version `678ffcb…`.
+    - `/api/me` and `/api/fiscal-years/2026-01/overview` return 401 with `Cache-Control: no-store` without a token.
+    - `/manifest.webmanifest` is served as `application/manifest+json`, and `favicon.svg`, `favicon.ico`, `sign-in-bg.svg` and the 4 icons return 200. `index.html` links the manifest, both tab icons and the apple-touch-icon.
+  - Still open: the owner's look at the deployed M9 pages (the owner's earlier production check ran while the deploy was still in progress), the iPhone Home Screen sign-in, and the budget alert.
 
 ## Definition of Done (PRD 9)
 
-Checked on 18 Oct 2026 before the M9 push. Ticked items have their proof next to them. The rest wait for the push or for the owner.
+Checked on 18 Oct 2026, before and after the M9 push (`678ffcb`). Ticked items have their proof next to them. The rest wait for the owner.
 
-- [ ] **Every requirement not tagged Nice is built.** Every untagged, Must and Tech requirement is in a milestone above:
+- [x] **Every requirement not tagged Nice is built.** Every untagged, Must and Tech requirement is in a milestone above:
   - **AUTH-01 to AUTH-05:** M1 and M3.
   - **SET-01, SET-02, SET-04 and the 6 wizard steps:** M3.
   - **PLN-01, PLN-04, PLN-05:** M4, with renames in M8.
@@ -124,9 +130,9 @@ Checked on 18 Oct 2026 before the M9 push. Ticked items have their proof next to
   - **4.6 no DELETE:** only entries and additional income have DELETE routes.
   - **4.7 validation:** M3, M4 and M8.
   - **Owner-approved deviations:** AUTH-04 (Sign out is outside Settings, M8), PRD 5.7 "one page" (sections, M8), UX-05 (dark theme only).
-  - Waits for M9 to be deployed.
+  - M9 is deployed (`678ffcb`), so every milestone is on production.
 - [x] **Skipped Nice items are listed in the README** ("Skipped Nice items"): the seed data script, UX-05 (replaced), the success criteria, and the UX-06 automatic install banner. Every other Nice item is built.
-- [ ] **`dotnet test` and `npm run build` pass, and a push to `main` deploys.** Both pass locally (above). Waits for the push and its CI run.
+- [x] **`dotnet test` and `npm run build` pass, and a push to `main` deploys.** The M9 push ran every step green (https://github.com/OUF5/NAMA/actions/runs/39111983259): `dotnet test` 449 of 449, the web build, the Cloud Run and Hosting deploys, and both smoke tests (`/api/health` returned `678ffcb…`, `/api/me` returned 401).
 - [x] **The worked examples in sections 3 and 4.1 are unit tests** (`dotnet test --list-tests`):
   - `FiscalCalendarTests.Worked_example_month_runs_from_payday_to_the_day_before_the_next_payday`, `Worked_example_statuses` and `Worked_example_first_fiscal_year` (section 3).
   - `Payday_31_months` and `Payday_31_date_belongs_to_the_right_month` (R-CAL-01).
@@ -135,7 +141,7 @@ Checked on 18 Oct 2026 before the M9 push. Ticked items have their proof next to
   - End to end: `RolloverTests.Example_A_…` and `Example_B_…`.
 - [x] **No `double` or `float` in the API:** `grep -rnwE "double|float" api api.tests --include='*.cs' --exclude-dir=bin --exclude-dir=obj` finds nothing.
 - [x] **Firestore rules deny all browser access.** `firestore.rules` is `allow read, write: if false` on `/{document=**}`, and the workflow deploys it (`--only hosting,firestore`). An unauthenticated read of `https://firestore.googleapis.com/v1/projects/nama-b6bda/databases/(default)/documents/users` answers `403 PERMISSION_DENIED` ("Missing or insufficient permissions.").
-- [ ] **Works on a 360 px phone and on desktop.** Waits for the owner's check of every page at 360/390/430 px and on desktop, locally and on production.
+- [ ] **Works on a 360 px phone and on desktop.** The owner checked every page locally, and production up to M8. Waits for the owner's look at the deployed M9 pages.
 - [ ] **The budget alert exists, and Cloud Run max instances = 1.**
   - Max instances, checked read-only with `gcloud run services describe nama-api --region=me-central1 --format=yaml`:
     - The revision has `autoscaling.knative.dev/maxScale: '1'` (the workflow's `--max-instances=1`).
@@ -401,6 +407,11 @@ Checked on 18 Oct 2026 before the M9 push. Ticked items have their proof next to
   - The card has the mark, "NAMA", the caption "Plan and track your spending, salary to salary.", and the unchanged Google button. "Built by Ouf." sits under it.
   - AUTH-01 behavior is unchanged. A new `sign-in.spec.ts` covers the page (3 tests).
 
+- 18 Oct 2026, after M9: **Sharing NAMA: invite links** (owner's choice of A, over B "a People list in Settings" and C "open sign-up with a user cap").
+  - The owner creates a single-use invite link (expires after 7 days) in Settings and sends it. The person opens it, signs in with Google, and is allowed.
+  - The emails in `ALLOWED_EMAILS` stay as admins, so the owner can never be locked out.
+  - This changes AUTH-02. It is its own milestone after M9, planned in a fresh session. Nothing is built yet.
+
 ## Open questions
 
 ### Before Phase 1 is done
@@ -420,7 +431,7 @@ Nothing here is built without the owner's answer.
 - The Angular specs (interceptor, guards, app) run locally with `npx ng test --watch=false`, but CI only builds. Add `npm test` to the workflow?
 - The wizard has no cap on the number of accounts, categories or income items. Firestore allows 500 writes per batch, so a setup with more than about 490 items would fail. Add a cap?
 - Run the Firestore emulator in CI (Java and firebase-tools in the workflow), so the Firestore store is tested automatically?
-- Open sign-up instead of the allowlist? Anyone with a Google account could then use the app, which would change AUTH-02. The owner wants to revisit this later. If so, it needs abuse and cost protection at the same time (for example a user cap), because the site is public and the budget alert never stops spending. Until then, people are added through the `ALLOWED_EMAILS` GitHub variable.
+- (Answered after M9: invite links, see Decisions.) Open sign-up instead of the allowlist? Anyone with a Google account could then use the app, which would change AUTH-02. The owner wants to revisit this later. If so, it needs abuse and cost protection at the same time (for example a user cap), because the site is public and the budget alert never stops spending. Until then, people are added through the `ALLOWED_EMAILS` GitHub variable.
 - M6: Every filter change reads all entries of the FY again (about 1,000 reads late in an FY). If the Firestore usage page shows daily reads near 50,000, add PRD 7.4's 5-minute cache.
 - M6: The edit dialog has no "after this entry" preview. Should it show the change from the saved amount?
 - M6: The Entries list has no paging. Is that fine at personal scale (about 1,000 rows per FY)?
