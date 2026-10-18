@@ -30,8 +30,10 @@ public static class MeEndpoint
 
     // Today (R-CAL-10) and the first and last day of the stored FYs (FY-03, R-STA-03) are for the
     // Add form, so it needs no extra call (M5, NFR-01).
+    // IsAdmin: the email is in ALLOWED_EMAILS, so Settings shows People (AUTH-07).
     public record MeResponse(
         bool SetupCompleted,
+        bool IsAdmin,
         ProfileDto? Profile,
         string? CurrentFyId,
         string? CurrentPeriodKey,
@@ -42,19 +44,19 @@ public static class MeEndpoint
 
     public static IEndpointRouteBuilder MapMe(this IEndpointRouteBuilder api)
     {
-        api.MapGet("/me", (ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
-            LoadAsync(user.FindFirstValue("sub")!, store, time));
+        api.MapGet("/me", (ClaimsPrincipal user, IUserStore store, TimeProvider time, EmailAllowlist admins) =>
+            LoadAsync(user.FindFirstValue("sub")!, admins.IsAdmin(user), store, time));
         return api;
     }
 
     // R-CAL-10: "today" in the profile time zone. The current FY and month are null when no
     // stored FY contains today (after the last FY ends, before the next one is started).
-    public static async Task<MeResponse> LoadAsync(string uid, IUserStore store, TimeProvider time)
+    public static async Task<MeResponse> LoadAsync(string uid, bool isAdmin, IUserStore store, TimeProvider time)
     {
         var profile = await store.GetProfileAsync(uid);
         if (profile is null)
         {
-            return new MeResponse(SetupCompleted: false, Profile: null, CurrentFyId: null, CurrentPeriodKey: null,
+            return new MeResponse(SetupCompleted: false, IsAdmin: isAdmin, Profile: null, CurrentFyId: null, CurrentPeriodKey: null,
                 CurrentPeriod: null, Today: null, FirstDate: null, LastDate: null);
         }
         var today = FiscalCalendar.Today(time, profile.Timezone);
@@ -62,6 +64,7 @@ public static class MeEndpoint
         var current = FiscalCalendar.FindPeriod(fiscalYears, today);
         return new MeResponse(
             profile.SetupCompleted,
+            isAdmin,
             ProfileDto.From(profile),
             current?.FiscalYear.Id,
             current?.Period.Key,

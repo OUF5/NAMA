@@ -39,13 +39,41 @@ export interface Income {
   currentTotal: number | null;
 }
 
-// Owner's choice (M8, NFR-01): every section in one call.
+// AUTH-07, STG-07. Dates are YYYY-MM-DD in the admin's time zone. A member id is not a user id.
+export interface Member {
+  id: string;
+  email: string;
+  joinedOn: string;
+}
+
+export interface Invite {
+  id: string;
+  createdOn: string;
+  expiresOn: string;
+  expired: boolean;
+}
+
+export interface People {
+  admins: string[];
+  members: Member[];
+  invites: Invite[];
+}
+
+// AUTH-06: the token is sent only once; just its hash is stored.
+export interface CreatedInvite {
+  token: string;
+  expiresOn: string;
+  people: People;
+}
+
+// Owner's choice (M8, NFR-01): every section in one call. people is null unless you are an admin.
 export interface SettingsResponse {
   profile: Profile;
   calendar: Calendar;
   income: Income;
   bankAccounts: BankAccount[];
   categories: Category[];
+  people: People | null;
 }
 
 export interface ProfileChange {
@@ -116,5 +144,18 @@ export class SettingsApi {
 
   updateSubCategory(id: string, name: string, archived: boolean): Promise<SubCategory> {
     return firstValueFrom(this.http.put<SubCategory>(`/api/sub-categories/${id}`, { name, archived }));
+  }
+
+  // AUTH-06, AUTH-07 (admins only). Each answers with the whole People list.
+  createInvite(): Promise<CreatedInvite> {
+    return firstValueFrom(this.http.post<CreatedInvite>('/api/invites', {}));
+  }
+
+  revokeInvite(id: string): Promise<{ people: People }> {
+    return firstValueFrom(this.http.delete<{ people: People }>(`/api/invites/${id}`));
+  }
+
+  removePerson(memberId: string): Promise<{ people: People }> {
+    return firstValueFrom(this.http.delete<{ people: People }>(`/api/people/${memberId}`));
   }
 }

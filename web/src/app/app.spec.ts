@@ -11,7 +11,7 @@ describe('App', () => {
   const signOut = vi.fn();
 
   beforeEach(async () => {
-    me.set({ setupCompleted: true, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null });
+    me.set({ setupCompleted: true, isAdmin: false, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null });
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
@@ -32,6 +32,7 @@ describe('App', () => {
   it('should show the project name and the current month with its dates (UX-02)', async () => {
     me.set({
       setupCompleted: true,
+      isAdmin: false,
       profile: {
         displayName: 'Owner',
         email: 'owner@example.com',
@@ -143,7 +144,7 @@ describe('App', () => {
   });
 
   it('should hide navigation and settings until setup is complete', async () => {
-    me.set({ setupCompleted: false, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null });
+    me.set({ setupCompleted: false, isAdmin: false, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;

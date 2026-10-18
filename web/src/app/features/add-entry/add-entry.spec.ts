@@ -17,6 +17,7 @@ const sep = { key: '2026-09', label: 'Sep 2026', startDate: '2026-09-27', endDat
 function meWith(lastBankAccountId: string | null): Me {
   return {
     setupCompleted: true,
+    isAdmin: false,
     profile: { displayName: 'Owner', email: 'o@example.com', projectName: 'Home', currency: 'SAR', timezone: 'Asia/Riyadh', fiscalStartMonth: 1, paydayDay: 27, lastBankAccountId },
     currentFyId: '2026-01',
     currentPeriodKey: '2026-09',

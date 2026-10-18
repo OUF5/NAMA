@@ -5,6 +5,7 @@ using Api.Features.FiscalYears;
 using Api.Features.Income;
 using Api.Features.Indicator;
 using Api.Features.Overview;
+using Api.Features.People;
 using Api.Features.Plans;
 using Api.Features.Profile;
 using Api.Features.Settings;
@@ -72,5 +73,6 @@ api.MapIncome();
 api.MapEntries();
 api.MapIndicator();
 api.MapOverview();
+api.MapPeople();
 
 app.Run();

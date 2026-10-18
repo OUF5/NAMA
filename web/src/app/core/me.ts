@@ -18,6 +18,8 @@ export interface Profile {
 // GET /api/me (PRD 7.5). The current FY and month are null when no FY contains today.
 export interface Me {
   setupCompleted: boolean;
+  // AUTH-02: the email is in ALLOWED_EMAILS, so Settings shows People (AUTH-07).
+  isAdmin: boolean;
   profile: Profile | null;
   currentFyId: string | null;
   currentPeriodKey: string | null;
@@ -50,6 +52,13 @@ export class MeService {
   // POST /api/setup answers with the new /api/me, so no second call is needed.
   set(me: Me): void {
     this.me.set(me);
+  }
+
+  // AUTH-06: joins with an invite link. It answers with /api/me too.
+  async acceptInvite(token: string): Promise<Me> {
+    const me = await firstValueFrom(this.http.post<Me>('/api/invites/accept', { token }));
+    this.me.set(me);
+    return me;
   }
 
   // POST /api/entries also sets lastBankAccountId on the profile (decision 5).

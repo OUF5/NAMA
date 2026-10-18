@@ -1,18 +1,27 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { Router, provideRouter } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { AuthService } from '../../core/auth';
+import { MeService } from '../../core/me';
 import { SignIn } from './sign-in';
 
 // AUTH-01 sign-in page with the owner's M9 design: the NAMA mark, the background artwork and the
-// "Built by Ouf." credit.
+// "Built by Ouf." credit. AUTH-06: the same page on /invite/<token> joins with the link.
 describe('Sign in (AUTH-01)', () => {
   let signIn: ReturnType<typeof vi.fn>;
+  let acceptInvite: ReturnType<typeof vi.fn>;
 
-  function open(): HTMLElement {
+  function open(token: string | null = null): HTMLElement {
     signIn = vi.fn();
+    acceptInvite = vi.fn();
     TestBed.configureTestingModule({
       imports: [SignIn],
-      providers: [provideRouter([]), { provide: AuthService, useValue: { signIn } }],
+      providers: [
+        provideRouter([]),
+        { provide: AuthService, useValue: { signIn } },
+        { provide: MeService, useValue: { acceptInvite } },
+        { provide: ActivatedRoute, useValue: { snapshot: { paramMap: convertToParamMap(token ? { token } : {}) } } },
+      ],
     });
     const fixture = TestBed.createComponent(SignIn);
     fixture.detectChanges();
@@ -59,4 +68,53 @@ describe('Sign in (AUTH-01)', () => {
       'Sign-in did not finish. Please try again.',
     );
   });
+
+  it('shows the invite caption on an invite link', () => {
+    const root = open('abc123');
+
+    expect(root.querySelector('.caption')!.textContent!.trim()).toBe("You're invited to NAMA. Sign in with Google to join.");
+    expect(root.querySelector('button.google')!.textContent!.trim()).toBe('Sign in with Google');
+  });
+
+  it('signs in, joins with the link and opens the app without the link in the history', async () => {
+    const root = open('abc123');
+    signIn.mockResolvedValue(undefined);
+    acceptInvite.mockResolvedValue({ setupCompleted: false });
+    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+    root.querySelector<HTMLButtonElement>('button.google')!.click();
+    await settle();
+
+    expect(acceptInvite).toHaveBeenCalledWith('abc123');
+    expect(navigate).toHaveBeenCalledWith('/', { replaceUrl: true });
+  });
+
+  it('does not join when sign-in does not finish', async () => {
+    const root = open('abc123');
+    signIn.mockRejectedValue(new Error('popup closed'));
+
+    root.querySelector<HTMLButtonElement>('button.google')!.click();
+    await settle();
+
+    expect(acceptInvite).not.toHaveBeenCalled();
+    expect(root.querySelector('[role="alert"]')!.textContent!.trim()).toBe('Sign-in did not finish. Please try again.');
+  });
+
+  for (const [status, message] of [
+    [404, 'This invite link was already used or revoked. Ask the person who shared NAMA for a new one.'],
+    [410, 'This invite link has expired. Ask the person who shared NAMA for a new one.'],
+  ] as const) {
+    it(`says why a link no longer works (${status})`, async () => {
+      const root = open('abc123');
+      signIn.mockResolvedValue(undefined);
+      acceptInvite.mockRejectedValue(new HttpErrorResponse({ status }));
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+      root.querySelector<HTMLButtonElement>('button.google')!.click();
+      await settle();
+
+      expect(navigate).not.toHaveBeenCalled();
+      expect(root.querySelector('[role="alert"]')!.textContent!.trim()).toBe(message);
+    });
+  }
 });

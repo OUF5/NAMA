@@ -8,7 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { AuthService } from './core/auth';
 import { MeService } from './core/me';
-import { SETTINGS_SECTIONS } from './features/settings/settings-sections';
+import { visibleSections } from './features/settings/settings-sections';
 import { dialogSize } from './shared/dialog';
 import { periodWithDates } from './shared/month-label';
 
@@ -52,8 +52,9 @@ export class App {
   });
 
   // Desktop side bar (owner's choice, M8): Settings opens its sections under it while you are in
-  // Settings. The gear in the top bar stays (UX-01); phones get the Settings list instead.
-  protected readonly settingsSections = SETTINGS_SECTIONS;
+  // Settings. The gear in the top bar stays (UX-01); phones get the Settings list instead. People
+  // is listed for admins only (STG-07).
+  protected readonly settingsSections = computed(() => visibleSections(this.me.me()?.isAdmin === true));
   protected readonly inSettings = computed(() => this.url().startsWith('/settings'));
 
   // AUTH-04, owner's choice (M8): outside Settings, always visible (the bottom of the side bar, the

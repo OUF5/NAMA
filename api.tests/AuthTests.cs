@@ -74,7 +74,7 @@ public class AuthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.True(response.Headers.CacheControl?.NoStore);
         Assert.Equal(
-            """{"setupCompleted":false,"profile":null,"currentFyId":null,"currentPeriodKey":null,"currentPeriod":null,"today":null,"firstDate":null,"lastDate":null}""",
+            """{"setupCompleted":false,"isAdmin":true,"profile":null,"currentFyId":null,"currentPeriodKey":null,"currentPeriod":null,"today":null,"firstDate":null,"lastDate":null}""",
             await response.Content.ReadAsStringAsync());
     }
 }

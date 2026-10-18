@@ -18,6 +18,7 @@ public static class FirestoreSetup
             EmulatorDetection = EmulatorDetection.EmulatorOrProduction,
         }.Build());
         services.AddSingleton<IUserStore, FirestoreUserStore>();
+        services.AddSingleton<IAccessStore, FirestoreAccessStore>();
         return services;
     }
 }
@@ -328,7 +329,8 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
         }
     }
 
-    private static async Task<bool> DeleteAsync(DocumentReference reference)
+    // Also used for revoking an invite (FirestoreAccessStore).
+    internal static async Task<bool> DeleteAsync(DocumentReference reference)
     {
         try
         {

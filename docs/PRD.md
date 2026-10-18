@@ -115,7 +115,7 @@ Stop. That is not in the approved plan or the PRD. Undo it and continue with the
 
 ### Users
 
-- One user (you). Data is stored per Google account, so the app is multi-user ready, but an email allowlist limits who can use it (`AUTH-02`).
+- One user (you). Data is stored per Google account, so the app is multi-user ready, but admins and invite links limit who can use it (`AUTH-02`).
 
 ### Out of scope for Phase 1
 
@@ -235,10 +235,12 @@ These are the rules Claude must get exactly right. Put them in pure functions in
 ### 5.1 Sign-in and access (AUTH)
 
 - **AUTH-01** Sign in with Google only (Firebase Authentication, Google provider), using `signInWithPopup`. 🆕 ADDED · Tech
-- **AUTH-02** Allowlist: only emails listed in the API setting `ALLOWED_EMAILS` (comma separated) can use the app. Anyone else sees an "Access not allowed" page. 🆕 ADDED · Must (stops strangers from creating data and using your quota). ✅ DECIDED: only your Gmail at first; add emails later by editing the variable
+- **AUTH-02** Access: only allowed people can use the app. **Admins** are the emails in the API setting `ALLOWED_EMAILS` (comma separated, ignoring case). Admins are always allowed, so they can never be locked out. Anyone else needs an invite link from an admin (AUTH-06). An allowed person who is removed (AUTH-07) loses access on their next request. Anyone who is not allowed sees an "Access not allowed" page that says "Ask the person who shared NAMA for an invite link". 🆕 ADDED · Must (stops strangers from creating data and using your quota). ✅ DECIDED: invite links (owner's choice of option A, 18 Oct 2026). This replaces "add emails later by editing the variable".
 - **AUTH-03** Every API call sends the Firebase ID token as a Bearer token. The API validates it and takes the user id from the token's `sub` claim. The client never sends a user id.
 - **AUTH-04** Sign out is available in Settings.
 - **AUTH-05** After sign-in: setup not completed → Setup wizard; otherwise → Dashboard.
+- **AUTH-06** Invite links. An admin creates an invite link in Settings → People. Each link works once and expires 7 days after it was created. The person opens the link, signs in with Google, and is allowed from then on. The Google account that uses the link is the one allowed. A used, expired or revoked link shows why it no longer works. ✅ DECIDED
+- **AUTH-07** People. Settings → People is shown to admins only. It lists the admins, the people who joined with the date they joined, and the unused links with the date each one expires. An admin can revoke an unused link or remove a person, and removing a person asks for confirmation first (UX-04). A removed person's data is kept, and it comes back if the same Google account is invited again. ✅ DECIDED
 
 ### 5.2 Setup wizard (SET)
 
@@ -311,6 +313,7 @@ Page **Settings** (`/settings`). One page with clear sections and no hidden menu
 - **STG-04 Bank accounts:** add and rename. No delete (your rule). Archive (🆕 ADDED · Nice).
 - **STG-05 Categories and sub-categories:** add and rename. No delete (your rule). Archive (🆕 ADDED · Nice). A link opens Plan for amounts.
 - **STG-06 Session:** sign out. The app version (git commit) is shown at the bottom to confirm deploys. 🆕 ADDED · Nice
+- **STG-07 People** (admins only): see AUTH-07.
 
 ### 5.8 Fiscal year rollover (FY) 🆕 ADDED · Must
 
@@ -346,7 +349,7 @@ Page **Dashboard** (`/`), the landing page. Labeled "Preview: the full dashboard
 - **NFR-02 Cold start.** Cloud Run scales to zero when idle, so the first request after a pause is slower. Keep startup light and turn on startup CPU boost, which Google built to shorten cold starts ([Google Cloud blog](https://cloud.google.com/blog/products/serverless/announcing-startup-cpu-boost-for-cloud-run--cloud-functions)). Optional later: one minimum instance removes the cold start but is billed while idle ([pricing](https://cloud.google.com/run/pricing)). 🆕 ADDED · Tech
 - **NFR-03 Security.**
     - Firestore rules deny all browser access. Only the API touches data; server client libraries bypass security rules and use IAM instead ([Firestore rules](https://cloud.google.com/firestore/docs/security/get-started)). 🆕 ADDED · Must
-    - Every endpoint requires a valid token and an allowlisted email, except `GET /api/health`.
+    - Every endpoint requires a valid token and an allowed user (AUTH-02), except `GET /api/health`. `POST /api/invites/accept` needs only a valid token with a verified email (AUTH-06).
     - Every query is scoped to the user id from the token.
     - No secrets in the repo. The Firebase web config in Angular is public by design.
     - API responses send `Cache-Control: no-store`. Hosting already does not cache backend responses by default; this is a second safety net ([cache behavior](https://firebase.google.com/docs/hosting/manage-cache)). 🆕 ADDED · Tech
@@ -432,17 +435,19 @@ All data lives under `users/{uid}`. Amounts are `long` minor units. Dates are `Y
 | `users/{uid}/bankAccounts/{id}` | `name`, `nameLower`, `archived` | Never store account numbers |
 | `users/{uid}/incomes/{id}` | `kind` (salary or additional), `label`, `amountMinor`, `fromPeriodKey`, `toPeriodKey` | Empty `toPeriodKey` = open ended; equal to `fromPeriodKey` = once. Changing the salary ends the current salary item the month before the effective month and creates a new one |
 | `users/{uid}/entries/{id}` | `date`, `periodKey`, `fyId`, `categoryId`, `subCategoryId`, `bankAccountId`, `amountMinor`, `note` | `periodKey` and `fyId` are set by the API from `date`. `categoryId` is copied for filtering |
+| `invites/{id}` | `createdByUid`, `createdByEmail`, `expiresAt` | App-level, not under `users/{uid}` (AUTH-06). `id` is the SHA-256 (hex) of the link's random token; the token itself is never stored. The document exists only while the link is unused |
+| `members/{id}` | `uid`, `email`, `joinedAt`, `invitedByEmail` | App-level, not under `users/{uid}` (AUTH-02). `id` is random, so no URL carries a user id. Accept deletes the invite and creates the member in one transaction, so a link works once |
 - **Indexes:** single-field indexes are automatic. Add the composite index `entries (fyId asc, date desc)` in `firestore.indexes.json`. Add others only when a query fails with an index link.
 - **Reads:** the overview endpoint loads the FY's entries in one query and adds them up in memory. At personal scale this stays inside the 50,000 free reads per day. If the Firestore usage page shows daily reads near that limit, add a 5-minute in-memory cache that is cleared on every write (safe because max instances = 1). Phase 2 can add a summary document if needed. 🆕 ADDED · Tech
 
 ### 7.5 API contract
 
-Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid token and an allowlisted email, except `GET /api/health`.
+Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid token and an allowed user (AUTH-02), except `GET /api/health` and `POST /api/invites/accept` (a verified Google account is enough there).
 
 | Method and path | Purpose | Notes |
 | --- | --- | --- |
 | `GET /api/health` | Liveness and version | No auth. Returns the git commit |
-| `GET /api/me` | Profile, `setupCompleted`, current FY id, current month key | Called right after sign-in |
+| `GET /api/me` | Profile, `setupCompleted`, `isAdmin`, current FY id, current month key | Called right after sign-in |
 | `POST /api/setup` | Saves the whole wizard in one batch | 409 if already set up |
 | `PUT /api/profile` | Name, project name, currency, time zone |  |
 | `PUT /api/settings/calendar` | FY start month and payday | Applies from the next FY; returns the date it takes effect |
@@ -462,19 +467,23 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 | `GET /api/entries?fyId=&periodKey=&categoryId=&subCategoryId=&bankAccountId=&q=` | List entries with filters |  |
 | `POST /api/entries`, `PUT /api/entries/{id}`, `DELETE /api/entries/{id}` | Create, edit, delete | 422 if the date is outside existing FYs. Updates `lastBankAccountId` |
 | `GET /api/entries/export.csv` (same filters) | CSV export | Nice |
+| `POST /api/invites` | Create an invite link (AUTH-06) | Admins only. Answers the token once, the expiry and the People list |
+| `DELETE /api/invites/{id}` | Revoke an unused link (AUTH-07) | Admins only |
+| `DELETE /api/people/{memberId}` | Remove a person (AUTH-07) | Admins only. Their data is kept |
+| `POST /api/invites/accept` | Join with an invite link (AUTH-06); body has `token` | A signed-in account that is not allowed yet. 404 used, revoked or unknown, 410 expired. Answers with `/api/me` |
 
 ### 7.6 Sign-in flow
 
 1. Angular signs in with `signInWithPopup(auth, new GoogleAuthProvider())`.
 2. A functional HTTP interceptor adds `Authorization: Bearer ID_TOKEN` (from `auth.currentUser.getIdToken()`) to every `/api` request. The SDK refreshes tokens by itself.
 3. The API registers JwtBearer with authority and issuer `https://securetoken.google.com/PROJECT_ID`, audience `PROJECT_ID`, lifetime validation on, and `MapInboundClaims = false` so `sub` and `email` keep their names. Firebase documents these checks (audience = project ID, signature with Google's public keys) for verifying ID tokens with a third-party JWT library ([docs](https://firebase.google.com/docs/auth/admin/verify-id-tokens)).
-4. An authorization policy requires `email_verified` to be true and the email to be in `ALLOWED_EMAILS`.
+4. An authorization policy requires `email_verified` to be true and an allowed user: an admin email, or a person who joined with an invite (AUTH-06).
 5. The user id is the `sub` claim. Repositories always take it from the token.
 6. 401 → the app signs out and shows sign-in. 403 → the "Access not allowed" page.
 
 ### 7.7 Frontend structure
 
-- **Routes:** `/sign-in` (public), `/setup`, `/` (Dashboard), `/add`, `/entries`, `/months`, `/plan`, `/settings`, `/no-access`.
+- **Routes:** `/sign-in` (public), `/invite/:token` (public, AUTH-06), `/setup`, `/` (Dashboard), `/add`, `/entries`, `/months`, `/plan`, `/settings`, `/no-access`.
 - **Guards:** `authGuard` waits for the Firebase auth state; `setupGuard` sends you to `/setup` until setup is complete.
 - **State:** small services using signals. No NgRx. 🆕 ADDED · Tech
 - **UI kit:** Angular Material: stepper (wizard), form field, select, datepicker, table (desktop), cards (phone), expansion panel (months), button toggle (Months or Year), progress bar (indicator), snackbar (messages), chips (status). 🆕 ADDED · Tech
@@ -646,6 +655,7 @@ Do them in order. Each milestone ends with its checks passing and a push to `mai
 | **M7** Months and year | Overview endpoint, statuses, month cards, compact grid with a fixed first column | Statuses match today's date; grid totals equal the Entries totals |
 | **M8** Settings and FY rollover | Profile, calendar settings (next FY), salary history, additional income, accounts, categories, start next FY with plan copy | The rollover examples from 4.1 pass end to end |
 | **M9** Dashboard preview and polish | Dashboard cards and CSS bars, empty states, dark mode, PWA (Nice) | Every Definition of Done item below is ticked |
+| **M10** Invite links | AUTH-02 (changed), AUTH-06, AUTH-07, STG-07: invite links, Settings → People, the no-access text | An admin creates a link and a second Google account joins with it and lands on Setup; a link works once (even with two accepts at the same time) and stops working after 7 days; a revoked link and a removed person are refused, and the removed person's data is kept; the access check reads no Firestore on a normal request; admins always get in; only admins see and use People; strangers see "Ask the person who shared NAMA for an invite link" |
 
 ## 9. Definition of Done (Phase 1)
 
@@ -678,7 +688,7 @@ Ideas from the benchmark, not committed: spending by category, trend vs plan ove
 2. **Payday changes:** ✅ apply from the next FY, the same way as the FY start month.
 3. **Region:** ✅ `me-central1` (Doha) for Cloud Run and Firestore. Billing: link your existing Cloud Billing account.
 4. **Language:** ✅ English-only UI in Phase 1.
-5. **Access:** ✅ only your Gmail in the allowlist at first.
+5. **Access:** ✅ only your Gmail in the allowlist at first (replaced by invite links, AUTH-02).
 
 ---
 

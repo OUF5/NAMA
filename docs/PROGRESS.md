@@ -109,6 +109,25 @@
     - `/api/me` and `/api/fiscal-years/2026-01/overview` return 401 with `Cache-Control: no-store` without a token.
     - `/manifest.webmanifest` is served as `application/manifest+json`, and `favicon.svg`, `favicon.ico`, `sign-in-bg.svg` and the 4 icons return 200. `index.html` links the manifest, both tab icons and the apple-touch-icon.
   - Still open: the owner's look at the deployed M9 pages (the owner's earlier production check ran while the deploy was still in progress), the iPhone Home Screen sign-in, and the budget alert.
+- **M10 Invite links: built locally (18 Oct 2026), not pushed yet.** AUTH-02 (changed), AUTH-06, AUTH-07 and STG-07: admins from `ALLOWED_EMAILS`, single-use invite links that expire after 7 days, Settings → People, and the new no-access sentence. The PRD changes are in sections 1, 5.1, 5.7, 7.4 to 7.7, NFR-03, 8 (the M10 row) and 11.
+  - New endpoints: `POST /api/invites`, `DELETE /api/invites/{id}`, `DELETE /api/people/{memberId}` (admins only) and `POST /api/invites/accept` (signed in, not yet allowed). `/api/me` gets `isAdmin`, and `/api/settings` gets `people` (null unless you are an admin).
+  - Locally: `dotnet test api.tests` passed 478 of 478 (449 before; 29 new in `InvitesDomainTests`, `InvitesTests`, `PeopleTests`, `MemberCacheTests` and `FirestoreMappingTests`). `npm run build` passed with no warnings: initial 540.34 kB (539.98 kB before), Settings chunk 72.23 kB lazy. `npx ng test --watch=false` passed 134 of 134 (119 before). No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
+  - `dotnet run` (port 5099, emulator) answers 401 with `Cache-Control: no-store` without a token on the 4 new routes, `/api/me` and `/api/settings`.
+  - "Done when", proven by the tests so far:
+    - Joining: `A_stranger_joins_with_a_link_and_lands_on_setup` (403, then 200 with `setupCompleted: false`; only the hash is stored).
+    - Single use: `A_link_works_once` and `Two_people_accepting_at_the_same_time_let_one_in`.
+    - 7 days: `A_link_expires_7_days_after_it_was_created` (−1 s gives 200; 0 s and +1 day give 410).
+    - Revoke and remove: `A_revoked_link_is_refused`, `Removing_a_person_ends_their_access_at_once_and_keeps_their_data`, `A_removed_person_invited_again_gets_their_data_back`.
+    - No read per request: `MemberCacheTests` (20 requests and no member read; one read again after 5 minutes; joins and removals without a read).
+    - Admins always get in: `Admin_requests_never_read_the_members` (the members store throws; admins still get 200 and nothing is read).
+    - Admins only: `Only_admins_manage_links_and_people` (403 for members and strangers) and the Settings specs.
+    - The no-access text: `no-access.spec.ts`.
+  - Emulator: a scratch program ran `FirestoreAccessStore` against the emulator in a throwaway project (`nama-scratch`, deleted afterwards). It found the following:
+    - The invite's id is the hash, and the token is stored nowhere.
+    - Two accepts of one link in parallel gave Joined and NotFound, with 1 member and no invite left.
+    - An expired link gave Expired and stayed listed.
+    - Revoke gave true, then false. Remove returned the member, then null.
+  - Still to do: the owner's local check with a second Google account, then the push and the production check.
 
 ## Definition of Done (PRD 9)
 
@@ -418,6 +437,19 @@ Checked on 18 Oct 2026, before and after the M9 push (`678ffcb`). Ticked items h
   - The owner creates a single-use invite link (expires after 7 days) in Settings and sends it. The person opens it, signs in with Google, and is allowed.
   - The emails in `ALLOWED_EMAILS` stay as admins, so the owner can never be locked out.
   - This changes AUTH-02. It is its own milestone after M9, planned in a fresh session. Nothing is built yet.
+- 18 Oct 2026, M10: **Owner's answers**: a removed person's data is kept; a link is shown once (only its SHA-256 is stored); links have no label; there is no cap on people or links. Claude's recommendations, which the owner did not change: Remove asks first and Revoke does not; the 5-minute member reload stays; the new IDs are AUTH-06, AUTH-07 and STG-07 and the milestone is M10.
+- 18 Oct 2026, M10: **The access check** (AUTH-02) is the fallback policy. It needs a verified email and either an admin email or a member `uid`.
+  - Admins are checked from the token alone, so they never read Firestore.
+  - Members are looked up in `MemberCache`: loaded with one `members` query on first need, changed right after each accept and removal (Cloud Run max instances = 1), and read again at most every 5 minutes when a request needs it.
+  - A load and a change take turns (a lock), so a load cannot drop a member who just joined.
+  - Named policies: `Admin` for the 3 admin routes, and `SignedIn` (a verified Google account) for accept.
+- 18 Oct 2026, M10: **Firestore** (PRD 7.4): top-level `invites/{sha256 hex}` and `members/{random id}`. A member's id is not their `uid`, so `DELETE /api/people/{memberId}` takes no user id from the URL (CLAUDE.md). `expiresAt` and `joinedAt` are Timestamps (moments, not dates). No index and no rules change.
+- 18 Oct 2026, M10: **Accept** answers with `/api/me`.
+  - An admin or member leaves the link unused.
+  - 404 means used, revoked or unknown. 410 means expired.
+  - The web page is the sign-in page on `/invite/:token`, with an invite caption. It signs in, joins, and goes to `/` with `replaceUrl`, so the token leaves the history.
+- 18 Oct 2026, M10: **People dates** (`joinedOn`, `createdOn`, `expiresOn`) are `YYYY-MM-DD` in the admin's profile time zone, or UTC before setup. They come from the new `FiscalCalendar.DateIn`, which `Today` now uses too.
+- 18 Oct 2026, M10: **Settings stays at 2 calls** (NFR-01). People rides on `GET /api/settings`. Create, revoke and remove answer with the whole People list. A 404 on revoke or remove reads `/api/settings` again ("That changed in the meantime").
 
 ## Open questions
 
@@ -428,6 +460,8 @@ Checked on 18 Oct 2026, before and after the M9 push (`678ffcb`). Ticked items h
 - M9: on an iPhone, does Google sign-in (`signInWithPopup`) work inside the installed Home Screen app? If not, it is reported, not worked around.
 
 Answered in M9: "Dashboard will get `categories` and `rows`" (kept; see Decisions).
+
+- M10: The People list shows the email a person had when they joined. If they change the email on their Google account, the list keeps the old one. Is that fine?
 
 ### Phase 2 / later
 

@@ -34,7 +34,7 @@ public static class SetupEndpoint
                 MeEndpoint.PeriodDto.From(FiscalCalendar.PeriodContaining(today, paydayDay))));
         });
 
-        api.MapPost("/setup", async (SetupRequest request, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
+        api.MapPost("/setup", async (SetupRequest request, ClaimsPrincipal user, IUserStore store, TimeProvider time, EmailAllowlist admins) =>
         {
             // AUTH-03: the user id and email come from the token, never from the body.
             var uid = user.FindFirstValue("sub")!;
@@ -42,7 +42,7 @@ public static class SetupEndpoint
             {
                 return Results.Problem(statusCode: StatusCodes.Status409Conflict, detail: "Setup is already complete.");
             }
-            return Results.Created("/api/me", await MeEndpoint.LoadAsync(uid, store, time));
+            return Results.Created("/api/me", await MeEndpoint.LoadAsync(uid, admins.IsAdmin(user), store, time));
         });
 
         return api;

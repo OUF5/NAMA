@@ -43,3 +43,5 @@ jobs:
       - run: curl -fsS https://${{ vars.GCP_PROJECT_ID }}.web.app/api/health | tee /dev/stderr | grep -q "${{ github.sha }}"
       # Smoke test: calls without a token are refused (M1, NFR-03).
       - run: test "$(curl -sS -o /dev/null -w '%{http_code}' https://${{ vars.GCP_PROJECT_ID }}.web.app/api/me)" = 401
+      # Smoke test: accepting an invite link needs a signed-in Google account (M10, AUTH-06).
+      - run: test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST https://${{ vars.GCP_PROJECT_ID }}.web.app/api/invites/accept)" = 401

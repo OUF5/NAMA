@@ -17,6 +17,7 @@ const rollover: Rollover = {
 function me(today: string): Me {
   return {
     setupCompleted: true,
+    isAdmin: false,
     profile: null,
     currentFyId: '2026-01',
     currentPeriodKey: '2026-12',

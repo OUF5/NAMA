@@ -1,5 +1,5 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { NgTemplateOutlet } from '@angular/common';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentType } from '@angular/cdk/portal';
 import { Component, computed, effect, inject, signal } from '@angular/core';
@@ -18,11 +18,12 @@ import { Category, PlanApi, SubCategory } from '../plan/plan-api';
 import { CalendarDialog } from './calendar-dialog';
 import { IncomeItemDialog, IncomeItemDialogData } from './income-item-dialog';
 import { NameDialog, NameDialogData } from './name-dialog';
+import { InviteLinkDialog, InviteLinkDialogData, RemovePersonDialog } from './people-dialogs';
 import { ProfileDialog } from './profile-dialog';
 import { SalaryDialog, SalaryDialogData } from './salary-dialog';
-import { Calendar, Income, IncomeItem, SettingsApi, SettingsResponse } from './settings-api';
+import { Calendar, Income, IncomeItem, Invite, Member, People, SettingsApi, SettingsResponse } from './settings-api';
 import { incomeMonths, monthGroups } from './settings-lines';
-import { SETTINGS_SECTIONS, SettingsSectionId } from './settings-sections';
+import { SETTINGS_SECTIONS, SettingsSectionId, visibleSections } from './settings-sections';
 
 const PHONE = '(max-width: 767.98px)';
 
@@ -43,7 +44,8 @@ function byName(accounts: BankAccount[]): BankAccount[] {
 // (UX-04). Archive and restore are reversible, so they need no confirmation. Load = GET
 // /api/settings and GET /api/health (NFR-01), once for every section; each change is one call.
 // Long lists stay short: a category opens its sub-categories, only the newest salary shows, and
-// archived items fold away.
+// archived items fold away. People (STG-07, AUTH-07) is for admins only: /api/settings sends it
+// only to them.
 @Component({
   selector: 'app-settings',
   imports: [NgTemplateOutlet, RouterLink, MatButtonModule, MatIconModule],
@@ -58,11 +60,11 @@ export class Settings {
   private readonly breakpoints = inject(BreakpointObserver);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  private readonly document = inject(DOCUMENT);
 
   protected readonly monthNames = MONTH_NAMES;
   protected readonly formatDate = formatDate;
   protected readonly incomeMonths = incomeMonths;
-  protected readonly sections = SETTINGS_SECTIONS;
 
   protected readonly phone = toSignal(this.breakpoints.observe(PHONE).pipe(map((state) => state.matches)), {
     initialValue: this.breakpoints.isMatched(PHONE),
@@ -80,6 +82,8 @@ export class Settings {
   protected readonly busy = signal(false);
 
   private readonly currency = computed(() => this.data()?.profile.currency ?? 'SAR');
+
+  protected readonly sections = computed(() => visibleSections(!!this.data()?.people));
 
   // The folded parts that are open: "category-<id>", "archived-…" and "salary-history".
   private readonly opened = signal<ReadonlySet<string>>(new Set());
@@ -125,6 +129,7 @@ export class Settings {
       income: d.income.currentTotal !== null ? `${this.money(d.income.currentTotal)} this month` : 'No current month',
       'bank-accounts': count(this.accounts().active.length, this.accounts().archived.length),
       categories: count(this.categories().active.length, this.categories().archived.length),
+      people: d.people ? peopleSummary(d.people) : undefined,
     };
   });
 
@@ -137,6 +142,9 @@ export class Settings {
         void this.router.navigate(['/settings'], { replaceUrl: true });
       } else if (!param && !this.phone()) {
         void this.router.navigate(['/settings', 'profile'], { replaceUrl: true });
+      } else if (param === 'people' && this.data() && !this.data()!.people) {
+        // Not an admin: People is not one of your sections.
+        void this.router.navigate(['/settings'], { replaceUrl: true });
       }
     });
     // A message belongs to the section it was shown on.
@@ -324,6 +332,54 @@ export class Settings {
     );
   }
 
+  // AUTH-06: the link is built here from the token, and shown once.
+  protected async createInvite(): Promise<void> {
+    this.busy.set(true);
+    this.status.set('');
+    try {
+      const created = await this.api.createInvite();
+      this.patch({ people: created.people });
+      const link = `${this.document.location.origin}/invite/${created.token}`;
+      await this.open<InviteLinkDialog, InviteLinkDialogData, unknown>(InviteLinkDialog, { link, expiresOn: created.expiresOn }, '520px');
+      this.status.set('Invite link created.');
+    } catch {
+      this.status.set('The link could not be created. Please try again.');
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  // AUTH-07: an unused link can be made again in one tap, so revoking needs no confirmation.
+  protected async revokeInvite(invite: Invite): Promise<void> {
+    await this.peopleChange(() => this.api.revokeInvite(invite.id), 'Link revoked.');
+  }
+
+  // AUTH-07, UX-04: confirmed first. Their data is kept.
+  protected async removePerson(member: Member): Promise<void> {
+    if (await this.open<RemovePersonDialog, string, boolean>(RemovePersonDialog, member.email, '440px')) {
+      await this.peopleChange(() => this.api.removePerson(member.id), `Removed ${member.email}.`);
+    }
+  }
+
+  // A 404 means the link was used or revoked meanwhile, or the person already removed: the list is
+  // read again so it shows what is there now.
+  private async peopleChange(call: () => Promise<{ people: People }>, message: string): Promise<void> {
+    this.busy.set(true);
+    try {
+      this.patch({ people: (await call()).people });
+      this.status.set(message);
+    } catch (error: unknown) {
+      if (error instanceof HttpErrorResponse && error.status === 404) {
+        this.patch({ people: (await this.api.settings().catch(() => this.data()!)).people });
+        this.status.set('That changed in the meantime. The list is up to date now.');
+      } else {
+        this.status.set('It could not be saved. Please try again.');
+      }
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   private async load(): Promise<void> {
     try {
       // The version is a nicety (STG-06); the page works without it.
@@ -397,4 +453,11 @@ export class Settings {
     const ref = this.dialog.open<C, D, R>(component, { ...dialogSize(this.breakpoints.isMatched(PHONE), width), data });
     return firstValueFrom(ref.afterClosed());
   }
+}
+
+// "2 people · 1 unused link" on the phone list.
+function peopleSummary(people: People): string {
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const unused = people.invites.filter((invite) => !invite.expired).length;
+  return `${plural(people.members.length, 'person', 'people')} · ${plural(unused, 'unused link', 'unused links')}`;
 }

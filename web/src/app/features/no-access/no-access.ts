@@ -2,7 +2,8 @@ import { Component, computed, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { AuthService } from '../../core/auth';
 
-// AUTH-02: shown when the API answers 403, because the email is not in ALLOWED_EMAILS.
+// AUTH-02: shown when the API answers 403: the account is not an admin and has not joined with an
+// invite link (AUTH-06).
 @Component({
   selector: 'app-no-access',
   imports: [MatButtonModule],
@@ -16,6 +17,7 @@ import { AuthService } from '../../core/auth';
           This Google account is not allowed to use NAMA.
         }
       </p>
+      <p>Ask the person who shared NAMA for an invite link.</p>
       <button mat-flat-button type="button" (click)="useAnotherAccount()">Use another account</button>
     </section>
   `,

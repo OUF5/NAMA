@@ -5,13 +5,15 @@ using Api.Features.BankAccounts;
 using Api.Features.Categories;
 using Api.Features.FiscalYears;
 using Api.Features.Income;
+using Api.Features.People;
 using Api.Features.Profile;
 using Api.Infrastructure;
 
 namespace Api.Features.Settings;
 
 // PRD 5.7 Settings. Owner's choice (M8, NFR-01): GET /api/settings brings every section in one
-// call (an addition to PRD 7.5); the version comes from GET /api/health.
+// call (an addition to PRD 7.5); the version comes from GET /api/health. People (STG-07) is there
+// for admins only, and null for everyone else.
 public static class SettingsEndpoint
 {
     // STG-02, R-CAL-07: the settings apply from the FY after the latest stored one. NextFiscalYear is
@@ -23,11 +25,12 @@ public static class SettingsEndpoint
         CalendarDto Calendar,
         IncomeEndpoint.IncomeResponse Income,
         IReadOnlyList<BankAccountsEndpoint.BankAccountDto> BankAccounts,
-        IReadOnlyList<CategoriesEndpoint.CategoryDto> Categories);
+        IReadOnlyList<CategoriesEndpoint.CategoryDto> Categories,
+        PeopleEndpoint.PeopleDto? People);
 
     public static IEndpointRouteBuilder MapSettings(this IEndpointRouteBuilder api)
     {
-        api.MapGet("/settings", async (ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
+        api.MapGet("/settings", async (ClaimsPrincipal user, IUserStore store, TimeProvider time, IAccessStore access, EmailAllowlist admins) =>
         {
             var uid = user.FindFirstValue("sub")!;
             var profile = await store.GetProfileAsync(uid);
@@ -46,7 +49,8 @@ public static class SettingsEndpoint
                 (await store.GetCategoriesAsync(uid))
                     .OrderBy(category => category.SortOrder)
                     .Select(category => CategoriesEndpoint.ToDto(category, subCategories))
-                    .ToList()));
+                    .ToList(),
+                admins.IsAdmin(user) ? await PeopleEndpoint.LoadAsync(access, admins, time, profile.Timezone) : null));
         });
 
         // STG-02, R-CAL-07: saved right away, applied when the next FY is started. Stored FYs keep

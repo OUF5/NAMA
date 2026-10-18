@@ -12,7 +12,7 @@ public static class ProfileEndpoint
     {
         // Answers with the new /api/me: the time zone moves "today" and the current month (R-CAL-10),
         // and the names and currency are shown everywhere (UX-02, R-MON-03).
-        api.MapPut("/profile", async (ProfileRequest request, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
+        api.MapPut("/profile", async (ProfileRequest request, ClaimsPrincipal user, IUserStore store, TimeProvider time, EmailAllowlist admins) =>
         {
             var uid = user.FindFirstValue("sub")!;
             if (await store.GetProfileAsync(uid) is null)
@@ -21,7 +21,7 @@ public static class ProfileEndpoint
             }
             await store.UpdateProfileAsync(uid, Names.Normalize(request.DisplayName), Names.Normalize(request.ProjectName),
                 request.Currency!, request.Timezone!);
-            return Results.Ok(await MeEndpoint.LoadAsync(uid, store, time));
+            return Results.Ok(await MeEndpoint.LoadAsync(uid, admins.IsAdmin(user), store, time));
         });
         return api;
     }

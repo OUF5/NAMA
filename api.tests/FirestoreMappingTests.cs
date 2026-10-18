@@ -112,4 +112,29 @@ public class FirestoreMappingTests
 
         Assert.Equal(account, FirestoreDocuments.ToBankAccount("a", FirestoreDocuments.ToDocument(account)));
     }
+
+    // AUTH-06: createdAt is set by the server, so the round trip puts it in by hand.
+    [Fact]
+    public void Invite_comes_back_unchanged()
+    {
+        var created = new DateTimeOffset(2026, 10, 18, 9, 30, 0, TimeSpan.Zero);
+        var invite = new Invite("hash", "uid-1", "owner@example.com", created, created.AddDays(7));
+
+        var document = AccessDocuments.ToDocument(invite);
+        document.CreatedAt = Google.Cloud.Firestore.Timestamp.FromDateTimeOffset(created);
+
+        Assert.Equal(("uid-1", "owner@example.com"), (document.CreatedByUid, document.CreatedByEmail));
+        Assert.Equal(invite, AccessDocuments.ToInvite("hash", document));
+    }
+
+    [Fact]
+    public void Member_comes_back_unchanged()
+    {
+        var member = new Member("m", "uid-2", "friend@example.com", new DateTimeOffset(2026, 10, 19, 6, 0, 0, TimeSpan.Zero), "owner@example.com");
+
+        var document = AccessDocuments.ToDocument(member);
+
+        Assert.Equal(("uid-2", "friend@example.com", "owner@example.com"), (document.Uid, document.Email, document.InvitedByEmail));
+        Assert.Equal(member, AccessDocuments.ToMember("m", document));
+    }
 }

@@ -40,7 +40,8 @@ public static class FiscalYearsEndpoint
 
         // FY-02, R-CAL-07, R-CAL-08: one FY per call, from the profile's current settings. 409 before
         // the last month of the latest FY, and when that FY was just started (a second click or a race).
-        api.MapPost("/fiscal-years/next", async (StartNextRequest request, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
+        api.MapPost("/fiscal-years/next", async (StartNextRequest request, ClaimsPrincipal user, IUserStore store, TimeProvider time,
+            EmailAllowlist admins) =>
         {
             var uid = user.FindFirstValue("sub")!;
             var profile = await store.GetProfileAsync(uid);
@@ -62,7 +63,7 @@ public static class FiscalYearsEndpoint
                 return Results.Problem(statusCode: StatusCodes.Status409Conflict, detail: $"{next.Label} was already started.");
             }
             return Results.Created($"/api/fiscal-years/{next.Id}",
-                new StartNextResponse(FiscalYearDto.From(next), plans.Count, await MeEndpoint.LoadAsync(uid, store, time)));
+                new StartNextResponse(FiscalYearDto.From(next), plans.Count, await MeEndpoint.LoadAsync(uid, admins.IsAdmin(user), store, time)));
         });
 
         return api;

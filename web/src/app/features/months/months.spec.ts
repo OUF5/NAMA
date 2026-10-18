@@ -40,6 +40,7 @@ const fy2027: FiscalYear = {
 
 const me: Me = {
   setupCompleted: true,
+  isAdmin: false,
   profile: {
     displayName: 'Owner',
     email: 'o@example.com',

@@ -9,6 +9,12 @@ export const routes: Routes = [
     title: 'NAMA · Sign in',
     loadComponent: () => import('./features/sign-in/sign-in').then((m) => m.SignIn),
   },
+  // AUTH-06: an invite link. Public: the page signs in first, then joins.
+  {
+    path: 'invite/:token',
+    title: 'NAMA · Invite',
+    loadComponent: () => import('./features/sign-in/sign-in').then((m) => m.SignIn),
+  },
   {
     path: 'no-access',
     title: 'NAMA · Access not allowed',

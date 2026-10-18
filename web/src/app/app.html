@@ -48,7 +48,7 @@
         </a>
         @if (inSettings()) {
           <div class="sub-nav" role="group" aria-label="Settings sections">
-            @for (section of settingsSections; track section.id) {
+            @for (section of settingsSections(); track section.id) {
               <a class="nav-item sub" [routerLink]="['/settings', section.id]" routerLinkActive="active">
                 {{ section.label }}
               </a>

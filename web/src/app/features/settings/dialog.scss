@@ -32,6 +32,17 @@ p {
   color: var(--text-2);
 }
 
+// The invite link dialog's "Copied." (AUTH-06), with its height kept so nothing jumps.
+.status {
+  min-height: 21px;
+  color: var(--text-2);
+}
+
+// "Remove friend@example.com?" can be long on phones.
+[mat-dialog-title] {
+  overflow-wrap: anywhere;
+}
+
 .error {
   margin: 8px 0 0;
   color: var(--danger);

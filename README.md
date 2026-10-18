@@ -24,7 +24,7 @@ Local runs use the Firestore emulator and never touch production data.
 firebase emulators:start --only firestore
 
 # 2. API on http://localhost:5080. launchSettings.json sets FIREBASE_PROJECT_ID and
-#    FIRESTORE_EMULATOR_HOST=localhost:8080; the allowlist is given on the command line.
+#    FIRESTORE_EMULATOR_HOST=localhost:8080; the admin emails are given on the command line.
 cd api && ALLOWED_EMAILS=you@gmail.com dotnet run
 
 # 3. Web on http://localhost:4200; /api is proxied to the API (web/proxy.conf.json)
@@ -56,14 +56,18 @@ curl http://localhost:8080/api/health
 | `PORT` | Port to listen on. Set by Cloud Run |
 | `APP_VERSION` | Git commit returned by `GET /api/health`. Set by the workflow |
 | `FIREBASE_PROJECT_ID` | Firebase project whose ID tokens are accepted. Required: the API does not start without it |
-| `ALLOWED_EMAILS` | Comma-separated emails allowed to use the app, ignoring case. Empty means nobody |
+| `ALLOWED_EMAILS` | The admins (AUTH-02): comma-separated emails, ignoring case. Admins are always allowed and can invite other people in Settings → People. Empty means no admins |
 | `FIRESTORE_EMULATOR_HOST` | Local only (`localhost:8080`, from `launchSettings.json`). When set, the API uses the emulator instead of production Firestore |
 
 ## Deploy
 
-Every push to `main` runs [.github/workflows/deploy.yml](.github/workflows/deploy.yml): API tests, web build, deploy the API to Cloud Run (`--max-instances=1`, `--min-instances=0`, `--no-invoker-iam-check`), deploy Hosting and the Firestore rules and indexes, then smoke tests on `https://nama-b6bda.web.app` (`/api/health` returns the pushed commit, `/api/me` without a token returns 401). There is only one environment: production.
+Every push to `main` runs [.github/workflows/deploy.yml](.github/workflows/deploy.yml): API tests, web build, deploy the API to Cloud Run (`--max-instances=1`, `--min-instances=0`, `--no-invoker-iam-check`), deploy Hosting and the Firestore rules and indexes, then smoke tests on `https://nama-b6bda.web.app` (`/api/health` returns the pushed commit, and `/api/me` and `POST /api/invites/accept` without a token return 401). There is only one environment: production.
 
-GitHub repository variables (Settings → Secrets and variables → Actions → Variables): `GCP_PROJECT_ID`, `GCP_REGION`, `WIF_PROVIDER`, `DEPLOY_SA`, `ALLOWED_EMAILS`. No secrets are needed. To allow another person, add their email to `ALLOWED_EMAILS` and push.
+GitHub repository variables (Settings → Secrets and variables → Actions → Variables): `GCP_PROJECT_ID`, `GCP_REGION`, `WIF_PROVIDER`, `DEPLOY_SA`, `ALLOWED_EMAILS`. No secrets are needed.
+
+## Inviting people (AUTH-06, AUTH-07)
+
+An admin (an email in `ALLOWED_EMAILS`) opens Settings → People and taps "Create invite link". The link is shown once: copy it and send it. It works once and expires after 7 days. The person opens it, signs in with Google and sets up NAMA with their own data. Settings → People lists who joined and when; an admin can revoke an unused link or remove a person. A removed person's data stays in Firestore (`users/{uid}`) and comes back if the same Google account is invited again; delete it by hand in the Firebase console if wanted. To add another admin, add their email to `ALLOWED_EMAILS` and push.
 
 ## One-time setup
 

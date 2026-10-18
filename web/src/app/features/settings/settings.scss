@@ -151,6 +151,11 @@
   font-weight: 600;
 }
 
+// People (STG-07): "Admin", "Joined 18 Oct 2026" or the expiry date on a line of its own.
+.below {
+  display: block;
+}
+
 // A category row: the whole name area opens its sub-categories.
 .expand {
   display: flex;

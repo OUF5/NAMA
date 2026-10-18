@@ -101,10 +101,13 @@ public static class FiscalCalendar
     public static bool HasStarted(Period period, DateOnly today) => period.StartDate <= today;
 
     // R-CAL-10: today's date in the profile time zone (IANA id).
-    public static DateOnly Today(TimeProvider timeProvider, string timeZoneId)
+    public static DateOnly Today(TimeProvider timeProvider, string timeZoneId) => DateIn(timeProvider.GetUtcNow(), timeZoneId);
+
+    // The date of a moment in a time zone, for example when an invite link expires (AUTH-07).
+    public static DateOnly DateIn(DateTimeOffset instant, string timeZoneId)
     {
         var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(timeProvider.GetUtcNow(), zone).DateTime);
+        return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(instant, zone).DateTime);
     }
 
     // R-CAL-09, R-STA-03: the stored FY and month of a date, or null when no FY contains it.

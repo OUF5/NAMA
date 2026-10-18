@@ -9,9 +9,15 @@ export const SETTINGS_SECTIONS = [
   { id: 'income', label: 'Income', icon: 'payments' },
   { id: 'bank-accounts', label: 'Bank accounts', icon: 'account_balance' },
   { id: 'categories', label: 'Categories', icon: 'category' },
+  { id: 'people', label: 'People', icon: 'group' },
 ] as const;
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];
+
+// STG-07: People is shown to admins only (AUTH-07).
+export function visibleSections(isAdmin: boolean): readonly (typeof SETTINGS_SECTIONS)[number][] {
+  return SETTINGS_SECTIONS.filter((section) => isAdmin || section.id !== 'people');
+}
 
 // /settings and /settings/<section> are one route, so the page (and its one GET /api/settings)
 // stays when you move between sections.

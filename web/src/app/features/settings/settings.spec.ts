@@ -3,13 +3,15 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { MatDialog } from '@angular/material/dialog';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { MeService } from '../../core/me';
 import { FiscalYear } from '../plan/plan-api';
 import { Settings } from './settings';
-import { SettingsResponse } from './settings-api';
+import { InviteLinkDialog, RemovePersonDialog } from './people-dialogs';
+import { People, SettingsResponse } from './settings-api';
 import { settingsMatcher } from './settings-sections';
 
 // FY 2026 with payday 27; today is 17 Oct 2026, so the current month is Sep 2026.
@@ -32,7 +34,17 @@ const transition: FiscalYear = {
   periods: ['01', '02', '03', '04', '05', '06'].map((m) => ({ key: `2027-${m}`, label: '', startDate: '', endDate: '' })),
 };
 
-function settings(currentPeriodKey: string | null = '2026-09'): SettingsResponse {
+// AUTH-07: what an admin gets. Dates are in the admin's time zone.
+const people: People = {
+  admins: ['owner@example.com'],
+  members: [{ id: 'm1', email: 'friend@example.com', joinedOn: '2026-10-18' }],
+  invites: [
+    { id: 'i2', createdOn: '2026-10-17', expiresOn: '2026-10-24', expired: false },
+    { id: 'i1', createdOn: '2026-10-01', expiresOn: '2026-10-08', expired: true },
+  ],
+};
+
+function settings(currentPeriodKey: string | null = '2026-09', peopleList: People | null = null): SettingsResponse {
   return {
     profile: {
       displayName: 'Owner',
@@ -73,6 +85,7 @@ function settings(currentPeriodKey: string | null = '2026-09'): SettingsResponse
         subCategories: [{ id: 'groceries', categoryId: 'food', name: 'Groceries', sortOrder: 0, archived: false }],
       },
     ],
+    people: peopleList,
   };
 }
 
@@ -80,15 +93,21 @@ describe('Settings (PRD 5.7)', () => {
   let http: HttpTestingController;
   let harness: RouterTestingHarness;
   let phone: boolean;
+  // What the opened dialog closes with.
+  let dialogResult: unknown;
+  let dialogOpen: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     phone = false;
+    dialogResult = undefined;
+    dialogOpen = vi.fn(() => ({ afterClosed: () => of(dialogResult) }));
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([{ matcher: settingsMatcher, component: Settings }]),
         { provide: MeService, useValue: { me: signal(null), set: vi.fn(), patchProfile: vi.fn() } },
+        { provide: MatDialog, useValue: { open: dialogOpen } },
         {
           provide: BreakpointObserver,
           useValue: { observe: () => of({ matches: phone, breakpoints: {} }), isMatched: () => phone },
@@ -253,4 +272,92 @@ describe('Settings (PRD 5.7)', () => {
     expect(text(root)).toContain('Add sub-category');
   });
 
+  // STG-07: People is for admins only. /api/settings sends people: null to everyone else.
+  it('hides People from someone who is not an admin', async () => {
+    await open('/settings/people');
+
+    expect(TestBed.inject(Router).url).toBe('/settings/profile');
+  });
+
+  it('lists People on phones for an admin', async () => {
+    phone = true;
+    const root = await open('/settings', settings('2026-09', people));
+
+    const rows = Array.from(root.querySelectorAll<HTMLAnchorElement>('a.menu-row'));
+    expect(text(rows[5])).toBe('group People 1 person · 1 unused link chevron_right');
+    expect(rows[5].getAttribute('href')).toBe('/settings/people');
+  });
+
+  // AUTH-07: the admins, who joined and when, and the unused links with their expiry.
+  it('shows the admins, the people who joined and the links', async () => {
+    const root = await open('/settings/people', settings('2026-09', people));
+
+    expect(root.querySelector('h1')?.textContent).toBe('People');
+    const items = Array.from(root.querySelectorAll('.item')).map((item) => text(item));
+    expect(items).toEqual([
+      'owner@example.com Admin',
+      'friend@example.com Joined 18 Oct 2026 person_remove',
+      'Created 17 Oct 2026 Expires on 24 Oct 2026 link_off',
+      'Created 1 Oct 2026 Expired on 8 Oct 2026 link_off',
+    ]);
+    // Admins come from ALLOWED_EMAILS and cannot be removed here.
+    expect(root.querySelector('[aria-label="Remove owner@example.com"]')).toBeNull();
+  });
+
+  // AUTH-06: the link is built from the token and shown once in a dialog.
+  it('creates a link and shows it once', async () => {
+    const root = await open('/settings/people', settings('2026-09', people));
+    const create = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((b) => text(b) === 'Create invite link')!;
+
+    create.click();
+    const request = http.expectOne('/api/invites');
+    expect(request.request.method).toBe('POST');
+    const newer = { ...people, invites: [{ id: 'i3', createdOn: '2026-10-18', expiresOn: '2026-10-25', expired: false }, ...people.invites] };
+    request.flush({ token: 'tok_123', expiresOn: '2026-10-25', people: newer });
+    await settle();
+
+    expect(dialogOpen).toHaveBeenCalledTimes(1);
+    expect(dialogOpen.mock.calls[0][0]).toBe(InviteLinkDialog);
+    expect(dialogOpen.mock.calls[0][1].data).toEqual({ link: `${location.origin}/invite/tok_123`, expiresOn: '2026-10-25' });
+    expect(text(root.querySelector('.status'))).toBe('Invite link created.');
+    expect(text(root)).toContain('Created 18 Oct 2026 Expires on 25 Oct 2026');
+  });
+
+  // An unused link loses nothing when revoked, so there is no confirmation.
+  it('revokes a link straight away', async () => {
+    const root = await open('/settings/people', settings('2026-09', people));
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Revoke the link created on 1 Oct 2026"]')!.click();
+    const request = http.expectOne('/api/invites/i1');
+    expect(request.request.method).toBe('DELETE');
+    request.flush({ people: { ...people, invites: [people.invites[0]] } });
+    await settle();
+
+    expect(dialogOpen).not.toHaveBeenCalled();
+    expect(text(root.querySelector('.status'))).toBe('Link revoked.');
+    expect(text(root)).not.toContain('Created 1 Oct 2026');
+  });
+
+  // UX-04: removing a person asks first; Cancel sends nothing.
+  it('asks before removing a person', async () => {
+    const root = await open('/settings/people', settings('2026-09', people));
+    const remove = root.querySelector<HTMLButtonElement>('[aria-label="Remove friend@example.com"]')!;
+
+    remove.click();
+    await settle();
+    expect(dialogOpen.mock.calls[0][0]).toBe(RemovePersonDialog);
+    expect(dialogOpen.mock.calls[0][1].data).toBe('friend@example.com');
+    // http.verify (afterEach) proves Cancel sent nothing; now confirm.
+
+    dialogResult = true;
+    remove.click();
+    await settle();
+    const request = http.expectOne('/api/people/m1');
+    expect(request.request.method).toBe('DELETE');
+    request.flush({ people: { ...people, members: [] } });
+    await settle();
+
+    expect(text(root.querySelector('.status'))).toBe('Removed friend@example.com.');
+    expect(text(root)).toContain('Nobody has joined yet.');
+  });
 });

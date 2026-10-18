@@ -123,7 +123,7 @@ Done. Add these GitHub repository variables:
   GCP_REGION      = ${REGION}
   WIF_PROVIDER    = projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL_ID}/providers/${PROVIDER_ID}
   DEPLOY_SA       = ${SA_EMAIL}
-  ALLOWED_EMAILS  = your Gmail address (comma separated if more than one)
+  ALLOWED_EMAILS  = the admins: your Gmail address (comma separated if more than one). Others join with invite links
 
 After the first successful deploy, run:  ./infra/setup.sh cleanup
 EOF

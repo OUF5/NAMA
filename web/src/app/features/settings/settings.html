@@ -10,7 +10,7 @@
   @if (!current) {
     <!-- Phones: the sections, each with a summary of its values. -->
     <nav class="card menu" aria-label="Settings sections">
-      @for (s of sections; track s.id) {
+      @for (s of sections(); track s.id) {
         <a class="menu-row" [routerLink]="['/settings', s.id]">
           <mat-icon aria-hidden="true">{{ s.icon }}</mat-icon>
           <span class="name">
@@ -200,6 +200,83 @@
               }
             }
           </section>
+        }
+        @case ('people') {
+          <!-- STG-07, AUTH-07: admins only. Admins come from ALLOWED_EMAILS and cannot be removed here. -->
+          @if (d.people; as people) {
+            <section class="card" aria-labelledby="people-title">
+              <div class="card-head">
+                <h2 id="people-title">People</h2>
+              </div>
+              <ul class="list">
+                @for (email of people.admins; track email) {
+                  <li class="item">
+                    <span class="name">
+                      {{ email }}
+                      <span class="caption below">Admin</span>
+                    </span>
+                  </li>
+                }
+                @for (member of people.members; track member.id) {
+                  <li class="item">
+                    <span class="name">
+                      {{ member.email }}
+                      <span class="caption below">Joined {{ formatDate(member.joinedOn) }}</span>
+                    </span>
+                    <button
+                      mat-icon-button
+                      type="button"
+                      [disabled]="busy()"
+                      [attr.aria-label]="'Remove ' + member.email"
+                      [title]="'Remove ' + member.email"
+                      (click)="removePerson(member)"
+                    >
+                      <mat-icon>person_remove</mat-icon>
+                    </button>
+                  </li>
+                }
+              </ul>
+              @if (people.members.length === 0) {
+                <p class="note">Nobody has joined yet. Create an invite link below and send it.</p>
+              }
+            </section>
+
+            <section class="card" aria-labelledby="links-title">
+              <div class="card-head">
+                <h2 id="links-title">Invite links</h2>
+                <button mat-stroked-button type="button" [disabled]="busy()" (click)="createInvite()">Create invite link</button>
+              </div>
+              <p class="caption">
+                Each link works once and expires after 7 days. The person who opens it signs in with Google and
+                gets NAMA with their own data.
+              </p>
+              @if (people.invites.length === 0) {
+                <p class="note">No unused links.</p>
+              }
+              <ul class="list">
+                @for (invite of people.invites; track invite.id) {
+                  <li class="item">
+                    <span class="name">
+                      Created {{ formatDate(invite.createdOn) }}
+                      <span class="caption below">
+                        {{ invite.expired ? 'Expired on' : 'Expires on' }} {{ formatDate(invite.expiresOn) }}
+                      </span>
+                    </span>
+                    <button
+                      mat-icon-button
+                      type="button"
+                      [disabled]="busy()"
+                      [attr.aria-label]="'Revoke the link created on ' + formatDate(invite.createdOn)"
+                      [title]="'Revoke the link created on ' + formatDate(invite.createdOn)"
+                      (click)="revokeInvite(invite)"
+                    >
+                      <mat-icon>link_off</mat-icon>
+                    </button>
+                  </li>
+                }
+              </ul>
+            </section>
+          }
         }
       }
     </div>
