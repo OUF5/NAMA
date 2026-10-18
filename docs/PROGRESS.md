@@ -75,7 +75,7 @@
   - Commit `42be360` deployed, and every CI step passed (`dotnet test`: 358 of 358).
   - On production, `/api/health` returns version `42be360…`. `GET /api/fiscal-years/2026-01/overview` returns 401 with `Cache-Control: no-store` without a token, and `/months` returns 200.
   - Still open: the owner's production check that Sep 2026 shows In progress on `/months` and that a few Year cells match their Entries totals.
-- **M8 Settings and FY rollover: built, waiting for the owner's local check (18 Oct 2026).** The Settings page (STG-01 to STG-06), the rollover (FY-01 to FY-03, R-CAL-07, R-CAL-08) with the FY-01 banner on Months, salary history and additional income (R-INC-02, R-INC-03), rename/archive/restore for accounts, categories and sub-categories, and Plan's FY selector.
+- **M8 Settings and FY rollover: done (18 Oct 2026).** The Settings page (STG-01 to STG-06), the rollover (FY-01 to FY-03, R-CAL-07, R-CAL-08) with the FY-01 banner on Months, salary history and additional income (R-INC-02, R-INC-03), rename/archive/restore for accounts, categories and sub-categories, and Plan's FY selector.
   - New endpoints: `GET /api/settings`, `PUT /api/profile`, `PUT /api/settings/calendar`, `POST /api/fiscal-years/next`, `GET /api/income`, `POST /api/income/salary`, `POST`/`PUT`/`DELETE /api/income/additional[/{id}]`, `POST /api/bank-accounts`, `PUT /api/bank-accounts/{id}`, `PUT /api/categories/{id}`, `PUT /api/sub-categories/{id}`. No DELETE for categories, sub-categories or accounts.
   - Locally: `dotnet test api.tests` passed 434 of 434 (358 before). `npm run build` passed with no warnings: initial 535.01 kB (533.96 kB before), Settings chunk 58.40 kB lazy. `npx ng test --watch=false` passed 96 of 96 (86 before), 3 runs in a row. No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
   - `dotnet run` answers 401 with `Cache-Control: no-store` on all 13 new routes without a token.
@@ -89,7 +89,10 @@
     - Income add, update (to an open-ended item, `toPeriodKey` null) and delete worked; a missing id returned false and created nothing.
     - Account, category and sub-category updates changed `name`, `nameLower` and `archived`, kept `createdAt` and `sortOrder`, and a missing id returned false.
     - The profile and calendar updates kept `createdAt` and moved `updatedAt`.
-  - Still to do: the owner's local browser check (see the recipe under Decisions), then the commit, the push and the production check.
+  - The owner checked everything locally with the recipe under Decisions and approved it. That check led to the Settings, Sign out and Plan design changes under Decisions; the final local run passed `dotnet test` 434 of 434, `npm run build` with no warnings (initial 540.26 kB) and `npx ng test --watch=false` 105 of 105.
+  - Commit `90b0534` deployed, and every CI step passed (`dotnet test`: 434 of 434).
+  - On production, `/api/health` returns version `90b0534…`. All 13 new routes return 401 with `Cache-Control: no-store` without a token, and `/settings`, `/settings/income` and `/plan` return 200.
+  - Still open: the owner's production check of Settings and Plan (and the M7 one above).
 - Next: M9 Dashboard preview and polish, in a fresh session. M9 also puts the FY-01 banner (`shared/rollover-banner.ts`) on Dashboard.
 
 ## Decisions
