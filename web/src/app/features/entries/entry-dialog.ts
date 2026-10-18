@@ -8,7 +8,7 @@ import { formatMoney, minorToInput, parseAmount, toMinor } from '../../shared/mo
 import { formatDate, fromDateString, toDateString } from '../../shared/month-label';
 import { Category } from '../plan/plan-api';
 import { BankAccount, Entry, EntryApi } from '../add-entry/entry-api';
-import { EntryFields, KeptItems, applyServerErrors, createEntryForm } from '../add-entry/entry-fields';
+import { EntryFields, KeptItems, applyServerErrors, createEntryForm, showAllErrors } from '../add-entry/entry-fields';
 
 export interface EntryDialogData {
   entry: Entry;
@@ -76,7 +76,7 @@ export class EntryDialog {
 
   protected async save(): Promise<void> {
     if (this.form.invalid) {
-      this.form.markAllAsTouched();
+      showAllErrors(this.form);
       return;
     }
     const value = this.form.getRawValue();

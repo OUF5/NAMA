@@ -407,6 +407,13 @@ Checked on 18 Oct 2026, before and after the M9 push (`678ffcb`). Ticked items h
   - The card has the mark, "NAMA", the caption "Plan and track your spending, salary to salary.", and the unchanged Google button. "Built by Ouf." sits under it.
   - AUTH-01 behavior is unchanged. A new `sign-in.spec.ts` covers the page (3 tests).
 
+- 18 Oct 2026, after M9: **Add page layout** (owner's request: the page looked empty on desktop and sat at the top on phones).
+  - A larger amount field.
+  - The planned indicator in its own panel with a placeholder until a sub-category is chosen; beside the fields from 1100px wide.
+  - On phones the fields are 48px high, the panel follows them, and Save follows the panel (sticky, so it stays visible on a short screen). Two earlier versions stretched the card to the screen height and left a large gap above Save on tall phones (owner's checks). Then (owner's request, phones only): the title and the card are centered together, the plan is an inset box, and the fields and Save are 48px high.
+  - Entry form errors (Add and the edit dialog): tapping an empty field and leaving it no longer turns it red. A field shows its error after Save (`showAllErrors`), after a server error, or once it is left with text typed wrong (`TouchedErrorStateMatcher` now also needs `dirty`).
+  - The entry fields component got a `split` input for this; the edit dialog is unchanged. No API change; Add still makes 2 calls.
+  - Rules in docs/DESIGN.md "Add form".
 - 18 Oct 2026, after M9: **Sharing NAMA: invite links** (owner's choice of A, over B "a People list in Settings" and C "open sign-up with a user cap").
   - The owner creates a single-use invite link (expires after 7 days) in Settings and sends it. The person opens it, signs in with Google, and is allowed.
   - The emails in `ALLOWED_EMAILS` stay as admins, so the owner can never be locked out.

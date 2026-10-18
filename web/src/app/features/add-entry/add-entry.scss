@@ -1,6 +1,10 @@
 // docs/DESIGN.md "Add form (ENT)": one phone screen, Save always visible, one filled button,
 // tokens only. The fields are styled in entry-fields.scss.
 
+:host {
+  display: block;
+}
+
 h1 {
   margin-bottom: 16px;
 }
@@ -17,7 +21,14 @@ h1 {
 form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+}
+
+// Wide screens: room for the indicator panel beside the fields (entry-fields.scss).
+@media (min-width: 1100px) {
+  form.card {
+    max-width: 1000px;
+  }
 }
 
 .empty h2 {
@@ -64,10 +75,24 @@ form {
   }
 }
 
-// Phones: a full-width Save under the thumb (ENT-03, UX-07).
+// Phones: a full-width Save right under the plan panel, under the thumb (ENT-03, UX-07). It is
+// sticky, so it stays on screen when the form is taller than the screen (keyboard open).
+// The page fills the screen between the top bar and the bottom bar, and the title and the card
+// are centered in it together (owner's request): 56px top bar + 1px border, the bottom bar (56px
+// items, 8px padding, 1px border) and the page's 16px padding top and bottom (app.scss).
 @media (max-width: 767.98px) {
+  :host {
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100dvh - 57px - 65px - env(safe-area-inset-bottom) - 32px);
+  }
+
   h1 {
-    margin-bottom: 12px;
+    margin: auto 0 12px;
+  }
+
+  .card {
+    margin-bottom: auto;
   }
 
   .card {
@@ -82,7 +107,7 @@ form {
     padding: 4px 0 0;
 
     button {
-      height: 44px;
+      height: 48px;
     }
   }
 

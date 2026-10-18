@@ -102,6 +102,9 @@ describe('Entry dialog (TBL-02, TBL-03)', () => {
     expect(await options('Bank account')).toEqual(['Al Rajhi', 'Closed (archived)']);
     // No "after this entry" preview: "spent so far" already includes this entry.
     expect(root().querySelector('.after')).toBeNull();
+    // The Add page layout (split) is not used in the dialog: no placeholder panel.
+    expect(root().querySelector('app-entry-fields')!.classList).not.toContain('split');
+    expect(root().querySelector('.placeholder')).toBeNull();
   });
 
   // PRD 7.5: 422 when the new date is outside every FY.

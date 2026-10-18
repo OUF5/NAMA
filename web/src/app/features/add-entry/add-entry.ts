@@ -9,7 +9,14 @@ import { formatMoney, parseAmount, toMinor } from '../../shared/money';
 import { fromDateString, toDateString } from '../../shared/month-label';
 import { Category, PlanApi } from '../plan/plan-api';
 import { BankAccount, EntryApi } from './entry-api';
-import { EntryFields, applyServerErrors, createEntryForm, entryAccountOptions, entryCategoryOptions } from './entry-fields';
+import {
+  EntryFields,
+  applyServerErrors,
+  createEntryForm,
+  entryAccountOptions,
+  entryCategoryOptions,
+  showAllErrors,
+} from './entry-fields';
 
 // PRD 5.4 Add entry (ENT-01 to ENT-03). Page load is 2 calls (NFR-01): categories and bank accounts.
 // /api/me is already loaded by setupGuard and brings the last used account, today and the FY range.
@@ -56,7 +63,7 @@ export class AddEntry {
   // ENT-02: amount and note clear; category, sub-category, account and date stay for quick repeats.
   protected async save(): Promise<void> {
     if (this.form.invalid) {
-      this.form.markAllAsTouched();
+      showAllErrors(this.form);
       return;
     }
     const value = this.form.getRawValue();

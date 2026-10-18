@@ -209,6 +209,63 @@ describe('Add entry (PRD 5.4)', () => {
     expect(root.textContent).toContain('More than 0, at most 10,000,000, with up to 2 decimals.');
   });
 
+  // Owner's request (after M9): tapping an empty field and leaving it shows no error; Save does, and
+  // so does text typed wrong once the field is left.
+  it('shows errors on empty fields only after Save', async () => {
+    const fixture = await open();
+    const root = fixture.nativeElement as HTMLElement;
+    await chooseGroceries(fixture);
+    const amount = inputLabeled(root, 'Amount (SAR)');
+
+    amount.dispatchEvent(new Event('focus'));
+    amount.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    expect(root.querySelector('mat-error')).toBeNull();
+
+    (root.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    http.expectNone('/api/entries');
+    expect(root.querySelector('mat-error')?.textContent?.trim()).toBe(
+      'More than 0, at most 10,000,000, with up to 2 decimals.',
+    );
+  });
+
+  it('shows an error for text typed wrong once the field is left', async () => {
+    const fixture = await open();
+    const root = fixture.nativeElement as HTMLElement;
+    await chooseGroceries(fixture);
+    const amount = inputLabeled(root, 'Amount (SAR)');
+
+    type(amount, '1.234');
+    amount.dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(root.querySelector('mat-error')?.textContent?.trim()).toBe(
+      'More than 0, at most 10,000,000, with up to 2 decimals.',
+    );
+  });
+
+  // Owner's request (after M9): the indicator panel says what it will show until a sub-category is
+  // chosen, then the planned indicator takes its place.
+  it('shows the plan panel placeholder until a sub-category is chosen', async () => {
+    const fixture = await open();
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.querySelector('app-entry-fields')!.classList).toContain('split');
+    expect(root.querySelector('.placeholder-title')?.textContent?.trim()).toBe('Plan for the month');
+    expect(root.querySelector('app-planned-indicator')).toBeNull();
+
+    await chooseGroceries(fixture);
+    fixture.detectChanges();
+
+    expect(root.querySelector('.placeholder')).toBeNull();
+    expect(root.querySelector('.side app-planned-indicator')).not.toBeNull();
+  });
+
   // UX-03: without an active bank account the page says where to add or restore one.
   it('links to the bank accounts in Settings when no account is active', async () => {
     configure(meWith(null));

@@ -5,6 +5,7 @@ import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, Validator
 import { ErrorStateMatcher, provideNativeDateAdapter } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { merge } from 'rxjs';
@@ -18,13 +19,20 @@ import { BankAccount, EntryApi, Indicator } from './entry-api';
 // PRD 4.7: notes are optional, at most 200 characters.
 export const NOTE_MAX_LENGTH = 200;
 
-// Errors show only on touched fields. Material's default also shows them once the form was
-// submitted, which turned the cleared amount red right after every save (ENT-02 quick repeat).
-// Save on an invalid form marks every field touched, so its errors still show.
+// Errors show on fields that were left after typing in them, or after Save. Material's default also
+// shows them once the form was submitted, which turned the cleared amount red right after every save
+// (ENT-02 quick repeat). Tapping an empty field and leaving it shows nothing (owner's request, after
+// M9); Save on an invalid form and server errors mark the fields (showAllErrors, applyServerErrors).
 export class TouchedErrorStateMatcher implements ErrorStateMatcher {
   isErrorState(control: AbstractControl | null): boolean {
-    return !!control && control.invalid && control.touched;
+    return !!control && control.invalid && control.touched && control.dirty;
   }
+}
+
+// Save on an invalid form: every field shows its error.
+export function showAllErrors(form: EntryForm): void {
+  form.markAllAsTouched();
+  Object.values(form.controls).forEach((control) => control.markAsDirty());
 }
 
 // The entry form of Add (PRD 5.4) and of the Entries edit dialog (TBL-02). Fields in the PRD 5.4 order.
@@ -83,6 +91,7 @@ export function applyServerErrors(form: EntryForm, error: unknown): boolean {
   for (const [field, messages] of known) {
     fields[field].setErrors({ server: messages[0] });
     fields[field].markAsTouched();
+    fields[field].markAsDirty();
   }
   return known.length > 0;
 }
@@ -90,7 +99,16 @@ export function applyServerErrors(form: EntryForm, error: unknown): boolean {
 // The fields and the planned indicator (ENT-01). The page owns the form and its Save.
 @Component({
   selector: 'app-entry-fields',
-  imports: [ReactiveFormsModule, MatDatepickerModule, MatFormFieldModule, MatInputModule, MatSelectModule, PlannedIndicator],
+  imports: [
+    ReactiveFormsModule,
+    MatDatepickerModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatInputModule,
+    MatSelectModule,
+    PlannedIndicator,
+  ],
+  host: { '[class.split]': 'split()' },
   providers: [
     OUTLINE_FORM_FIELDS,
     provideNativeDateAdapter(),
@@ -113,6 +131,10 @@ export class EntryFields implements OnInit {
   readonly keep = input<KeptItems | null>(null);
   // ENT-01 "after this entry". Off while editing: "spent so far" already includes the entry.
   readonly preview = input(true);
+  // The Add page layout (owner's request, after M9): a larger amount, and the indicator in its own
+  // panel (beside the fields on wide screens) with a placeholder until a sub-category is chosen.
+  // The edit dialog keeps the compact layout.
+  readonly split = input(false);
 
   protected readonly noteMax = NOTE_MAX_LENGTH;
   protected readonly toMinor = toMinor;

@@ -23,6 +23,7 @@
   } @else {
     <form class="card" [formGroup]="form" (ngSubmit)="save()" novalidate>
       <app-entry-fields
+        [split]="true"
         [form]="form"
         [categories]="categories()"
         [accounts]="accounts()"

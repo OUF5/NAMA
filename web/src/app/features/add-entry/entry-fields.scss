@@ -1,7 +1,8 @@
-// docs/DESIGN.md "Add form (ENT)": outline inputs, tokens only. Used by Add and the edit dialog.
+// docs/DESIGN.md "Add form (ENT)": outline inputs, tokens only. Used by Add (split) and the edit dialog.
 @use '@angular/material' as mat;
 
-.fields {
+.fields,
+.inputs {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -17,9 +18,71 @@ mat-form-field {
   min-width: 0;
 }
 
-.indicator {
+.side {
   padding-top: 12px;
   border-top: 1px solid var(--divider);
+}
+
+// Until a sub-category is chosen (Add only).
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 0;
+  text-align: center;
+
+  mat-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 32px;
+    color: var(--text-muted);
+  }
+
+  p {
+    margin: 0;
+    max-width: 280px;
+  }
+}
+
+.placeholder-title {
+  font-weight: 600;
+}
+
+// Add: more room, and a larger amount.
+:host(.split) {
+  .fields,
+  .inputs {
+    gap: 16px;
+  }
+
+  .amount {
+    @include mat.form-field-overrides(
+      (
+        container-height: 56px,
+        container-vertical-padding: 14px,
+        container-text-size: 22px,
+      )
+    );
+  }
+}
+
+// Wide screens: the indicator panel beside the fields.
+@media (min-width: 1100px) {
+  :host(.split) .fields {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 24px;
+  }
+
+  :host(.split) .side {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 0 0 24px;
+    border-top: 0;
+    border-left: 1px solid var(--divider);
+  }
 }
 
 // Phones: large touch targets (ENT-03, UX-07).
@@ -31,5 +94,27 @@ mat-form-field {
         container-vertical-padding: 10px,
       )
     );
+  }
+
+  // Add: a little taller (still at least 44px, UX-07). The plan sits in an inset box, so it reads
+  // as a summary of the month rather than part of the form.
+  :host(.split) {
+    @include mat.form-field-overrides(
+      (
+        container-height: 48px,
+        container-vertical-padding: 12px,
+      )
+    );
+
+    .side {
+      padding: 12px 16px;
+      border: 1px solid var(--divider);
+      border-radius: 8px;
+      background: var(--bg);
+    }
+
+    .placeholder {
+      padding: 8px 0;
+    }
   }
 }

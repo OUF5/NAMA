@@ -1,4 +1,5 @@
 <div class="fields" [formGroup]="form()">
+  <div class="inputs">
   <div class="row">
     <mat-form-field subscriptSizing="dynamic">
       <mat-label>Category</mat-label>
@@ -25,8 +26,8 @@
     </mat-form-field>
   </div>
 
-  <!-- ENT-03: the numeric keypad on phones. -->
-  <mat-form-field subscriptSizing="dynamic">
+  <!-- ENT-03: the numeric keypad on phones. Larger on Add (split), the one value typed every time. -->
+  <mat-form-field class="amount" subscriptSizing="dynamic">
     <mat-label>Amount ({{ currency() }})</mat-label>
     <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
     @if (form().controls.amount.hasError('server')) {
@@ -80,14 +81,29 @@
     }
   </mat-form-field>
 
-  @if (indicator(); as current) {
-    <app-planned-indicator
-      class="indicator"
-      [period]="current.period"
-      [planned]="toMinor(current.planned)"
-      [spent]="toMinor(current.spent)"
-      [pending]="pending()"
-      [currency]="currency()"
-    />
+  </div>
+
+  <!-- ENT-01. On Add (split) it has its own panel: beside the fields on wide screens, and a
+       placeholder until a sub-category is chosen, so the page never looks empty. -->
+  @if (indicator() || split()) {
+    <div class="side">
+      @if (indicator(); as current) {
+        <app-planned-indicator
+          [period]="current.period"
+          [planned]="toMinor(current.planned)"
+          [spent]="toMinor(current.spent)"
+          [pending]="pending()"
+          [currency]="currency()"
+        />
+      } @else {
+        <div class="placeholder">
+          <mat-icon aria-hidden="true">insights</mat-icon>
+          <p class="placeholder-title">Plan for the month</p>
+          <p class="caption">
+            Choose a sub-category to see what is planned, spent and left in the month of the date.
+          </p>
+        </div>
+      }
+    </div>
   }
 </div>
