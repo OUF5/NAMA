@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- UX-06 app icon source (not served). "N" in the primary token color (#e4e4e7) on the bg token
-     color (#0a0a0b), full bleed: the OS rounds the corners. PNGs in web/public/icons are rendered from it (see README). -->
+<!-- UX-06 app icon source (not served): the NAMA mark (owner's request), a black square with a light
+     border, as in favicon.svg (border 1/8 of the square). The primary token color (#e4e4e7) on the bg
+     token color (#0a0a0b), full bleed: the OS rounds the corners, so the mark sits centered at 56%.
+     PNGs in web/public/icons are rendered from it (see README). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <rect width="512" height="512" fill="#0a0a0b"/>
-  <polygon fill="#e4e4e7" points="144,384 144,128 200,128 312,300 312,128 368,128 368,384 312,384 200,212 200,384"/>
+  <rect x="130" y="130" width="252" height="252" fill="#0a0a0b" stroke="#e4e4e7" stroke-width="36"/>
 </svg>

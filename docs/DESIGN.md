@@ -8,7 +8,7 @@ The tokens are defined once in `web/src/styles.scss`, the only file with color v
 
 Exceptions, because these files cannot read CSS variables:
 - `web/public/google-g.svg`: the Google brand colors.
-- The PWA files (UX-06): `web/public/manifest.webmanifest` and the `theme-color` meta in `web/src/index.html` use `--bg` (`#0a0a0b`) and `--surface` (`#121214`). The icons (`web/icons/*.svg`, rendered to `web/public/icons/*.png`) and the NAMA mark (`web/public/favicon.svg`, rendered to `favicon.ico`) use `--primary` (`#e4e4e7`) and `--bg`. So does the sign-in artwork (`web/public/sign-in-bg.svg`). If a token changes, change them too.
+- The PWA files (UX-06): `web/public/manifest.webmanifest` and the `theme-color` meta in `web/src/index.html` use `--bg` (`#0a0a0b`) and `--surface` (`#121214`). The app icons (`web/icons/*.svg`, rendered to `web/public/icons/*.png`, also the NAMA mark) and the tab icon (`web/public/favicon.svg`, rendered to `favicon.ico`) use `--primary` (`#e4e4e7`) and `--bg`. So does the sign-in artwork (`web/public/sign-in-bg.svg`). If a token changes, change them too.
 
 | Token | Use |
 | --- | --- |
@@ -138,7 +138,7 @@ Use at most 3 sizes per screen, not counting KPIs.
 - **Sign in with Google:** follows Google's branding guidelines (light variant): a white button with a 1px `--google-border`, 4px radius, the official multicolor "G" logo (`web/public/google-g.svg`, the only file allowed to contain those brand colors) and dark text. It is the only white button in the app.
 - **Icons:** Material Symbols Outlined only (the app default), 20px, `--text-2`.
 - **The NAMA mark:** a black square (`--bg`) with a light border (`--primary`), square corners, nothing inside. It is the browser tab icon (`web/public/favicon.svg`, 4/32 border, and `favicon.ico`) and the logo before "NAMA" in the top bar (14px, 2px border, 8px gap; drawn in CSS, `aria-hidden`).
-- **App icons (UX-06):** a geometric "N" (no font) in `--primary` on `--bg`, full bleed (the OS rounds them); the maskable one keeps the N inside the 80% safe zone.
+- **App icons (UX-06):** the NAMA mark (owner's request, replaces the "N"): a `--bg` square with a `--primary` border (1/8 of its size), centered on a full-bleed `--bg` background, because the OS rounds the corners. It is 56% of the icon; the maskable one is 50%, inside the 80% safe zone.
 
 ## Accessibility (UX-07)
 

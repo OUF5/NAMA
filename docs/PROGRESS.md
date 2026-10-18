@@ -456,6 +456,7 @@ Checked on 18 Oct 2026, before and after the M9 push (`678ffcb`). Ticked items h
   - The web page is the sign-in page on `/invite/:token`, with an invite caption. It signs in, joins, and goes to `/` with `replaceUrl`, so the token leaves the history.
 - 18 Oct 2026, M10: **People dates** (`joinedOn`, `createdOn`, `expiresOn`) are `YYYY-MM-DD` in the admin's profile time zone, or UTC before setup. They come from the new `FiscalCalendar.DateIn`, which `Today` now uses too.
 - 18 Oct 2026, M10: **Settings stays at 2 calls** (NFR-01). People rides on `GET /api/settings`. Create, revoke and remove answer with the whole People list. A 404 on revoke or remove reads `/api/settings` again ("That changed in the meantime").
+- 18 Oct 2026, after Phase 1: **The app icons are the NAMA mark** (owner's request), replacing the "N" from M9. The Home Screen icon, the 192 and 512 icons and the maskable one now show the black square with a light border, centered on black (56%; the maskable one 50%, inside the safe zone). Same render commands (README); no new tool or package. An existing Home Screen icon on the iPhone only changes after it is removed and added again.
 
 ## Open questions
 

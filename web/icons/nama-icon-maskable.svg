@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- UX-06 maskable icon source (not served): the same "N" at 75%, inside the 80% safe zone. -->
+<!-- UX-06 maskable icon source (not served): the same mark at 50%, so its corners stay inside the
+     80% safe zone (half-diagonal 181px, safe radius 204.8px). -->
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
   <rect width="512" height="512" fill="#0a0a0b"/>
-  <polygon fill="#e4e4e7" points="172,352 172,160 214,160 298,289 298,160 340,160 340,352 298,352 214,223 214,352"/>
+  <rect x="144" y="144" width="224" height="224" fill="#0a0a0b" stroke="#e4e4e7" stroke-width="32"/>
 </svg>
