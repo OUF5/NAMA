@@ -132,7 +132,7 @@
     - `/api/health` returns version `519f8c7…`.
     - `POST /api/invites`, `DELETE /api/invites/x`, `DELETE /api/people/x`, `POST /api/invites/accept` and `GET /api/settings` return 401 with `Cache-Control: no-store` without a token.
     - `/invite/abc`, `/settings/people` and `/no-access` return 200.
-  - Still open: the owner's production check with a second Google account (create a link, join, reuse the link, remove the account).
+  - The owner ran the production check with a second Google account on 18 Oct 2026 (create a link, join and land on Setup, reuse the link, remove the account) and confirmed that all of it worked.
 
 ## Definition of Done (PRD 9)
 
