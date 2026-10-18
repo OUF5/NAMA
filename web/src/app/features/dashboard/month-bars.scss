@@ -1,0 +1,179 @@
+// docs/DESIGN.md "Dashboard chart (DSH-03)": a CSS column chart. Planned in --text-muted, spent in
+// the status color, on a --divider grid; chips with text. Tokens only.
+@use '../../shared/plan-status';
+
+@include plan-status.styles;
+
+$plot: 160px;
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text-muted);
+
+  > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.key {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+
+  &.planned {
+    background: var(--text-muted);
+  }
+
+  &.spent {
+    background: var(--ok);
+  }
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
+.chart {
+  display: flex;
+  gap: 8px;
+}
+
+// The top value and 0, level with the grid lines.
+.axis {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: $plot;
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: right;
+
+  span {
+    line-height: 1;
+  }
+}
+
+.plot {
+  position: relative;
+  flex: 1;
+  display: flex;
+}
+
+.lines {
+  position: absolute;
+  inset: 0 0 auto;
+  height: $plot;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+
+  span {
+    border-top: 1px solid var(--divider);
+  }
+
+  span:last-child {
+    border-top-color: var(--border);
+  }
+}
+
+// One month: its two columns and its name. A button, so a month can be picked for the numbers below.
+.col {
+  position: relative;
+  flex: 1;
+  min-width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+
+  &:hover,
+  &.selected {
+    background: var(--surface-2);
+  }
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: $plot;
+}
+
+.bar {
+  width: 12px;
+  border-radius: 3px 3px 0 0;
+  background: var(--text-muted);
+
+  &.ok {
+    background: var(--ok);
+  }
+
+  &.warn {
+    background: var(--warn);
+  }
+
+  &.danger {
+    background: var(--danger);
+  }
+}
+
+.month {
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.upcoming .month {
+  color: var(--text-muted);
+}
+
+.now .month {
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+.detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+
+  p {
+    margin: 4px 0 0;
+  }
+}
+
+.detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.label {
+  font-weight: 500;
+}
+
+.over {
+  margin: 8px 0 0;
+  color: var(--danger);
+}
+
+@media (max-width: 767.98px) {
+  .bar {
+    width: 8px;
+  }
+}

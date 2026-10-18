@@ -140,6 +140,7 @@ function overview(
       },
     ],
     totals: { income: 51500.25, planned: 5300, spent: 1379.99, remaining: 3920.01 },
+    toDate: { income: 34500.25, spent: 1379.99, saved: 33120.26 },
     rollover: null,
   };
 }
@@ -372,6 +373,25 @@ describe('Months (PRD 5.6)', () => {
     const link = card('2026-08').querySelector('a.see-all')!;
     expect(text(link)).toBe('See all 7 entries in Aug 2026');
     expect(link.getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-08');
+  });
+
+  // UX-03: the Months view says what to do when nothing is planned or spent in the FY.
+  it('shows an empty state above the month cards when nothing is planned or spent', async () => {
+    await open('/months', { ...overview(), rows: [] });
+
+    const empty = root().querySelector('.empty')!;
+    expect(text(empty.querySelector('h2'))).toBe('Nothing planned or spent in FY 2026 yet');
+    expect(Array.from(empty.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+      '/plan',
+      '/add',
+    ]);
+    expect(root().querySelectorAll('section.month').length).toBe(3);
+  });
+
+  it('shows no empty state when something is planned or spent', async () => {
+    await open();
+
+    expect(root().querySelector('.empty')).toBeNull();
   });
 
   it('opens no card when no month is in progress', async () => {

@@ -209,6 +209,21 @@ describe('Add entry (PRD 5.4)', () => {
     expect(root.textContent).toContain('More than 0, at most 10,000,000, with up to 2 decimals.');
   });
 
+  // UX-03: without an active bank account the page says where to add or restore one.
+  it('links to the bank accounts in Settings when no account is active', async () => {
+    configure(meWith(null));
+    const fixture = TestBed.createComponent(AddEntry);
+    (await vi.waitFor(() => http.expectOne('/api/categories'))).flush(categories);
+    (await vi.waitFor(() => http.expectOne('/api/bank-accounts'))).flush([accounts[1]]);
+    await settle(fixture);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(root.querySelector('.empty h2')?.textContent?.trim()).toBe('No bank account');
+    expect(root.querySelector('.empty a')?.getAttribute('href')).toBe('/settings/bank-accounts');
+    expect(root.querySelector('form')).toBeNull();
+  });
+
   // PRD 7.5: 422 when the date is outside every FY.
   it('shows the API answer on the date field', async () => {
     const fixture = await open();

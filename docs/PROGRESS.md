@@ -93,7 +93,62 @@
   - Commit `90b0534` deployed, and every CI step passed (`dotnet test`: 434 of 434).
   - On production, `/api/health` returns version `90b0534…`. All 13 new routes return 401 with `Cache-Control: no-store` without a token, and `/settings`, `/settings/income` and `/plan` return 200.
   - Still open: the owner's production check of Settings and Plan (and the M7 one above).
-- Next: M9 Dashboard preview and polish, in a fresh session. M9 also puts the FY-01 banner (`shared/rollover-banner.ts`) on Dashboard.
+- **M9 Dashboard preview and polish: built locally (18 Oct 2026), waiting for the owner's local check and the push.** Dashboard (DSH-01 to DSH-03) with the FY-01 banner, UX-03 empty states, UX-06 PWA (manifest and icons, no service worker). The overview response gets `toDate` (DSH-02).
+  - Locally: `dotnet test api.tests` passed 449 of 449 (434 before; 15 new). `npm run build` passed with no warnings: initial 539.98 kB (540.26 kB before), Dashboard chunk 14.37 kB lazy. `npx ng test --watch=false` passed 119 of 119 (105 before). No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
+  - Hand check (`OverviewTests`, the M7 data, today 17 Oct 2026). FY to date covers Jan to Sep 2026:
+    - Income 8 × 17,000 + 17,500.25 = 153,500.25. Spent: Aug 50 + Sep 1,299.99 = 1,349.99. Saved 152,150.26.
+    - An entry dated 25 Oct (still Sep 2026) counts: spent 1,449.99, saved 152,050.26. One dated 27 Oct (Oct 2026, not started) does not.
+    - Adding 200,000 in Jan gives saved −47,849.74.
+    - At 27 Oct 00:00 Riyadh, Oct's income joins (170,500.25 / 169,150.26).
+    - After the FY ends: 204,500.25 / 1,349.99 / 203,150.26. Before it starts: 0 / 0 / 0.
+  - Current month card (`dashboard.spec.ts`): Sep 2026 · 27 Sep to 26 Oct, Remaining 600.01, Income 17,500.25, Planned 1,900, Spent 1,299.99, bar 68%, "Within plan".
+  - Still to do: the owner's local check (360/390/430 px and desktop, the banner with the M8 recipe, the icons), then the push, the production checks and the Definition of Done below.
+
+## Definition of Done (PRD 9)
+
+Checked on 18 Oct 2026 before the M9 push. Ticked items have their proof next to them. The rest wait for the push or for the owner.
+
+- [ ] **Every requirement not tagged Nice is built.** Every untagged, Must and Tech requirement is in a milestone above:
+  - **AUTH-01 to AUTH-05:** M1 and M3.
+  - **SET-01, SET-02, SET-04 and the 6 wizard steps:** M3.
+  - **PLN-01, PLN-04, PLN-05:** M4, with renames in M8.
+  - **ENT-01, ENT-03:** M5. **ENT-04:** M6.
+  - **TBL-01, TBL-02, TBL-03, TBL-05:** M6.
+  - **MON-01, MON-02 (Year view), MON-03:** M7.
+  - **STG-01 to STG-05:** M8.
+  - **FY-01 to FY-03:** M5, M8 and M9.
+  - **DSH-01 to DSH-03:** M9.
+  - **UX-01:** M0, M1 and M8. **UX-02:** M3. **UX-07:** every screen, docs/DESIGN.md.
+  - **NFR-01:** call counts under Decisions. **NFR-02:** `startup-cpu-boost: 'true'` on the live service. **NFR-03:** M0 rules, M1 auth, `no-store`. **NFR-04:** see below. **NFR-06:** owner check. **NFR-07:** default logging.
+  - **Rules R-CAL, R-MON, R-INC, R-PLN, R-STA:** M2 to M8, with unit tests.
+  - **4.6 no DELETE:** only entries and additional income have DELETE routes.
+  - **4.7 validation:** M3, M4 and M8.
+  - **Owner-approved deviations:** AUTH-04 (Sign out is outside Settings, M8), PRD 5.7 "one page" (sections, M8), UX-05 (dark theme only).
+  - Waits for M9 to be deployed.
+- [x] **Skipped Nice items are listed in the README** ("Skipped Nice items"): the seed data script, UX-05 (replaced), the success criteria, and the UX-06 automatic install banner. Every other Nice item is built.
+- [ ] **`dotnet test` and `npm run build` pass, and a push to `main` deploys.** Both pass locally (above). Waits for the push and its CI run.
+- [x] **The worked examples in sections 3 and 4.1 are unit tests** (`dotnet test --list-tests`):
+  - `FiscalCalendarTests.Worked_example_month_runs_from_payday_to_the_day_before_the_next_payday`, `Worked_example_statuses` and `Worked_example_first_fiscal_year` (section 3).
+  - `Payday_31_months` and `Payday_31_date_belongs_to_the_right_month` (R-CAL-01).
+  - `Example_A_start_month_change_creates_a_transition_fiscal_year` and `Example_B_payday_change_gives_a_shorter_first_month` (R-CAL-08).
+  - `Payday_change_from_1_to_27_gives_a_longer_first_month` and `Start_month_and_payday_change_together`.
+  - End to end: `RolloverTests.Example_A_…` and `Example_B_…`.
+- [x] **No `double` or `float` in the API:** `grep -rnwE "double|float" api api.tests --include='*.cs' --exclude-dir=bin --exclude-dir=obj` finds nothing.
+- [x] **Firestore rules deny all browser access.** `firestore.rules` is `allow read, write: if false` on `/{document=**}`, and the workflow deploys it (`--only hosting,firestore`). An unauthenticated read of `https://firestore.googleapis.com/v1/projects/nama-b6bda/databases/(default)/documents/users` answers `403 PERMISSION_DENIED` ("Missing or insufficient permissions.").
+- [ ] **Works on a 360 px phone and on desktop.** Waits for the owner's check of every page at 360/390/430 px and on desktop, locally and on production.
+- [ ] **The budget alert exists, and Cloud Run max instances = 1.**
+  - Max instances, checked read-only with `gcloud run services describe nama-api --region=me-central1 --format=yaml`:
+    - The revision has `autoscaling.knative.dev/maxScale: '1'` (the workflow's `--max-instances=1`).
+    - The service has `run.googleapis.com/maxScale: '20'` (service level; nobody set it on purpose).
+    - Cloud Run's docs say the effective limit is the lower of the two, so it is **1**.
+  - Billing is enabled (`gcloud billing projects describe nama-b6bda`: account `01DEB3-536911-FBAE34`).
+  - Budget: `gcloud billing budgets list` failed. The local credentials have no quota project, and `billingbudgets.googleapis.com` is disabled for the gcloud client. Changing that would change settings, so **the owner confirms the 5 USD budget in the console** (Billing → Budgets & alerts).
+- [x] **The README covers local setup, deploy, environment variables and the one-time setup:**
+  - local setup: the emulator, the API, the web app, and the three test and build commands;
+  - deploy: the workflow steps and the GitHub variables;
+  - environment variables: all five, including `FIRESTORE_EMULATOR_HOST`;
+  - the one-time setup, now with `./infra/setup.sh firestore`;
+  - the UX-06 install steps.
 
 ## Decisions
 
@@ -307,23 +362,72 @@
 - 18 Oct 2026, M8: `MONTH_NAMES` moved from the wizard to `shared/month-label.ts` (Settings reuses it), with `monthKeyLabel`. `shared/dialog.ts` has `dialogSize` (the entry dialog uses it too). No new packages: `MatCheckboxModule` and `MatAutocompleteModule` are part of `@angular/material`.
 - 18 Oct 2026, M8: **Local check recipe** (emulator only): delete the emulator user and redo the wizard with FY start month November and payday 1. That gives FY 2025/26 (1 Nov 2025 to 31 Oct 2026), in its last month today, so Months shows the banner. Change the start month to July in Settings (it takes effect from 1 Nov 2026: a transition FY of 8 months, Nov 2026 to Jun 2027), then Start with the copy on and check Plan with the FY selector and Add up to 30 Jun 2027.
 
+- 18 Oct 2026, M9: **FY to date (DSH-02)** (owner's choice).
+  - It counts the months that started on or before today (Closed and In progress, `FiscalCalendar.HasStarted`), each with its full income (the salary arrives on payday, the month's first day) and every entry in it, including entries dated later in the current month.
+  - So spent equals the sum of those months' Spent on Months.
+  - Saved = income − spent (`PlanCalculator.Saved`), and it can be negative.
+  - The API sums it into the overview's new `toDate: { income, spent, saved }`, so Dashboard stays at one call.
+- 18 Oct 2026, M9: **Dashboard makes 1 call (NFR-01)**: the overview (`/api/me` is cached).
+  - It adds `GET /api/fiscal-years` only when no FY contains today; then it shows the latest FY.
+  - There is no FY selector on the preview.
+  - The overview's `categories` and `rows` stay (answers the M7 question): `rows` gives the empty state, and Phase 2 builds on it.
+- 18 Oct 2026, M9: **Dashboard layout:**
+  - The title and "Preview: the full dashboard comes in Phase 2", the FY-01 banner (the same component and the overview's `rollover`), the FY caption, then three cards: the current month, FY to date, and planned vs spent.
+  - The current month card reuses the Months KPI block, now `shared/month-summary.ts` (moved out of Months, which looks the same; its specs pass unchanged apart from the new `toDate` fixture field).
+  - With no month in progress the card says "No month is in progress. FY 2026 ended on 26 Jan 2027. Start FY 2027 above to keep adding entries." (or "FY X starts on …").
+  - After Start, the page reloads the overview once, for the FY that now contains today, else the one just started.
+- 18 Oct 2026, M9: **Planned vs spent (DSH-03) is a column chart** (owner's request after the first version, which had one horizontal row per month).
+  - Plain CSS, no chart library: a Planned and a Spent column per month, on one scale (the largest planned or spent value of any month). The axis shows only that value and 0, so it shows API numbers only.
+  - Each month is a 44px button, so on phones the chart scrolls sideways inside its card (like the Year grid).
+  - The values are written out under the chart for the picked month (the month in progress at first), and over-plan months are listed (UX-07).
+  - Rules are in docs/DESIGN.md "Dashboard chart".
+- 18 Oct 2026, M9: **UX-03 empty states:**
+  - New on Dashboard, and on the Months view when nothing is planned or spent (the Year view's text).
+  - Add's "No bank account" now links to Settings → Bank accounts.
+  - Settings says to start the next FY "on the Dashboard or Months".
+  - Entries, Plan and the Year view were already fine.
+- 18 Oct 2026, M9: **UX-06 PWA without a service worker** (owner's choice).
+  - Chrome (since 108 on phones and 112 on desktop) and Edge install from the browser menu without one. Safari on iPhone makes a Home Screen app from a manifest with `display: standalone`. Only Chrome's automatic install prompt needs a fetch handler. Sources: web.dev "install criteria", the Chrome blog "Revisiting Chrome's installability criteria", Microsoft Edge "Get started developing a PWA", WebKit "Web Push for Web Apps on iOS and iPadOS".
+  - Files: `manifest.webmanifest`; icons 192, 512 and 512 maskable; a 180 apple-touch-icon; the `theme-color` and `apple-mobile-web-app-title` meta tags.
+  - No new package. `angular.json` already copies `public/`.
+- 18 Oct 2026, M9: **Icons** (owner's choice): an "N" monogram drawn as an SVG path (`web/icons/*.svg`, not served), `--primary` on `--bg`, rendered to PNG with the macOS built-ins `qlmanage` and `sips` (commands in the README). The manifest, the icons and the `theme-color` meta are the second hex exception in docs/DESIGN.md, after `google-g.svg`.
+- 18 Oct 2026, M9: **The NAMA mark** (owner's request): a black square with a light border, nothing inside.
+  - It replaces the Angular default `favicon.ico` (from M0) as the browser tab icon: `favicon.svg` for current browsers, with a 32px `favicon.ico` fallback, rendered with `qlmanage` and `sips` (no new tool or package).
+  - The top bar shows it before "NAMA", drawn in CSS with the tokens.
+  - The first version, the "N" on a rounded square, was replaced at the owner's request. The PWA app icons still show the "N".
+- 18 Oct 2026, M9: **Sign-in page redesign** (owner's request: unique, an eye-catching background picture, the logo and "Built by Ouf.").
+  - The page covers the whole screen, top bar included.
+  - The background is original SVG artwork (`web/public/sign-in-bg.svg`, 2.5 kB): the NAMA mark as concentric squares framing the card, each turned 4° more, fading outwards, over a faint grid. It is monochrome with no gradients (docs/DESIGN.md). No stock photo, so there is no license to track.
+  - The card has the mark, "NAMA", the caption "Plan and track your spending, salary to salary.", and the unchanged Google button. "Built by Ouf." sits under it.
+  - AUTH-01 behavior is unchanged. A new `sign-in.spec.ts` covers the page (3 tests).
+
 ## Open questions
+
+### Before Phase 1 is done
+
+- The Angular CLI added an `analytics` id to `web/angular.json` during a local run. It is not committed. Keep it out of the repo (and turn it off with `ng analytics disable`)?
+- The owner's production checks still open from M7 (Sep 2026 In progress on `/months`, a few Year cells equal to their Entries totals) and M8 (Settings and Plan).
+- M9: on an iPhone, does Google sign-in (`signInWithPopup`) work inside the installed Home Screen app? If not, it is reported, not worked around.
+
+Answered in M9: "Dashboard will get `categories` and `rows`" (kept; see Decisions).
+
+### Phase 2 / later
+
+Nothing here is built without the owner's answer.
 
 - M5: `today`, `firstDate` and `lastDate` come from the cached `/api/me`, which loads once per sign-in. If a tab stays open past midnight, the Add form's default date is yesterday until a reload. The top bar's current month has the same limit. Reload `/api/me` when the app comes back to the foreground?
 - M5: Should docs/DESIGN.md get rules for the inline "Saved" confirmation and the planned indicator's layout?
-
 - The Angular specs (interceptor, guards, app) run locally with `npx ng test --watch=false`, but CI only builds. Add `npm test` to the workflow?
 - The wizard has no cap on the number of accounts, categories or income items. Firestore allows 500 writes per batch, so a setup with more than about 490 items would fail. Add a cap?
 - Run the Firestore emulator in CI (Java and firebase-tools in the workflow), so the Firestore store is tested automatically?
-- The Angular CLI added an `analytics` id to `web/angular.json` during a local run. It is not committed. Keep it out of the repo (and turn it off with `ng analytics disable`)?
 - Open sign-up instead of the allowlist? Anyone with a Google account could then use the app, which would change AUTH-02. The owner wants to revisit this later. If so, it needs abuse and cost protection at the same time (for example a user cap), because the site is public and the budget alert never stops spending. Until then, people are added through the `ALLOWED_EMAILS` GitHub variable.
 - M6: Every filter change reads all entries of the FY again (about 1,000 reads late in an FY). If the Firestore usage page shows daily reads near 50,000, add PRD 7.4's 5-minute cache.
 - M6: The edit dialog has no "after this entry" preview. Should it show the change from the saved amount?
 - M6: The Entries list has no paging. Is that fine at personal scale (about 1,000 rows per FY)?
 - M7: Should the Year grid scroll sideways to the in-progress column when it opens?
 - M7: `GET /api/entries?periodKey=` could query `fyId == X && periodKey == Y` (equality filters only, so no new index). That would cut each opened Months card from N reads to about N/12.
-- M7: Dashboard (M9) will get `categories` and `rows` from the overview, which it may not need. Is that fine at personal scale?
 - M7: Should docs/DESIGN.md get the Year grid cell rule (not underlined, with a "Tap a cell" caption)?
 - M8: Starting an FY writes the FY and every copied plan in one Firestore batch, and a batch allows 500 writes. More than 499 sub-categories with plans would fail. Add a cap or split the batch?
 - M8: The Settings income totals and pickers use the stored FYs only. An additional income item can't run "until" a month of an FY that is not started yet (open ended works). Is that fine?
-
+- M9: Cloud Run has a service-level `run.googleapis.com/maxScale: '20'` next to the revision's `1`. The effective limit is 1, but Google recommends the service-level setting (`--max`). Set the service-level maximum to 1 in the workflow?
+- M9: Dashboard ideas for Phase 2: an FY selector, a link from each bar row to its Months card.

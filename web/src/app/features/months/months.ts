@@ -15,6 +15,7 @@ import { MeService } from '../../core/me';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
 import { formatMoney, toMinor } from '../../shared/money';
 import { formatDate, formatDay } from '../../shared/month-label';
+import { MonthSummary } from '../../shared/month-summary';
 import { RolloverBanner } from '../../shared/rollover-banner';
 import { EntriesResponse, Entry, EntryApi } from '../add-entry/entry-api';
 import { openEntryDialog } from '../entries/entry-dialog';
@@ -47,6 +48,7 @@ interface MonthEntries {
     MatIconModule,
     MatProgressBarModule,
     MatSelectModule,
+    MonthSummary,
     RolloverBanner,
     YearGrid,
   ],
@@ -96,9 +98,6 @@ export class Months {
     }
     const names = this.names();
     return data.months.map((month, i) => {
-      const planned = toMinor(month.planned);
-      const spent = toMinor(month.spent);
-      const remaining = toMinor(month.remaining);
       const categories = data.rows
         .map((row) => ({
           id: row.categoryId,
@@ -117,11 +116,6 @@ export class Months {
         month,
         key: month.period.key,
         dates: `${formatDay(month.period.startDate)} to ${formatDay(month.period.endDate)}`,
-        line: spendLine(planned, spent, this.currency()),
-        income: this.money(toMinor(month.income)),
-        planned: this.money(planned),
-        spent: this.money(spent),
-        remaining: this.money(remaining),
         categories,
       };
     });

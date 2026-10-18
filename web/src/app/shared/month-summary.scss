@@ -1,0 +1,77 @@
+// docs/DESIGN.md KPI row (desktop) and "KPI on phones", with the status chip and bar. Tokens only.
+@use 'plan-status';
+
+@include plan-status.styles;
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px 16px;
+  padding: 16px 0;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  .value {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+}
+
+.remaining {
+  order: 1;
+
+  .value {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.33;
+  }
+
+  // The status color (owner's choice, M7); Income, Planned and Spent stay neutral.
+  .ok {
+    color: var(--ok);
+  }
+
+  .warn {
+    color: var(--warn);
+  }
+
+  .danger {
+    color: var(--danger);
+  }
+}
+
+.bar-line {
+  order: 2;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  mat-progress-bar {
+    flex: 1;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .summary {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .remaining {
+    order: -2;
+    grid-column: 1 / -1;
+
+    .value {
+      font-size: 28px;
+    }
+  }
+
+  .bar-line {
+    order: -1;
+  }
+}

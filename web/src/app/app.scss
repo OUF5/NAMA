@@ -34,6 +34,18 @@
   letter-spacing: normal;
 }
 
+// The NAMA mark (the same as favicon.svg): a black square with a light border.
+.logo {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  background: var(--bg);
+  border: 2px solid var(--primary);
+}
+
 .month {
   font-size: 13px;
   color: var(--text-muted);

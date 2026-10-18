@@ -68,6 +68,15 @@ h1 {
   gap: 16px;
 }
 
+// UX-03: above the month cards when nothing is planned or spent in the FY.
+.empty {
+  margin-bottom: 16px;
+
+  h2 {
+    margin-bottom: 8px;
+  }
+}
+
 // MON-01 (docs/DESIGN.md "Month status").
 .month {
   scroll-margin-top: 16px;
@@ -119,60 +128,6 @@ h1 {
   flex: none;
   font-size: 13px;
   color: var(--text-2);
-}
-
-// Desktop: Income, Planned, Spent and Remaining in one row, then the bar.
-.summary {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px 16px;
-  padding: 16px 0;
-}
-
-.kpi {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-
-  .value {
-    font-weight: 500;
-    overflow-wrap: anywhere;
-  }
-}
-
-.remaining {
-  order: 1;
-
-  .value {
-    font-size: 24px;
-    font-weight: 600;
-    line-height: 1.33;
-  }
-
-  // The status color (owner's choice, M7); Income, Planned and Spent stay neutral.
-  .ok {
-    color: var(--ok);
-  }
-
-  .warn {
-    color: var(--warn);
-  }
-
-  .danger {
-    color: var(--danger);
-  }
-}
-
-.bar-line {
-  order: 2;
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-
-  mat-progress-bar {
-    flex: 1;
-  }
 }
 
 .details {
@@ -302,22 +257,7 @@ h1 {
     gap: 12px;
   }
 
-  // docs/DESIGN.md "KPI on phones": Remaining large, the bar, then Income, Planned and Spent.
-  .summary {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-  }
-
-  .remaining {
-    order: -2;
-    grid-column: 1 / -1;
-
-    .value {
-      font-size: 28px;
-    }
-  }
-
-  .bar-line {
-    order: -1;
+  .empty {
+    margin-bottom: 12px;
   }
 }

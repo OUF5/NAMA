@@ -96,6 +96,10 @@ public static class FiscalCalendar
         : today < period.StartDate ? PeriodStatus.YetToCome
         : PeriodStatus.InProgress;
 
+    // DSH-02 "FY to date" (owner's choice, M9): a month counts from its first day on, so In progress
+    // and Closed months count and Yet to come ones do not.
+    public static bool HasStarted(Period period, DateOnly today) => period.StartDate <= today;
+
     // R-CAL-10: today's date in the profile time zone (IANA id).
     public static DateOnly Today(TimeProvider timeProvider, string timeZoneId)
     {

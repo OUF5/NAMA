@@ -327,6 +327,17 @@ public class FiscalCalendarTests
         Assert.Equal(expected, FiscalCalendar.Status(FiscalCalendar.PeriodFor(2026, 9, 27), Date(today)));
     }
 
+    // DSH-02: a month counts towards "FY to date" from its first day on (In progress or Closed).
+    [Theory]
+    [InlineData("2026-09-26", false)]
+    [InlineData("2026-09-27", true)]
+    [InlineData("2026-10-26", true)]
+    [InlineData("2026-10-27", true)]
+    public void Has_started_from_the_first_day_of_the_month(string today, bool expected)
+    {
+        Assert.Equal(expected, FiscalCalendar.HasStarted(FiscalCalendar.PeriodFor(2026, 9, 27), Date(today)));
+    }
+
     // R-CAL-10
     [Theory]
     [InlineData("Asia/Riyadh", "2026-10-17")]

@@ -1,0 +1,125 @@
+// docs/DESIGN.md: cards, the in-progress month (MON-01), KPI rows, links. The page's one filled
+// button is the FY-01 banner's Start. Tokens only.
+h1 {
+  margin-bottom: 4px;
+}
+
+.preview,
+.fy,
+.note,
+.error {
+  margin: 0;
+}
+
+.preview {
+  margin-bottom: 16px;
+}
+
+.note {
+  color: var(--text-2);
+}
+
+.error,
+.danger {
+  color: var(--danger);
+}
+
+.status {
+  min-height: 24px;
+  margin: 4px 0;
+  color: var(--text-2);
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+// DSH-01: like the in-progress month card (2px --primary-text border).
+.current {
+  border: 2px solid var(--primary-text);
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.current > h2,
+.empty h2 {
+  margin-bottom: 8px;
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.now-chip {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary-text);
+  background: var(--primary-soft);
+}
+
+// DSH-02: Income, Spent and Saved in 3 columns on every size.
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px 16px;
+  padding-top: 16px;
+}
+
+.kpi {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  .value {
+    font-size: 24px;
+    font-weight: 600;
+    line-height: 1.33;
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .preview {
+    margin-bottom: 12px;
+  }
+
+  .cards {
+    gap: 12px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .kpi .value {
+    font-size: 15px;
+    font-weight: 500;
+  }
+}

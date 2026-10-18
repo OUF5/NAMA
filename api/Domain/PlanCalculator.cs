@@ -28,6 +28,9 @@ public static class PlanCalculator
     // ENT-01: planned minus spent; negative means over plan.
     public static long Remaining(long planned, long spent) => planned - spent;
 
+    // DSH-02: income minus spent; negative means more was spent than earned.
+    public static long Saved(long income, long spent) => income - spent;
+
     // ENT-01: share of the plan spent, rounded down (79.99% is 79). Null when nothing is planned.
     public static int? Percent(long planned, long spent) =>
         planned <= 0 ? null : (int)Math.Min(spent * 100 / planned, int.MaxValue);

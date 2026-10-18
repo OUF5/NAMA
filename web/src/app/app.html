@@ -1,7 +1,7 @@
 <mat-toolbar class="top-bar">
   <div class="title">
     <span class="brand"
-      >NAMA@if (projectName(); as name) {<span class="project"> · {{ name }}</span>}</span
+      ><span class="logo" aria-hidden="true"></span>NAMA@if (projectName(); as name) {<span class="project"> · {{ name }}</span>}</span
     >
     @if (currentMonth(); as month) {
       <span class="month">{{ month }}</span>

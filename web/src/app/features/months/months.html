@@ -61,6 +61,16 @@
   </ng-template>
 
   @if (view() === 'months') {
+    @if (d.rows.length === 0) {
+      <!-- UX-03: the same empty state as the Year view. -->
+      <section class="card empty">
+        <h2>Nothing planned or spent in {{ fiscalYear()?.label }} yet</h2>
+        <p class="note">
+          Plan amounts on <a routerLink="/plan">Plan</a>, and add spending on
+          <a routerLink="/add">Add</a>.
+        </p>
+      </section>
+    }
     <div class="cards">
       @for (card of cards(); track card.key) {
         <!-- MON-01: Closed plain, In progress 2px border and chip, Upcoming dashed. -->
@@ -82,37 +92,7 @@
             }
           </div>
 
-          <div class="summary">
-            <div class="kpi remaining">
-              <span class="caption">Remaining</span>
-              <span class="money value" [class]="card.line.status">{{ card.remaining }}</span>
-            </div>
-            <div class="kpi">
-              <span class="caption">Income</span>
-              <span class="money value">{{ card.income }}</span>
-            </div>
-            <div class="kpi">
-              <span class="caption">Planned</span>
-              <span class="money value">{{ card.planned }}</span>
-            </div>
-            <div class="kpi">
-              <span class="caption">Spent</span>
-              <span class="money value">{{ card.spent }}</span>
-            </div>
-            <div class="bar-line">
-              @if (card.line.bar !== null) {
-                <mat-progress-bar
-                  mode="determinate"
-                  [class]="card.line.status"
-                  [value]="card.line.bar"
-                  [attr.aria-label]="'Share of the plan spent: ' + card.line.chip"
-                />
-              }
-              @if (card.line.status) {
-                <span class="chip" [class]="card.line.status">{{ card.line.chip }}</span>
-              }
-            </div>
-          </div>
+          <app-month-summary [month]="card.month" [currency]="currency()" />
 
           <mat-expansion-panel
             class="details"

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <!-- The NAMA mark: a black square with a light border. The colors are the bg token (#0a0a0b)
+       and the primary token (#e4e4e7), see docs/DESIGN.md. The top bar draws the same mark in CSS. -->
+  <rect x="2" y="2" width="28" height="28" fill="#0a0a0b" stroke="#e4e4e7" stroke-width="4"/>
+</svg>

@@ -15,7 +15,10 @@
   } @else if (!hasAccounts()) {
     <section class="card empty">
       <h2>No bank account</h2>
-      <p class="note">Every entry needs a bank account that is not archived.</p>
+      <p class="note">
+        Every entry needs a bank account that is not archived.
+        <a routerLink="/settings/bank-accounts">Open Settings</a> to add or restore one.
+      </p>
     </section>
   } @else {
     <form class="card" [formGroup]="form" (ngSubmit)="save()" novalidate>

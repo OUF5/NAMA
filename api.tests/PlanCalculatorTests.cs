@@ -120,6 +120,17 @@ public class PlanCalculatorTests
         Assert.Equal(remaining, PlanCalculator.Remaining(planned, spent));
     }
 
+    // DSH-02: saved is income minus spent, and goes below 0 when more is spent than earned.
+    [Theory]
+    [InlineData(15_350_025, 134_999, 15_215_026)]
+    [InlineData(100_000, 100_000, 0)]
+    [InlineData(15_350_025, 20_134_999, -4_784_974)]
+    [InlineData(0, 0, 0)]
+    public void Saved_is_income_minus_spent(long income, long spent, long saved)
+    {
+        Assert.Equal(saved, PlanCalculator.Saved(income, spent));
+    }
+
     // ENT-01: rounded down, so 79.99% stays below the 80% "Near limit" line.
     [Theory]
     [InlineData(150_000, 0, 0)]

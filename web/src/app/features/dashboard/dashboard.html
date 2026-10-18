@@ -1,0 +1,89 @@
+<h1>Dashboard</h1>
+<p class="caption preview">Preview: the full dashboard comes in Phase 2</p>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+} @else if (data(); as d) {
+  <!-- FY-01: during the last month of the latest FY and after it ends. -->
+  @if (d.rollover; as rollover) {
+    <app-rollover-banner
+      [rollover]="rollover"
+      (started)="rolledOver($event.fiscalYear.label, $event.fiscalYear.id)"
+    />
+  }
+  @if (fiscalYear(); as fy) {
+    <p class="caption fy">
+      {{ fy.label }} · {{ formatDate(fy.startDate) }} to {{ formatDate(fy.endDate) }}
+    </p>
+  }
+  <p class="status" aria-live="polite">{{ status() }}</p>
+
+  <div class="cards">
+    <!-- DSH-01: the current month. -->
+    <section class="card current" aria-labelledby="current-title">
+      @if (current(); as c) {
+        <div class="card-head">
+          <div class="title">
+            <h2 id="current-title">{{ c.month.period.label }}</h2>
+            <span class="caption">{{ c.dates }}</span>
+          </div>
+          <span class="now-chip">{{ inProgressLabel }}</span>
+        </div>
+        <app-month-summary [month]="c.month" [currency]="currency()" />
+      } @else {
+        <h2 id="current-title">Current month</h2>
+        <p class="note">No month is in progress. {{ noMonthText() }}</p>
+      }
+    </section>
+
+    <!-- DSH-02: FY to date. -->
+    @if (toDate(); as t) {
+      <section class="card" aria-labelledby="to-date-title">
+        <div class="card-head">
+          <div class="title">
+            <h2 id="to-date-title">{{ fiscalYear()?.label }} to date</h2>
+            <span class="caption">{{ toDateRange() }}</span>
+          </div>
+        </div>
+        <div class="kpis">
+          <div class="kpi">
+            <span class="caption">Income</span>
+            <span class="money value">{{ t.income }}</span>
+          </div>
+          <div class="kpi">
+            <span class="caption">Spent</span>
+            <span class="money value">{{ t.spent }}</span>
+          </div>
+          <div class="kpi saved">
+            <span class="caption">Saved</span>
+            <span class="money value" [class.danger]="t.negative">{{ t.saved }}</span>
+            @if (t.negative) {
+              <span class="caption danger">Spent more than income</span>
+            }
+          </div>
+        </div>
+      </section>
+    }
+
+    <!-- DSH-03: planned vs spent per month. -->
+    @if (d.rows.length === 0) {
+      <!-- UX-03 -->
+      <section class="card empty">
+        <h2>Nothing planned or spent in {{ fiscalYear()?.label }} yet</h2>
+        <p class="note">
+          Plan amounts on <a routerLink="/plan">Plan</a>, and add spending on
+          <a routerLink="/add">Add</a>.
+        </p>
+      </section>
+    } @else {
+      <section class="card" aria-labelledby="bars-title">
+        <div class="card-head">
+          <h2 id="bars-title">Planned vs spent</h2>
+        </div>
+        <app-month-bars [months]="d.months" [currency]="currency()" />
+      </section>
+    }
+  </div>
+} @else {
+  <p class="caption">Loading…</p>
+}

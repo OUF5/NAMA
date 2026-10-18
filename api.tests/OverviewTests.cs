@@ -100,6 +100,67 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((204_500.25m, 19_600m, 1_349.99m, 18_250.01m), Numbers(overview["totals"]!));
     }
 
+    private static (decimal, decimal, decimal) ToDate(JsonNode overview) =>
+        (Dec(overview["toDate"]!["income"]), Dec(overview["toDate"]!["spent"]), Dec(overview["toDate"]!["saved"]));
+
+    // DSH-02 (owner's choice, M9): the months that started on or before today (Jan to Sep on 17 Oct
+    // 2026), each with its full income and every entry in it. Income 8 x 17,000 + 17,500.25;
+    // spent Aug 50 + Sep 1,299.99; saved = income - spent.
+    [Fact]
+    public async Task To_date_matches_the_hand_check()
+    {
+        var overview = await GetOk(await SetUp());
+
+        Assert.Equal((153_500.25m, 1_349.99m, 152_150.26m), ToDate(overview));
+    }
+
+    // Every entry of a started month counts, also one dated after today (25 Oct is in Sep 2026).
+    [Fact]
+    public async Task To_date_counts_entries_dated_later_in_the_current_month()
+    {
+        var sub = await SetUp();
+        await AddEntry(sub, "groceries", "2026-10-25", 100m);
+        await AddEntry(sub, "fuel", "2026-10-27", 70m); // Oct 2026 has not started: not counted
+
+        Assert.Equal((153_500.25m, 1_449.99m, 152_050.26m), ToDate(await GetOk(sub)));
+    }
+
+    [Fact]
+    public async Task Saved_can_be_negative()
+    {
+        var sub = await SetUp();
+        await AddEntry(sub, "groceries", "2026-02-10", 200_000m); // Jan 2026
+
+        Assert.Equal((153_500.25m, 201_349.99m, -47_849.74m), ToDate(await GetOk(sub)));
+    }
+
+    // 26 Oct 23:59:59 in Riyadh is still Sep 2026; at 27 Oct 00:00 Oct 2026 starts and its income joins.
+    [Theory]
+    [InlineData("2026-10-26T20:59:59Z", 153_500.25, 152_150.26)]
+    [InlineData("2026-10-26T21:00:00Z", 170_500.25, 169_150.26)]
+    public async Task To_date_follows_today_in_the_profile_time_zone(string utcNow, decimal income, decimal saved)
+    {
+        var overview = await GetOk(await SetUp(), utcNow: DateTimeOffset.Parse(utcNow, System.Globalization.CultureInfo.InvariantCulture));
+
+        Assert.Equal((income, 1_349.99m, saved), ToDate(overview));
+    }
+
+    [Fact]
+    public async Task To_date_is_the_whole_FY_after_it_ends()
+    {
+        var overview = await GetOk(await SetUp(), utcNow: new DateTimeOffset(2027, 1, 27, 9, 0, 0, TimeSpan.Zero));
+
+        Assert.Equal((204_500.25m, 1_349.99m, 203_150.26m), ToDate(overview));
+    }
+
+    [Fact]
+    public async Task To_date_is_zero_before_the_FY_starts()
+    {
+        var overview = await GetOk(await SetUp(), utcNow: new DateTimeOffset(2026, 1, 26, 9, 0, 0, TimeSpan.Zero));
+
+        Assert.Equal((0m, 0m, 0m), ToDate(overview));
+    }
+
     [Fact]
     public async Task Rows_hold_the_planned_and_spent_cells_per_sub_category_and_category()
     {

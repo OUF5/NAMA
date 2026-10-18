@@ -7,8 +7,8 @@ using Api.Infrastructure;
 
 namespace Api.Features.Overview;
 
-// PRD 7.5 GET /api/fiscal-years/{fyId}/overview: everything Months (PRD 5.6) needs in one call,
-// and later Dashboard (M9). Sums are made in minor units (R-MON-01). Owner's choices (M7): remaining
+// PRD 7.5 GET /api/fiscal-years/{fyId}/overview: everything Months (PRD 5.6) and Dashboard
+// (PRD 5.9) need in one call (NFR-01). Sums are made in minor units (R-MON-01). Owner's choices (M7): remaining
 // is planned minus spent, and a sub-category appears when it has a plan or spending in the FY.
 public static class OverviewEndpoint
 {
@@ -30,8 +30,13 @@ public static class OverviewEndpoint
 
     public record TotalsDto(decimal Income, decimal Planned, decimal Spent, decimal Remaining);
 
+    // DSH-02 (owner's choice, M9): the months that started on or before today, each with its full
+    // income and every entry in it. Saved is income minus spent and can be negative.
+    public record ToDateDto(decimal Income, decimal Spent, decimal Saved);
+
     // FiscalYears (oldest first) feed the MON-03 selector; Categories is GET /api/categories, for
     // the names and the edit dialog's pickers. Rollover is the FY-01 banner (null when hidden).
+    // ToDate is Dashboard's "FY to date" (DSH-02).
     public record OverviewResponse(
         IReadOnlyList<FiscalYearsEndpoint.FiscalYearDto> FiscalYears,
         string FyId,
@@ -39,6 +44,7 @@ public static class OverviewEndpoint
         IReadOnlyList<CategoriesEndpoint.CategoryDto> Categories,
         IReadOnlyList<CategoryRowDto> Rows,
         TotalsDto Totals,
+        ToDateDto ToDate,
         FiscalYearsEndpoint.RolloverDto? Rollover);
 
     public static IEndpointRouteBuilder MapOverview(this IEndpointRouteBuilder api)
@@ -124,6 +130,9 @@ public static class OverviewEndpoint
         }).ToList();
         var totalPlanned = months.Sum(month => month.Planned);
         var totalSpent = entries.Sum(entry => entry.AmountMinor);
+        var started = months.Where(month => FiscalCalendar.HasStarted(month.Period, today)).ToList();
+        var incomeToDate = started.Sum(month => income[month.Period.Key]);
+        var spentToDate = started.Sum(month => month.Spent);
 
         return new OverviewResponse(
             fiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
@@ -142,6 +151,10 @@ public static class OverviewEndpoint
                 Money.FromMinor(totalPlanned),
                 Money.FromMinor(totalSpent),
                 Money.FromMinor(PlanCalculator.Remaining(totalPlanned, totalSpent))),
+            new ToDateDto(
+                Money.FromMinor(incomeToDate),
+                Money.FromMinor(spentToDate),
+                Money.FromMinor(PlanCalculator.Saved(incomeToDate, spentToDate))),
             FiscalYearsEndpoint.Rollover(fiscalYears, profile, today));
     }
 
