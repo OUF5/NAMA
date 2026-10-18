@@ -32,6 +32,28 @@ public static class PlanCalculator
     public static int? Percent(long planned, long spent) =>
         planned <= 0 ? null : (int)Math.Min(spent * 100 / planned, int.MaxValue);
 
+    // FY-02 (owner's choice, M8): each new month gets the amount of the same month a year earlier,
+    // from whichever FY holds it. Only active sub-categories are copied (an archived one would be
+    // hidden but still counted). Sub-categories with nothing to copy get no plan.
+    public static IReadOnlyList<PlanAmounts> CopyForNextFiscalYear(
+        IEnumerable<PlanAmounts> sourcePlans, IEnumerable<Period> newPeriods, IReadOnlySet<string> activeSubCategoryIds)
+    {
+        var keys = newPeriods.Select(period => period.Key).ToList();
+        return sourcePlans
+            .Where(plan => activeSubCategoryIds.Contains(plan.SubCategoryId))
+            .GroupBy(plan => plan.SubCategoryId)
+            .Select(group =>
+            {
+                var amounts = keys
+                    .Select(key => (Key: key, Amount: group.Sum(plan => AmountFor(plan, FiscalCalendar.YearEarlierKey(key)))))
+                    .Where(item => item.Amount > 0)
+                    .ToDictionary(item => item.Key, item => item.Amount);
+                return new PlanAmounts(group.Key, group.First().CategoryId, amounts);
+            })
+            .Where(plan => plan.Amounts.Count > 0)
+            .ToList();
+    }
+
     // Owner's choice (M4): 0 clears a month, so it is dropped (stored amounts stay above 0, R-MON-02).
     // Returns null when a key is not one of the FY's stored months (R-CAL-09).
     public static IReadOnlyDictionary<string, long>? NormalizeAmounts(

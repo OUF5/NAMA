@@ -31,14 +31,15 @@ public static class OverviewEndpoint
     public record TotalsDto(decimal Income, decimal Planned, decimal Spent, decimal Remaining);
 
     // FiscalYears (oldest first) feed the MON-03 selector; Categories is GET /api/categories, for
-    // the names and the edit dialog's pickers.
+    // the names and the edit dialog's pickers. Rollover is the FY-01 banner (null when hidden).
     public record OverviewResponse(
         IReadOnlyList<FiscalYearsEndpoint.FiscalYearDto> FiscalYears,
         string FyId,
         IReadOnlyList<MonthDto> Months,
         IReadOnlyList<CategoriesEndpoint.CategoryDto> Categories,
         IReadOnlyList<CategoryRowDto> Rows,
-        TotalsDto Totals);
+        TotalsDto Totals,
+        FiscalYearsEndpoint.RolloverDto? Rollover);
 
     public static IEndpointRouteBuilder MapOverview(this IEndpointRouteBuilder api)
     {
@@ -53,13 +54,13 @@ public static class OverviewEndpoint
             {
                 return Results.NotFound();
             }
-            return Results.Ok(await LoadAsync(uid, fiscalYears, fiscalYear, FiscalCalendar.Today(time, profile.Timezone), store));
+            return Results.Ok(await LoadAsync(uid, fiscalYears, fiscalYear, profile, FiscalCalendar.Today(time, profile.Timezone), store));
         });
         return api;
     }
 
     private static async Task<OverviewResponse> LoadAsync(
-        string uid, IReadOnlyList<FiscalYear> fiscalYears, FiscalYear fiscalYear, DateOnly today, IUserStore store)
+        string uid, IReadOnlyList<FiscalYear> fiscalYears, FiscalYear fiscalYear, UserProfile profile, DateOnly today, IUserStore store)
     {
         var periods = fiscalYear.Periods;
         var plans = await store.GetPlansAsync(uid, fiscalYear.Id);
@@ -140,7 +141,8 @@ public static class OverviewEndpoint
                 Money.FromMinor(income.Values.Sum()),
                 Money.FromMinor(totalPlanned),
                 Money.FromMinor(totalSpent),
-                Money.FromMinor(PlanCalculator.Remaining(totalPlanned, totalSpent))));
+                Money.FromMinor(PlanCalculator.Remaining(totalPlanned, totalSpent))),
+            FiscalYearsEndpoint.Rollover(fiscalYears, profile, today));
     }
 
     private static List<CellDto> Cells(IEnumerable<(string PeriodKey, long Planned, long Spent)> cells) =>

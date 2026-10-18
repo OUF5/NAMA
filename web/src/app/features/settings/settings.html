@@ -1,0 +1,310 @@
+@let current = section();
+@if (current && phone()) {
+  <a class="back" routerLink="/settings"><mat-icon aria-hidden="true">chevron_left</mat-icon>Settings</a>
+}
+<h1>{{ current?.label ?? 'Settings' }}</h1>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+} @else if (data(); as d) {
+  @if (!current) {
+    <!-- Phones: the sections, each with a summary of its values. -->
+    <nav class="card menu" aria-label="Settings sections">
+      @for (s of sections; track s.id) {
+        <a class="menu-row" [routerLink]="['/settings', s.id]">
+          <mat-icon aria-hidden="true">{{ s.icon }}</mat-icon>
+          <span class="name">
+            {{ s.label }}
+            <span class="caption">{{ summaries()[s.id] }}</span>
+          </span>
+          <mat-icon aria-hidden="true">chevron_right</mat-icon>
+        </a>
+      }
+    </nav>
+  } @else {
+    <p class="status" aria-live="polite">{{ status() }}</p>
+
+    <div class="cards">
+      @switch (current.id) {
+        @case ('profile') {
+          <!-- STG-01 -->
+          <section class="card" aria-labelledby="profile-title">
+            <div class="card-head">
+              <h2 id="profile-title">Your details</h2>
+              <button mat-stroked-button type="button" (click)="editProfile()">Edit</button>
+            </div>
+            <dl class="facts">
+              <div>
+                <dt class="caption">Your name</dt>
+                <dd>{{ d.profile.displayName }}</dd>
+              </div>
+              <div>
+                <dt class="caption">Project name</dt>
+                <dd>{{ d.profile.projectName }}</dd>
+              </div>
+              <div>
+                <dt class="caption">Currency</dt>
+                <dd>{{ d.profile.currency }}</dd>
+              </div>
+              <div>
+                <dt class="caption">Time zone</dt>
+                <dd>{{ d.profile.timezone }}</dd>
+              </div>
+              <div>
+                <dt class="caption">Signed in as</dt>
+                <dd>{{ d.profile.email }}</dd>
+              </div>
+            </dl>
+          </section>
+        }
+        @case ('fiscal-year') {
+          <!-- STG-02, R-CAL-07 -->
+          <section class="card" aria-labelledby="calendar-title">
+            <div class="card-head">
+              <h2 id="calendar-title">Start month and payday</h2>
+              <button mat-stroked-button type="button" (click)="editCalendar()">Edit</button>
+            </div>
+            <dl class="facts">
+              <div>
+                <dt class="caption">Starts in</dt>
+                <dd>{{ monthNames[d.calendar.fiscalStartMonth - 1] }}</dd>
+              </div>
+              <div>
+                <dt class="caption">Payday</dt>
+                <dd>{{ d.calendar.paydayDay }}</dd>
+              </div>
+            </dl>
+            <p>Takes effect from the fiscal year starting {{ formatDate(d.calendar.takesEffectFrom) }}.</p>
+            <p class="caption">
+              Next: {{ nextFiscalYear() }}. The current fiscal year keeps its dates. Start the next one on
+              <a routerLink="/months">Months</a> when its last month begins.
+            </p>
+          </section>
+        }
+        @case ('income') {
+          <!-- STG-03, R-INC-01 to R-INC-03 -->
+          <section class="card total" aria-label="Total income">
+            @if (currentMonth(); as month) {
+              <span class="caption">Total income in {{ month }}</span>
+              <span class="money kpi">{{ money(d.income.currentTotal) }}</span>
+            } @else {
+              <p class="note">
+                No fiscal year contains today. Start the next fiscal year on <a routerLink="/months">Months</a>.
+              </p>
+            }
+          </section>
+
+          <section class="card" aria-labelledby="salary-title">
+            <div class="card-head">
+              <h2 id="salary-title">Salary</h2>
+              <button mat-stroked-button type="button" (click)="changeSalary()">Change salary</button>
+            </div>
+            <!-- The newest salary; the older ones fold away. -->
+            <ul class="list">
+              @for (salary of d.income.salaries; track salary.id; let first = $first) {
+                @if (first || isOpen('salary-history')) {
+                  <li class="item">
+                    <span class="name">{{ incomeMonths(salary) }}</span>
+                    <span class="money">{{ money(salary.amount) }}</span>
+                  </li>
+                }
+              }
+            </ul>
+            @if (d.income.salaries.length > 1) {
+              <ng-container
+                *ngTemplateOutlet="fold; context: { key: 'salary-history', label: 'History', count: d.income.salaries.length - 1 }"
+              />
+            }
+          </section>
+
+          <section class="card" aria-labelledby="additional-title">
+            <div class="card-head">
+              <h2 id="additional-title">Additional income</h2>
+              <button mat-stroked-button type="button" (click)="editIncome(null)">Add income</button>
+            </div>
+            @if (d.income.additional.length === 0) {
+              <p class="note">No additional income yet.</p>
+            }
+            <ul class="list">
+              @for (item of d.income.additional; track item.id) {
+                <li class="item">
+                  <span class="name">
+                    {{ item.label }}
+                    <span class="caption">{{ incomeMonths(item) }}</span>
+                  </span>
+                  <span class="money">{{ money(item.amount) }}</span>
+                  <button mat-icon-button type="button" (click)="editIncome(item)" [attr.aria-label]="'Edit ' + item.label">
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                </li>
+              }
+            </ul>
+          </section>
+        }
+        @case ('bank-accounts') {
+          <!-- STG-04: add, rename, archive. No delete (PRD 4.6). Archived ones fold away at the end. -->
+          <section class="card" aria-labelledby="accounts-title">
+            <div class="card-head">
+              <h2 id="accounts-title">Accounts</h2>
+              <button mat-stroked-button type="button" (click)="addAccount()">Add account</button>
+            </div>
+            <ul class="list">
+              @for (account of accounts().active; track account.id) {
+                <li class="item">
+                  <ng-container *ngTemplateOutlet="itemRow; context: { $implicit: account, kind: 'account' }" />
+                </li>
+              }
+            </ul>
+            @if (accounts().archived.length) {
+              <ng-container
+                *ngTemplateOutlet="fold; context: { key: 'archived-accounts', label: 'Archived', count: accounts().archived.length }"
+              />
+              @if (isOpen('archived-accounts')) {
+                <ul class="list">
+                  @for (account of accounts().archived; track account.id) {
+                    <li class="item">
+                      <ng-container *ngTemplateOutlet="itemRow; context: { $implicit: account, kind: 'account' }" />
+                    </li>
+                  }
+                </ul>
+              }
+            }
+          </section>
+        }
+        @case ('categories') {
+          <!-- STG-05: add, rename, archive. No delete (PRD 4.6). One row per category; its
+               sub-categories open under it. Archived ones fold away at the end. -->
+          <section class="card" aria-labelledby="categories-title">
+            <div class="card-head">
+              <h2 id="categories-title">Categories and sub-categories</h2>
+              <button mat-stroked-button type="button" (click)="addCategory()">Add category</button>
+            </div>
+            <p class="caption">Set planned amounts on <a routerLink="/plan">Plan</a>.</p>
+            <ul class="list">
+              @for (category of categories().active; track category.id) {
+                <ng-container *ngTemplateOutlet="categoryRow; context: { $implicit: category }" />
+              }
+            </ul>
+            @if (categories().archived.length) {
+              <ng-container
+                *ngTemplateOutlet="fold; context: { key: 'archived-categories', label: 'Archived', count: categories().archived.length }"
+              />
+              @if (isOpen('archived-categories')) {
+                <ul class="list">
+                  @for (category of categories().archived; track category.id) {
+                    <ng-container *ngTemplateOutlet="categoryRow; context: { $implicit: category }" />
+                  }
+                </ul>
+              }
+            }
+          </section>
+        }
+      }
+    </div>
+  }
+  <!-- STG-06: the git commit, to confirm deploys. -->
+  @if (version()) {
+    <p class="caption version">Version {{ version() }}</p>
+  }
+
+  <!-- A category row opens its sub-categories. -->
+  <ng-template #categoryRow let-category>
+    @let key = 'category-' + category.id;
+    <li class="group">
+      <div class="item">
+        <button
+          type="button"
+          class="expand"
+          [attr.aria-expanded]="isOpen(key)"
+          [attr.aria-controls]="key"
+          (click)="toggle(key)"
+        >
+          <mat-icon class="chevron" [class.open]="isOpen(key)" aria-hidden="true">chevron_right</mat-icon>
+          <span class="name">
+            <span class="strong">{{ category.name }}</span>
+            @if (category.archived) {
+              <span class="caption"> (archived)</span>
+            }
+            <span class="caption count">{{ subCount(category.subs.active.length) }}</span>
+          </span>
+        </button>
+        <ng-container *ngTemplateOutlet="actions; context: { $implicit: category, kind: 'category' }" />
+      </div>
+      @if (isOpen(key)) {
+        <div class="subs" [id]="key">
+          <ul class="list">
+            @for (sub of category.subs.active; track sub.id) {
+              <li class="item">
+                <ng-container *ngTemplateOutlet="itemRow; context: { $implicit: sub, kind: 'sub', category: category }" />
+              </li>
+            }
+          </ul>
+          @if (category.subs.archived.length) {
+            <ng-container
+              *ngTemplateOutlet="fold; context: { key: 'archived-' + key, label: 'Archived', count: category.subs.archived.length }"
+            />
+            @if (isOpen('archived-' + key)) {
+              <ul class="list">
+                @for (sub of category.subs.archived; track sub.id) {
+                  <li class="item">
+                    <ng-container *ngTemplateOutlet="itemRow; context: { $implicit: sub, kind: 'sub', category: category }" />
+                  </li>
+                }
+              </ul>
+            }
+          }
+          @if (!category.archived) {
+            <button mat-button type="button" class="add-sub" (click)="addSubCategory(category)">
+              <mat-icon>add</mat-icon>
+              Add sub-category
+            </button>
+          }
+        </div>
+      }
+    </li>
+  </ng-template>
+
+  <!-- "Archived (2)" or "History (3)": a list part that is folded away until opened. -->
+  <ng-template #fold let-key="key" let-label="label" let-count="count">
+    <button mat-button type="button" class="fold" [attr.aria-expanded]="isOpen(key)" (click)="toggle(key)">
+      <mat-icon class="chevron" [class.open]="isOpen(key)" aria-hidden="true">chevron_right</mat-icon>
+      {{ label }} ({{ count }})
+    </button>
+  </ng-template>
+
+  <!-- An account or sub-category: its name, then rename and archive or restore. -->
+  <ng-template #itemRow let-item let-kind="kind" let-category="category">
+    <span class="name">
+      {{ item.name }}
+      @if (item.archived) {
+        <span class="caption">(archived)</span>
+      }
+    </span>
+    <ng-container *ngTemplateOutlet="actions; context: { $implicit: item, kind: kind, category: category }" />
+  </ng-template>
+
+  <!-- 44px icon buttons with labels. -->
+  <ng-template #actions let-item let-kind="kind" let-category="category">
+    <button
+      mat-icon-button
+      type="button"
+      [attr.aria-label]="'Rename ' + item.name"
+      [title]="'Rename ' + item.name"
+      (click)="kind === 'account' ? renameAccount(item) : kind === 'category' ? renameCategory(item) : renameSub(category, item)"
+    >
+      <mat-icon>edit</mat-icon>
+    </button>
+    <button
+      mat-icon-button
+      type="button"
+      [disabled]="busy()"
+      [attr.aria-label]="(item.archived ? 'Restore ' : 'Archive ') + item.name"
+      [title]="(item.archived ? 'Restore ' : 'Archive ') + item.name"
+      (click)="kind === 'account' ? toggleAccount(item) : kind === 'category' ? toggleCategory(item) : toggleSub(item)"
+    >
+      <mat-icon>{{ item.archived ? 'unarchive' : 'archive' }}</mat-icon>
+    </button>
+  </ng-template>
+} @else {
+  <p class="caption">Loading…</p>
+}

@@ -1,17 +1,24 @@
-import { signal } from '@angular/core';
+import { ApplicationRef, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { App } from './app';
+import { AuthService } from './core/auth';
 import { Me, MeService } from './core/me';
+import { settingsMatcher } from './features/settings/settings-sections';
 
 describe('App', () => {
   const me = signal<Me | null>(null);
+  const signOut = vi.fn();
 
   beforeEach(async () => {
     me.set({ setupCompleted: true, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null });
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideRouter([]), { provide: MeService, useValue: { me } }],
+      providers: [
+        provideRouter([{ matcher: settingsMatcher, children: [] }]),
+        { provide: MeService, useValue: { me } },
+        { provide: AuthService, useValue: { signOut } },
+      ],
     }).compileComponents();
   });
 
@@ -53,8 +60,69 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    const labels = Array.from(compiled.querySelectorAll('.nav-item span')).map((el) => el.textContent?.trim());
+    const labels = Array.from(compiled.querySelectorAll('.nav > .nav-item span')).map((el) => el.textContent?.trim());
     expect(labels).toEqual(['Dashboard', 'Months', 'Add', 'Entries', 'Plan']);
+  });
+
+  // Owner's choice (M8): Settings in the side bar, with its sections while you are in Settings.
+  it('should open the Settings sections in the side bar while in Settings', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const settings = compiled.querySelector('.settings-group a')!;
+    expect(settings.getAttribute('href')).toBe('/settings');
+    expect(settings.getAttribute('aria-expanded')).toBe('false');
+    expect(compiled.querySelector('.sub-nav')).toBeNull();
+
+    await TestBed.inject(Router).navigateByUrl('/settings/income');
+    await fixture.whenStable();
+
+    expect(settings.getAttribute('aria-expanded')).toBe('true');
+    const subs = Array.from(compiled.querySelectorAll<HTMLAnchorElement>('.sub-nav a'));
+    expect(subs.map((a) => a.textContent?.trim())).toEqual(['Profile', 'Fiscal year', 'Income', 'Bank accounts', 'Categories']);
+    expect(subs[2].classList).toContain('active');
+    expect(subs[2].getAttribute('href')).toBe('/settings/income');
+
+  });
+
+  // AUTH-04, owner's choice (M8): outside Settings, after a confirmation.
+  describe('sign out', () => {
+    afterEach(() => document.querySelectorAll('.cdk-overlay-container').forEach((el) => (el.innerHTML = '')));
+
+    async function confirmWith(choice: string): Promise<void> {
+      signOut.mockClear();
+      const fixture = TestBed.createComponent(App);
+      await fixture.whenStable();
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.querySelector('.top-sign-out')?.getAttribute('aria-label')).toBe('Sign out');
+
+      compiled.querySelector<HTMLButtonElement>('.nav-sign-out')!.click();
+      const dialog = await vi.waitFor(() => {
+        const el = document.querySelector('app-sign-out-dialog');
+        expect(el).not.toBeNull();
+        return el!;
+      });
+      expect(dialog.querySelector('h2')?.textContent).toBe('Sign out?');
+      expect(signOut).not.toHaveBeenCalled();
+      // The dialog's bindings ([mat-dialog-close]="true") are set by its first change detection.
+      TestBed.inject(ApplicationRef).tick();
+
+      Array.from(dialog.querySelectorAll('button')).find((b) => b.textContent?.trim() === choice)!.click();
+      await fixture.whenStable();
+      await new Promise((resolve) => setTimeout(resolve));
+    }
+
+    it('signs out after the confirmation', async () => {
+      await confirmWith('Sign out');
+      // afterClosed fires once the close animation ends.
+      await vi.waitFor(() => expect(signOut).toHaveBeenCalledTimes(1));
+    });
+
+    it('stays signed in on Cancel', async () => {
+      await confirmWith('Cancel');
+      await vi.waitFor(() => expect(document.querySelector('app-sign-out-dialog')).toBeNull());
+      expect(signOut).not.toHaveBeenCalled();
+    });
   });
 
   it('should show the Add button in the top bar (PRD 5.4)', async () => {

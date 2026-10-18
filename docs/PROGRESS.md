@@ -75,7 +75,22 @@
   - Commit `42be360` deployed, and every CI step passed (`dotnet test`: 358 of 358).
   - On production, `/api/health` returns version `42be360…`. `GET /api/fiscal-years/2026-01/overview` returns 401 with `Cache-Control: no-store` without a token, and `/months` returns 200.
   - Still open: the owner's production check that Sep 2026 shows In progress on `/months` and that a few Year cells match their Entries totals.
-- Next: M8 Settings and FY rollover, in a fresh session. M8 also adds the FY-01 banner to Months.
+- **M8 Settings and FY rollover: built, waiting for the owner's local check (18 Oct 2026).** The Settings page (STG-01 to STG-06), the rollover (FY-01 to FY-03, R-CAL-07, R-CAL-08) with the FY-01 banner on Months, salary history and additional income (R-INC-02, R-INC-03), rename/archive/restore for accounts, categories and sub-categories, and Plan's FY selector.
+  - New endpoints: `GET /api/settings`, `PUT /api/profile`, `PUT /api/settings/calendar`, `POST /api/fiscal-years/next`, `GET /api/income`, `POST /api/income/salary`, `POST`/`PUT`/`DELETE /api/income/additional[/{id}]`, `POST /api/bank-accounts`, `PUT /api/bank-accounts/{id}`, `PUT /api/categories/{id}`, `PUT /api/sub-categories/{id}`. No DELETE for categories, sub-categories or accounts.
+  - Locally: `dotnet test api.tests` passed 434 of 434 (358 before). `npm run build` passed with no warnings: initial 535.01 kB (533.96 kB before), Settings chunk 58.40 kB lazy. `npx ng test --watch=false` passed 96 of 96 (86 before), 3 runs in a row. No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
+  - `dotnet run` answers 401 with `Cache-Control: no-store` on all 13 new routes without a token.
+  - "Done when", the 4.1 rollover examples end to end: `RolloverTests` (API with a fake today).
+    - Example A: `PUT /api/settings/calendar {7, 27}` on 17 Oct 2026 takes effect from 27 Jan 2027, with next FY 2027 a 6-month transition FY (to 26 Jul 2027). Start gets 409 on 17 Oct and 26 Dec 2026. On 27 Dec 2026 it gets 201: `2027-01` "FY 2027", Jan to Jun 2027, `isTransition`. Groceries is copied at 1,500 for Jan to Jun 2027; Fuel (nothing in Jan to Jun 2026) and the archived sub-category are not. A second Start gets 409. An entry on 15 Mar 2027 goes to `2027-02`/`2027-01`; 27 Jul 2027 gets 422. On 27 Jun 2027 Start stores FY 2027/28 (`2027-07`, 27 Jul 2027 to 26 Jul 2028) with Groceries in all 12 months and Fuel Sep to Dec 2027. 26 Jul 2028 is accepted, 27 Jul 2028 gets 422.
+    - Example B: `PUT {1, 1}` takes effect from 27 Jan 2027. Start on 26 Jan 2027 stores Jan 2027 = 27 to 31 Jan and Feb 2027 = 1 to 28 Feb, ending 31 Dec 2027. 31 Jan 2027 goes to `2027-01` and 1 Feb 2027 to `2027-02`.
+    - Also: several FYs behind gives one FY per call, then 409; `copyPlans: false` copies nothing; a calendar change after the next FY was started takes effect after it (27 Jan 2028); the overview's `rollover` is null before the last month, set during it, and null after Start.
+  - Emulator: a scratch program ran the new `FirestoreUserStore` methods with a throwaway user, deleted afterwards. It found the following:
+    - `StartFiscalYearAsync` stored the transition FY (27 Jan to 30 Jun 2027 with payday 1, 6 months) and 2 plans in one batch. A second call returned false and wrote nothing.
+    - `ChangeSalaryAsync` on the M2 example left 1,000,000 `2026-01..2026-02` and 1,100,000 from `2026-03`; the ended item kept `createdAt`.
+    - Income add, update (to an open-ended item, `toPeriodKey` null) and delete worked; a missing id returned false and created nothing.
+    - Account, category and sub-category updates changed `name`, `nameLower` and `archived`, kept `createdAt` and `sortOrder`, and a missing id returned false.
+    - The profile and calendar updates kept `createdAt` and moved `updatedAt`.
+  - Still to do: the owner's local browser check (see the recipe under Decisions), then the commit, the push and the production check.
+- Next: M9 Dashboard preview and polish, in a fresh session. M9 also puts the FY-01 banner (`shared/rollover-banner.ts`) on Dashboard.
 
 ## Decisions
 
@@ -144,7 +159,7 @@
 - 17 Oct 2026, M4: Plans are stored at `plans/{fyId}_{subCategoryId}`. `SetPlanAsync` runs in a transaction that creates the document or updates only `amounts` and `updatedAt`, so `createdAt` is kept. `categoryId` is copied from the sub-category.
 - 17 Oct 2026, M4: An unknown `fyId` or `subCategoryId` on the plans endpoints gets 404, as does another user's.
 - 17 Oct 2026, M4: **Bundle budget** (owner's choice): the initial `maximumWarning` went from 500 kB to 550 kB; the error limit stays 1 MB.
-- 17 Oct 2026, M4: The Plan page layout:
+- 17 Oct 2026, M4: The Plan page layout (replaced in M8, see "Plan redesign"):
   - Totals per month come first (a table on desktop, one card per month on phones).
   - Then the empty state (PLN-06), one card per category with its sub-categories and an "add sub-category" row, and an "Add a category" card.
   - Adding a sub-category opens its month editor straight away.
@@ -250,13 +265,49 @@
 - 17 Oct 2026, M7: **Remaining takes the plan status color** (owner's choice, after the local check): green within plan, amber near the limit, red when over, and neutral when nothing is planned or spent. It matches the bar and the chip. Income, Planned and Spent stay neutral, because DESIGN.md uses color only for status, so no number gets a fixed color of its own.
 - 17 Oct 2026, M7: **"Upcoming" instead of "Yet to come"** (owner's choice, after the local check). It is only the label on screen (month cards and the Year grid header) and in docs/DESIGN.md. The PRD term (R-STA-01, MON-01) and the API value `yetToCome` are unchanged.
 - 17 Oct 2026, M7: **FY-01 is M8.** The banner's action, `POST /api/fiscal-years/next`, is the M8 rollover, so M8 adds the banner to Months.
+- 18 Oct 2026, M8: **Plan copy (FY-02)** (owner's choice): each new month gets the amount of the same month a year earlier (key − 12 months), from whichever stored FY holds it. For normal FYs that is "the previous FY, month by month"; after a transition FY it still fills every month (Example A: FY 2027/28 Jul to Dec 2027 come from FY 2026). Archived sub-categories, and sub-categories of archived categories, are not copied. `PlanCalculator.CopyForNextFiscalYear`.
+- 18 Oct 2026, M8: **`POST /api/fiscal-years/next`**: body `{ copyPlans }` (required), answer 201 `{ fiscalYear, copiedPlans, me }`.
+  - Allowed from the first day of the latest FY's last month on (`FiscalCalendar.CanStartNext`); 409 before, and 409 when that FY already exists.
+  - One FY per call, from the profile's current settings (R-CAL-07).
+  - The FY and its copied plans are written in one Firestore batch; the FY is created, not set, so a second click fails as a whole.
+- 18 Oct 2026, M8: **FY-01 banner** (owner's choice): inline on Months, above the toolbar, with the "Copy planned amounts" checkbox (on) and "Start FY 2027" as Months' one filled button; no dialog (UX-04). The data is the overview's new `rollover` field (`{ fyId, label, endDate, nextLabel, nextStartDate }` or null). Text: "FY 2026 ends on 26 Jan 2027." during the last month, "ended on" after. Dashboard gets the same component in M9. docs/DESIGN.md has a "Banner (FY-01)" rule.
+- 18 Oct 2026, M8: **Calendar settings (STG-02)**: `PUT /api/settings/calendar` saves at once and answers `{ fiscalStartMonth, paydayDay, takesEffectFrom, nextFiscalYear }`. `takesEffectFrom` is the day after the latest stored FY ends, so after the next FY was started a change waits for the one after it. `nextFiscalYear` is a preview (not stored).
+- 18 Oct 2026, M8: **Settings makes 2 calls (NFR-01)** (owner's choice): `GET /api/settings` (`{ profile, calendar, income, bankAccounts, categories }`, an addition to PRD 7.5) and `GET /api/health` for the version (first 7 characters; hidden if the call fails). Each change is 1 call: the profile answers with the new `/api/me`, the calendar with the calendar, income changes with the whole income, and accounts and categories with the item.
+- 18 Oct 2026, M8: **Settings layout**: Profile, Fiscal year, Income, Bank accounts, Categories, Session (Sign out and the version at the bottom). The page has no filled button: every change opens one dialog (full screen on phones) whose Save is its one filled button. Archive and restore are icon buttons in the list, with no confirmation (reversible). Deleting an additional income item is confirmed inside its dialog (M6 pattern).
+- 18 Oct 2026, M8: **Settings sections are separate pages** (owner's choice after the local check; replaces "one page with clear sections" in PRD 5.7 and adds a Settings group to the UX-01 side bar).
+  - Each section has its own URL: `/settings/profile`, `fiscal-year`, `income`, `bank-accounts`, `categories`. One route (`settingsMatcher`) serves `/settings` and every section, so `GET /api/settings` and `GET /api/health` load once per visit and switching sections makes no call (NFR-01).
+  - Desktop: the side bar has Settings under a divider, after the 5 main items. While you are in Settings it shows the 5 sections under it (the open one highlighted); `/settings` opens Profile. The top-bar gear stays (UX-01).
+  - Phones: the bottom bar is unchanged. The gear opens `/settings` as a list of the 5 sections, each with a one-line summary (for example "SAR 17,500 this month", "2 active, 1 archived"). A section page has a "‹ Settings" back link.
+  - An unknown section goes back to `/settings`. A status message is cleared when the section changes.
+  - Long lists stay short: each category is one row ("Food · 4 sub-categories") that opens its sub-categories (adding one opens its category); only the newest salary shows, with the older ones under "History (n)"; archived accounts, categories and sub-categories are at the end of their list under "Archived (n)". Every fold is a button with `aria-expanded`; nothing is remembered after a reload.
+  - There is no Session section (owner's choice): the signed-in email is on Profile ("Signed in as"), and the version (STG-06) is at the bottom of every Settings page.
+  - Income has three cards: the total for the current month, Salary, and Additional income.
+- 18 Oct 2026, M8: **Sign out is outside Settings, with a confirmation** (owner's choice; replaces AUTH-04 "Sign out is available in Settings" and goes beyond UX-04, which keeps confirmations for destructive actions).
+  - Desktop: an outlined "Sign out" button at the bottom of the side bar, always visible. Phones: a 44px sign-out icon button (aria-label "Sign out") in the top bar next to the gear, because the bottom bar has no room.
+  - It opens one dialog, "Sign out?", with Cancel (focused first) and Sign out (the filled button); full screen on phones like every dialog. Only Sign out signs out.
+  - The dialog code is loaded on first use (`import()`), so `MatDialog` stays out of the initial bundle. The wizard keeps its own "Sign out" text button (M3).
+- 18 Oct 2026, M8: **After a change**: rollover and profile set `MeService` from the answer (top bar, currency, today, current FY, the Add date range); the calendar patches the profile in `MeService`. Plan, Entries and Add load again on navigation.
+- 18 Oct 2026, M8: **Plan redesign** (owner's request after the local check: the page grew without limit). It replaces the M4 layout.
+  - **PLN-03 totals turned sideways:** one table with 3 rows (Planned, Income, Unassigned) and a column per month, so every month's numbers are visible at once in about a sixth of the old height. Month headers show the month and year, with the dates on hover. Unassigned is green at 0 or more and red below 0. Desktop: sticky at the top, so a saved change shows while you edit lower down. Phones: not sticky (it would take a third of the screen); it scrolls sideways with the row labels fixed and can be folded to one line ("Oct 2026 · Unassigned 10,500").
+  - **A selected month:** clicking a month header selects its column (the current month by default). The list below is titled "Planned in Oct 2026" and shows each category's and sub-category's amount in that month, with its FY total under the name.
+  - **Compact categories:** each category is one row, closed at first, that opens its sub-categories, with "Add sub-category" at the end. "Add category" is a button next to the title. Both use the Settings name dialog. A new category opens; a new sub-category opens its editor.
+  - **Editor in a dialog** (PLN-01, PLN-02, PLN-04): the 12 month inputs with their dates, "Same amount for all months", "Copy from previous month", the FY total as typed, and "Unassigned after" next to each month while typing (red below 0). That preview is the only sum the browser makes, in exact minor units (like the ENT-01 preview); the saved numbers come from the API. After Save, the totals update, the row stays open and is highlighted for 2 seconds, and "Saved Groceries." shows.
+  - **API:** the plans response also has `categoryMonthTotals` (category → month → planned), so the category amounts are not added up in the browser. Plan still makes 2 calls on load.
+  - **"See the year grid"** links to `/months?fyId=…&view=year`; Months now accepts `view` in the URL (and remembers it, MON-02).
+- 18 Oct 2026, M8: **Plan FY selector** (owner's choice): shown with more than one FY, in the URL as `/plan?fyId=`. The plans response has `fiscalYears`. Default: the FY that contains today, else the latest.
+- 18 Oct 2026, M8: **FY labels are not given a suffix**: every selector shows the dates next to the label, and the ids differ.
+- 18 Oct 2026, M8: **Salary (R-INC-02)**: "Effective from" is any month of a stored FY, default the current month (empty when no FY contains today). 0 is allowed (as SET-01). An unknown month gets 400 on `EffectiveFromPeriodKey`. The ended item is updated, replaced ones are deleted, and the new one is created in one batch. History is newest first ("From Mar 2026", "Jan 2026 to Feb 2026").
+- 18 Oct 2026, M8: **Additional income (R-INC-03)**: Once (one month, stored with `to = from`) or Monthly (from, optional until). Until before from gets 400 on `ToPeriodKey` (checked inline too). The pickers offer only stored months. A salary item, an unknown item or another user's gets 404 on PUT and DELETE. DELETE answers 200 with the income. "Total income" is the current month's (`currentTotal`), or "No fiscal year contains today."
+- 18 Oct 2026, M8: **Archive**: accounts, categories and sub-categories can be archived and restored (`PUT … { name, archived }`). Names stay unique ignoring case against every item, archived ones included; only changing the case of an item's own name is allowed. The last active bank account cannot be archived (400 on `Archived`). Archiving a category does not change its sub-categories' flags (Add already hides them).
+- 18 Oct 2026, M8: **Plan shows archived sub-categories that have an amount in the selected FY**, marked "(archived)" and editable, because their amounts still count in the totals. Other archived ones stay hidden; archived categories get no "add sub-category" row.
+- 18 Oct 2026, M8: **Time zone (STG-01)**: an autocomplete over `Intl.supportedValuesOf('timeZone')` (MDN: Baseline since March 2022, primary ids only), with the saved zone added when it is an alias. The API checks it with `TimeZoneInfo.TryFindSystemTimeZoneById`. Currency has the hint "Only changes how amounts are shown. Nothing is converted." (R-MON-03).
+- 18 Oct 2026, M8: `MONTH_NAMES` moved from the wizard to `shared/month-label.ts` (Settings reuses it), with `monthKeyLabel`. `shared/dialog.ts` has `dialogSize` (the entry dialog uses it too). No new packages: `MatCheckboxModule` and `MatAutocompleteModule` are part of `@angular/material`.
+- 18 Oct 2026, M8: **Local check recipe** (emulator only): delete the emulator user and redo the wizard with FY start month November and payday 1. That gives FY 2025/26 (1 Nov 2025 to 31 Oct 2026), in its last month today, so Months shows the banner. Change the start month to July in Settings (it takes effect from 1 Nov 2026: a transition FY of 8 months, Nov 2026 to Jun 2027), then Start with the copy on and check Plan with the FY selector and Add up to 30 Jun 2027.
 
 ## Open questions
 
-- Plan has no FY selector. It shows the FY that contains today, or the latest FY after that ends. Once M8 can start the next FY, should Plan get a selector (like MON-03) so the next FY can be planned before it starts?
 - M5: `today`, `firstDate` and `lastDate` come from the cached `/api/me`, which loads once per sign-in. If a tab stays open past midnight, the Add form's default date is yesterday until a reload. The top bar's current month has the same limit. Reload `/api/me` when the app comes back to the foreground?
 - M5: Should docs/DESIGN.md get rules for the inline "Saved" confirmation and the planned indicator's layout?
-- Two FYs can share a label. Example: a transition FY "FY 2027" (Jan to Jun 2027), then the start month changes again before the next rollover, giving a second transition "FY 2027" (Jul to Sep 2027). The ids differ. Should the label get a suffix?
 
 - The Angular specs (interceptor, guards, app) run locally with `npx ng test --watch=false`, but CI only builds. Add `npm test` to the workflow?
 - The wizard has no cap on the number of accounts, categories or income items. Firestore allows 500 writes per batch, so a setup with more than about 490 items would fail. Add a cap?
@@ -270,3 +321,6 @@
 - M7: `GET /api/entries?periodKey=` could query `fyId == X && periodKey == Y` (equality filters only, so no new index). That would cut each opened Months card from N reads to about N/12.
 - M7: Dashboard (M9) will get `categories` and `rows` from the overview, which it may not need. Is that fine at personal scale?
 - M7: Should docs/DESIGN.md get the Year grid cell rule (not underlined, with a "Tap a cell" caption)?
+- M8: Starting an FY writes the FY and every copied plan in one Firestore batch, and a batch allows 500 writes. More than 499 sub-categories with plans would fail. Add a cap or split the batch?
+- M8: The Settings income totals and pickers use the stored FYs only. An additional income item can't run "until" a month of an FY that is not started yet (open ended works). Is that fine?
+

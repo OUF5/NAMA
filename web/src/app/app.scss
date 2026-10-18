@@ -102,6 +102,35 @@
   background: var(--primary);
 }
 
+// Settings and its sections, under a divider (desktop only).
+.settings-group {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+
+  .open {
+    color: var(--text);
+  }
+
+  .chevron {
+    margin-left: auto;
+  }
+}
+
+.sub {
+  min-height: 36px;
+  padding-left: 48px;
+}
+
+// Desktop: Sign out at the bottom of the side bar.
+.nav-sign-out {
+  margin-top: auto;
+}
+
+.top-sign-out {
+  display: none;
+}
+
 .content {
   grid-area: main;
   overflow: auto;
@@ -151,6 +180,16 @@
     padding: 4px 4px env(safe-area-inset-bottom);
     border-right: 0;
     border-top: 1px solid var(--border);
+  }
+
+  // Phones open Settings from the gear, as a list, and Sign out from the top bar.
+  .settings-group,
+  .nav-sign-out {
+    display: none;
+  }
+
+  .top-sign-out {
+    display: inline-flex;
   }
 
   .nav-item {

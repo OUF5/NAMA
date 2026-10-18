@@ -8,6 +8,7 @@ namespace Api.Features.Plans;
 
 // PRD 7.5 plans of one FY (PRD 5.3). Owner's choice (M4, NFR-01): the response also carries the
 // FY's stored months and the PLN-03 totals, so Plan needs only this call and GET /api/categories.
+// FiscalYears (oldest first) feed Plan's FY selector (owner's choice, M8).
 public static class PlansEndpoint
 {
     public record PlanDto(string SubCategoryId, string CategoryId, IReadOnlyDictionary<string, decimal> Amounts, decimal Total);
@@ -15,10 +16,14 @@ public static class PlansEndpoint
     // PLN-03, R-PLN-03: one row per month.
     public record MonthTotalsDto(string PeriodKey, decimal Planned, decimal Income, decimal Unplanned);
 
+    // CategoryMonthTotals: category id → month key → planned (R-PLN-02), for Plan's month
+    // column (owner's choice, M8), so the browser does no sums.
     public record PlansResponse(
+        IReadOnlyList<FiscalYearsEndpoint.FiscalYearDto> FiscalYears,
         FiscalYearsEndpoint.FiscalYearDto FiscalYear,
         IReadOnlyList<PlanDto> Plans,
         IReadOnlyDictionary<string, decimal> CategoryTotals,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, decimal>> CategoryMonthTotals,
         IReadOnlyList<MonthTotalsDto> Totals);
 
     public static IEndpointRouteBuilder MapPlans(this IEndpointRouteBuilder api)
@@ -26,8 +31,9 @@ public static class PlansEndpoint
         api.MapGet("/fiscal-years/{fyId}/plans", async (string fyId, ClaimsPrincipal user, IUserStore store) =>
         {
             var uid = user.FindFirstValue("sub")!;
-            var fiscalYear = await FindFiscalYearAsync(uid, fyId, store);
-            return fiscalYear is null ? Results.NotFound() : Results.Ok(await LoadAsync(uid, fiscalYear, store));
+            var fiscalYears = await FiscalYearsAsync(uid, store);
+            var fiscalYear = fiscalYears.FirstOrDefault(fiscalYear => fiscalYear.Id == fyId);
+            return fiscalYear is null ? Results.NotFound() : Results.Ok(await LoadAsync(uid, fiscalYears, fiscalYear, store));
         });
 
         // PLN-04, R-STA-02: any month of the FY can be set, closed months included.
@@ -35,7 +41,8 @@ public static class PlansEndpoint
             string fyId, string subCategoryId, PlanRequest request, ClaimsPrincipal user, IUserStore store) =>
         {
             var uid = user.FindFirstValue("sub")!;
-            var fiscalYear = await FindFiscalYearAsync(uid, fyId, store);
+            var fiscalYears = await FiscalYearsAsync(uid, store);
+            var fiscalYear = fiscalYears.FirstOrDefault(fiscalYear => fiscalYear.Id == fyId);
             var subCategory = (await store.GetSubCategoriesAsync(uid)).FirstOrDefault(sub => sub.Id == subCategoryId);
             if (fiscalYear is null || subCategory is null)
             {
@@ -55,27 +62,30 @@ public static class PlansEndpoint
             }
 
             await store.SetPlanAsync(uid, fiscalYear.Id, new PlanAmounts(subCategory.Id, subCategory.CategoryId, amounts));
-            return Results.Ok(await LoadAsync(uid, fiscalYear, store));
+            return Results.Ok(await LoadAsync(uid, fiscalYears, fiscalYear, store));
         });
 
         return api;
     }
 
-    private static async Task<FiscalYear?> FindFiscalYearAsync(string uid, string fyId, IUserStore store) =>
-        (await store.GetFiscalYearsAsync(uid)).FirstOrDefault(fiscalYear => fiscalYear.Id == fyId);
+    private static async Task<IReadOnlyList<FiscalYear>> FiscalYearsAsync(string uid, IUserStore store) =>
+        (await store.GetFiscalYearsAsync(uid)).OrderBy(fiscalYear => fiscalYear.StartDate).ToList();
 
     // R-PLN-02, R-PLN-03 and R-INC-01, over the FY's stored months (R-CAL-09).
-    private static async Task<PlansResponse> LoadAsync(string uid, FiscalYear fiscalYear, IUserStore store)
+    private static async Task<PlansResponse> LoadAsync(string uid, IReadOnlyList<FiscalYear> fiscalYears, FiscalYear fiscalYear, IUserStore store)
     {
         var plans = await store.GetPlansAsync(uid, fiscalYear.Id);
         var income = IncomeCalculator.TotalsForPeriods(await store.GetIncomesAsync(uid), fiscalYear.Periods);
 
-        var categoryTotals = plans
-            .Select(plan => plan.CategoryId)
-            .Distinct()
-            .ToDictionary(
-                categoryId => categoryId,
-                categoryId => Money.FromMinor(fiscalYear.Periods.Sum(period => PlanCalculator.CategoryPlanned(plans, categoryId, period.Key))));
+        var categoryIds = plans.Select(plan => plan.CategoryId).Distinct().ToList();
+        var categoryTotals = categoryIds.ToDictionary(
+            categoryId => categoryId,
+            categoryId => Money.FromMinor(fiscalYear.Periods.Sum(period => PlanCalculator.CategoryPlanned(plans, categoryId, period.Key))));
+        var categoryMonthTotals = categoryIds.ToDictionary(
+            categoryId => categoryId,
+            categoryId => (IReadOnlyDictionary<string, decimal>)fiscalYear.Periods.ToDictionary(
+                period => period.Key,
+                period => Money.FromMinor(PlanCalculator.CategoryPlanned(plans, categoryId, period.Key))));
 
         var totals = fiscalYear.Periods.Select(period =>
         {
@@ -85,6 +95,7 @@ public static class PlansEndpoint
         }).ToList();
 
         return new PlansResponse(
+            fiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
             FiscalYearsEndpoint.FiscalYearDto.From(fiscalYear),
             plans.Select(plan => new PlanDto(
                 plan.SubCategoryId,
@@ -92,6 +103,7 @@ public static class PlansEndpoint
                 plan.Amounts.ToDictionary(pair => pair.Key, pair => Money.FromMinor(pair.Value)),
                 Money.FromMinor(PlanCalculator.Total(plan, fiscalYear.Periods)))).ToList(),
             categoryTotals,
+            categoryMonthTotals,
             totals);
     }
 }

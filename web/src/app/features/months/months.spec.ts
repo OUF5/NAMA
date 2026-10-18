@@ -140,6 +140,7 @@ function overview(
       },
     ],
     totals: { income: 51500.25, planned: 5300, spent: 1379.99, remaining: 3920.01 },
+    rollover: null,
   };
 }
 
@@ -178,7 +179,10 @@ describe('Months (PRD 5.6)', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([{ path: 'months', component: Months }]),
-        { provide: MeService, useValue: { me: signal(me), load: async () => meValue } },
+        {
+          provide: MeService,
+          useValue: { me: signal(me), load: async () => meValue, set: (value: Me) => (meValue = value) },
+        },
       ],
     });
     http = TestBed.inject(HttpTestingController);
@@ -406,6 +410,44 @@ describe('Months (PRD 5.6)', () => {
     );
     await settle();
     http.verify();
+  });
+
+  // FY-01, FY-02: the banner during the last month; Start, then the overview of the FY that now
+  // contains today (the new /api/me), without the banner.
+  it('shows the rollover banner and starts the next FY', async () => {
+    const lastMonth = overview('2026-01', ['closed', 'closed', 'inProgress']);
+    lastMonth.rollover = {
+      fyId: '2026-01',
+      label: 'FY 2026',
+      endDate: '2027-01-26',
+      nextLabel: 'FY 2027',
+      nextStartDate: '2027-01-27',
+    };
+    await open('/months', lastMonth);
+    const banner = root().querySelector('app-rollover-banner')!;
+    expect(text(banner)).toContain('FY 2026 ends on 26 Jan 2027.');
+
+    button(banner, 'Start FY 2027').click();
+    const post = await vi.waitFor(() => http.expectOne('/api/fiscal-years/next'));
+    expect(post.request.body).toEqual({ copyPlans: true });
+    post.flush({ fiscalYear: fy2027, copiedPlans: 1, me: { ...me, currentFyId: '2027-01', lastDate: '2028-01-26' } });
+
+    (await overviewCall('2027-01')).flush(
+      overview('2027-01', ['yetToCome', 'yetToCome', 'yetToCome'], [fy2026, fy2027]),
+    );
+    await settle();
+    http.verify();
+
+    expect(root().querySelector('app-rollover-banner')).toBeNull();
+    expect(text(root().querySelector('.status'))).toBe('FY 2027 started.');
+  });
+
+  // Plan's "See the year grid" link (M8).
+  it('opens the Year view from the URL', async () => {
+    await open('/months?fyId=2026-01&view=year', overview(), null);
+
+    expect(root().querySelector('app-year-grid')).not.toBeNull();
+    expect(localStorage.getItem('nama.months.view')).toBe('year');
   });
 
   // MON-02: the last choice is remembered.

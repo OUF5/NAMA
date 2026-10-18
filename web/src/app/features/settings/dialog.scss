@@ -1,0 +1,58 @@
+// docs/DESIGN.md "Dialogs" for every Settings dialog: outline inputs, Save as the one filled
+// button, full screen on phones (set when the dialog opens). Tokens only.
+form {
+  display: contents;
+}
+
+mat-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+mat-form-field {
+  width: 100%;
+}
+
+p {
+  margin: 0 0 8px;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+
+  mat-form-field {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.note {
+  color: var(--text-2);
+}
+
+.error {
+  margin: 8px 0 0;
+  color: var(--danger);
+}
+
+mat-dialog-actions {
+  gap: 8px;
+}
+
+// Delete sits apart from Cancel and Save.
+.delete {
+  margin-right: auto;
+}
+
+@media (max-width: 767.98px) {
+  .row {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  mat-dialog-actions button {
+    height: 44px;
+  }
+}

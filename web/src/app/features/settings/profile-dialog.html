@@ -1,0 +1,43 @@
+<h2 mat-dialog-title>Profile</h2>
+<form [formGroup]="form" (ngSubmit)="save()" novalidate>
+  <mat-dialog-content>
+    <mat-form-field>
+      <mat-label>Your name</mat-label>
+      <input matInput formControlName="displayName" [maxlength]="nameMax" autocomplete="name" />
+      <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Project name</mat-label>
+      <input matInput formControlName="projectName" [maxlength]="nameMax" autocomplete="off" />
+      <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Currency</mat-label>
+      <mat-select formControlName="currency">
+        @for (code of currencies; track code) {
+          <mat-option [value]="code">{{ code }}</mat-option>
+        }
+      </mat-select>
+      <!-- R-MON-03 -->
+      <mat-hint>Only changes how amounts are shown. Nothing is converted.</mat-hint>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Time zone</mat-label>
+      <input matInput formControlName="timezone" [matAutocomplete]="zones" autocomplete="off" spellcheck="false" />
+      <mat-autocomplete #zones="matAutocomplete">
+        @for (zone of zoneOptions(); track zone) {
+          <mat-option [value]="zone">{{ zone }}</mat-option>
+        }
+      </mat-autocomplete>
+      <mat-hint>"Today" and the current month follow this time zone.</mat-hint>
+      <mat-error>Pick a time zone from the list.</mat-error>
+    </mat-form-field>
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+  </mat-dialog-content>
+  <mat-dialog-actions>
+    <button mat-stroked-button type="button" mat-dialog-close>Cancel</button>
+    <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+  </mat-dialog-actions>
+</form>

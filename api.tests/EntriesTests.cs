@@ -15,7 +15,7 @@ public class EntriesTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var sub = await SetUpUser(factory);
         await factory.Store.AddSubCategoryAsync(sub, new SubCategory("groceries", "food", "Groceries", 0));
         await factory.Store.AddSubCategoryAsync(sub, new SubCategory("old", "food", "Old", 1, Archived: true));
-        await factory.Store.AddBankAccount(sub, new BankAccount("closed", "Closed account", Archived: true));
+        await factory.Store.AddBankAccountAsync(sub, new BankAccount("closed", "Closed account", Archived: true));
         return sub;
     }
 

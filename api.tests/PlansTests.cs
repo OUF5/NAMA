@@ -146,6 +146,13 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
         // R-PLN-02: FY totals per category: 12 × 1,500 and 4 × 400.
         Assert.Equal(18000m, body["categoryTotals"]!["food"]!.GetValue<decimal>());
         Assert.Equal(1600m, body["categoryTotals"]!["transport"]!.GetValue<decimal>());
+
+        // Per category per month (Plan's month column, M8): 1,500 every month; 400 from Sep.
+        var food = body["categoryMonthTotals"]!["food"]!.AsObject();
+        Assert.Equal(12, food.Count);
+        Assert.All(food, pair => Assert.Equal(1500m, pair.Value!.GetValue<decimal>()));
+        var transport = body["categoryMonthTotals"]!["transport"]!;
+        Assert.Equal((0m, 400m), (transport["2026-08"]!.GetValue<decimal>(), transport["2026-09"]!.GetValue<decimal>()));
     }
 
     // R-PLN-03: unplanned income is negative when more is planned than earned.
@@ -196,10 +203,36 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("Dec 2026", fy["periods"]![11]!["label"]!.GetValue<string>());
     }
 
+    // Plan's FY selector (owner's choice, M8): every FY, oldest first, in the plans response.
+    [Fact]
+    public async Task The_plans_response_lists_every_fiscal_year()
+    {
+        var sub = await SetUp();
+        var fy2026 = (await factory.Store.GetFiscalYearsAsync(sub)).Single();
+        await factory.Store.AddFiscalYear(sub, FiscalCalendar.NextFiscalYear(fy2026, 7, 27));
+
+        var response = await Send(factory, HttpMethod.Get, "/api/fiscal-years/2027-01/plans", sub);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var plans = await Json(response);
+        Assert.Equal(["2026-01", "2027-01"], plans["fiscalYears"]!.AsArray().Select(fy => fy!["id"]!.GetValue<string>()));
+        Assert.Equal("2027-01", plans["fiscalYear"]!["id"]!.GetValue<string>());
+        Assert.Equal(6, plans["totals"]!.AsArray().Count);
+    }
+
     [Theory]
     [InlineData("GET", "/api/fiscal-years")]
     [InlineData("GET", "/api/fiscal-years/2026-01/plans")]
     [InlineData("PUT", "/api/fiscal-years/2026-01/plans/groceries")]
+    [InlineData("POST", "/api/fiscal-years/next")]
+    [InlineData("GET", "/api/settings")]
+    [InlineData("PUT", "/api/settings/calendar")]
+    [InlineData("PUT", "/api/profile")]
+    [InlineData("GET", "/api/income")]
+    [InlineData("POST", "/api/income/salary")]
+    [InlineData("POST", "/api/income/additional")]
+    [InlineData("PUT", "/api/income/additional/x")]
+    [InlineData("DELETE", "/api/income/additional/x")]
     public async Task Calls_without_a_token_return_401(string method, string url)
     {
         var response = await factory.CreateClient().SendAsync(new HttpRequestMessage(new HttpMethod(method), url));

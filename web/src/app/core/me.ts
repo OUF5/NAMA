@@ -57,6 +57,11 @@ export class MeService {
     this.me.update((me) => (me?.profile ? { ...me, profile: { ...me.profile, lastBankAccountId: id } } : me));
   }
 
+  // PUT /api/settings/calendar (STG-02) changes these two; nothing else in /api/me moves.
+  patchProfile(changes: Partial<Profile>): void {
+    this.me.update((me) => (me?.profile ? { ...me, profile: { ...me.profile, ...changes } } : me));
+  }
+
   clear(): void {
     this.me.set(null);
   }

@@ -45,10 +45,14 @@ export interface MonthTotals {
   unplanned: number;
 }
 
+// fiscalYears (oldest first) feed Plan's FY selector (owner's choice, M8).
 export interface PlansResponse {
+  fiscalYears: FiscalYear[];
   fiscalYear: FiscalYear;
   plans: PlanItem[];
   categoryTotals: Record<string, number>;
+  // Category id → month key → planned (R-PLN-02), for the month column (M8).
+  categoryMonthTotals: Record<string, Record<string, number>>;
   totals: MonthTotals[];
 }
 

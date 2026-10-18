@@ -139,4 +139,61 @@ public class PlanCalculatorTests
     {
         Assert.Null(PlanCalculator.Percent(0, 10_000));
     }
+
+    // FY-02 (owner's choice, M8): the same month a year earlier, from whichever FY holds it.
+    // R-CAL-08 Example A: FY 2026 → transition FY 2027 (Jan to Jun 2027) → FY 2027/28 (Jul 2027 to Jun 2028).
+    [Fact]
+    public void Copy_example_A_fills_every_month_from_the_same_month_a_year_earlier()
+    {
+        var active = new HashSet<string> { "groceries", "fuel" };
+        var transition = FiscalCalendar.NextFiscalYear(Fy, fiscalStartMonth: 7, payday: 27);
+
+        var toTransition = PlanCalculator.CopyForNextFiscalYear([Groceries, Fuel], transition.Periods, active);
+
+        // Fuel has nothing in Jan to Jun 2026, so it gets no plan.
+        var groceries = Assert.Single(toTransition);
+        Assert.Equal("groceries", groceries.SubCategoryId);
+        Assert.Equal("food", groceries.CategoryId);
+        Assert.Equal(
+            new[] { "2027-01", "2027-02", "2027-03", "2027-04", "2027-05", "2027-06" },
+            groceries.Amounts.Keys.Order());
+        Assert.All(groceries.Amounts.Values, amount => Assert.Equal(150_000, amount));
+
+        var fy2027 = FiscalCalendar.NextFiscalYear(transition, fiscalStartMonth: 7, payday: 27);
+
+        var toFy2027 = PlanCalculator.CopyForNextFiscalYear([Groceries, Fuel, groceries], fy2027.Periods, active);
+
+        // Jul to Dec 2027 come from FY 2026, Jan to Jun 2028 from the transition FY.
+        var copiedGroceries = toFy2027.Single(plan => plan.SubCategoryId == "groceries");
+        Assert.Equal(fy2027.Periods.Select(period => period.Key), copiedGroceries.Amounts.Keys.Order());
+        Assert.All(copiedGroceries.Amounts.Values, amount => Assert.Equal(150_000, amount));
+        var copiedFuel = toFy2027.Single(plan => plan.SubCategoryId == "fuel");
+        Assert.Equal(
+            new Dictionary<string, long> { ["2027-09"] = 40_000, ["2027-10"] = 40_000, ["2027-11"] = 40_000, ["2027-12"] = 40_000 },
+            copiedFuel.Amounts);
+    }
+
+    // R-CAL-08 Example B: the payday changes, but the keys stay YYYY-MM.
+    [Fact]
+    public void Copy_example_B_keeps_the_month_keys()
+    {
+        var next = FiscalCalendar.NextFiscalYear(Fy, fiscalStartMonth: 1, payday: 1);
+
+        var copied = PlanCalculator.CopyForNextFiscalYear([Fuel], next.Periods, new HashSet<string> { "fuel" });
+
+        Assert.Equal(
+            new Dictionary<string, long> { ["2027-09"] = 40_000, ["2027-10"] = 40_000, ["2027-11"] = 40_000, ["2027-12"] = 40_000 },
+            Assert.Single(copied).Amounts);
+    }
+
+    [Fact]
+    public void Copy_skips_archived_sub_categories_and_empty_plans()
+    {
+        var next = FiscalCalendar.NextFiscalYear(Fy, fiscalStartMonth: 1, payday: 27);
+        var empty = new PlanAmounts("empty", "food", new Dictionary<string, long>());
+
+        var copied = PlanCalculator.CopyForNextFiscalYear([Groceries, Fuel, empty], next.Periods, new HashSet<string> { "fuel", "empty" });
+
+        Assert.Equal("fuel", Assert.Single(copied).SubCategoryId);
+    }
 }

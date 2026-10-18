@@ -14,6 +14,7 @@ public sealed class InMemoryUserStore : IUserStore
         // lastBankAccountId changes with every entry (decision 5).
         public UserProfile Profile { get; set; } = setup.Profile;
         public List<FiscalYear> FiscalYears { get; } = [setup.FiscalYear];
+        public List<IncomeItem> Incomes { get; } = [.. setup.Incomes];
         public List<BankAccount> BankAccounts { get; } = [.. setup.BankAccounts];
         public List<Entry> Entries { get; } = [];
         public List<Category> Categories { get; } = [.. setup.Categories];
@@ -30,13 +31,10 @@ public sealed class InMemoryUserStore : IUserStore
     public Task<UserProfile?> GetProfileAsync(string uid) =>
         Task.FromResult(_users.TryGetValue(uid, out var data) ? data.Profile : null);
 
-    // Archive comes with Settings (M8); tests add archived accounts here.
-    public Task AddBankAccount(string uid, BankAccount account) => Write(uid, data => data.BankAccounts.Add(account));
-
     // Every entry of a user, as stored.
     public IReadOnlyList<Entry> Entries(string uid) => Read<Entry>(uid, data => data.Entries).Result;
 
-    // Starting the next FY comes with M8 (FY-02); tests add FYs here.
+    // Adds an FY without plans, for tests that only need its months.
     public Task AddFiscalYear(string uid, FiscalYear fiscalYear) => Write(uid, data => data.FiscalYears.Add(fiscalYear));
 
     public Task<IReadOnlyList<FiscalYear>> GetFiscalYearsAsync(string uid) => Read<FiscalYear>(uid, data => data.FiscalYears);
@@ -60,7 +58,7 @@ public sealed class InMemoryUserStore : IUserStore
         Write(uid, data => data.Plans[$"{fyId}_{plan.SubCategoryId}"] = (fyId, plan));
 
     public Task<IReadOnlyList<IncomeItem>> GetIncomesAsync(string uid) =>
-        Read<IncomeItem>(uid, data => data.Setup.Incomes);
+        Read<IncomeItem>(uid, data => data.Incomes);
 
     public Task<IReadOnlyList<BankAccount>> GetBankAccountsAsync(string uid) =>
         Read<BankAccount>(uid, data => data.BankAccounts);
@@ -100,6 +98,74 @@ public sealed class InMemoryUserStore : IUserStore
 
     public Task<bool> DeleteEntryAsync(string uid, string id) =>
         Change(uid, data => data.Entries.RemoveAll(entry => entry.Id == id) > 0);
+
+    public Task UpdateProfileAsync(string uid, string displayName, string projectName, string currency, string timezone) =>
+        Write(uid, data => data.Profile = data.Profile with
+        {
+            DisplayName = displayName,
+            ProjectName = projectName,
+            Currency = currency,
+            Timezone = timezone,
+        });
+
+    public Task UpdateCalendarAsync(string uid, int fiscalStartMonth, int paydayDay) =>
+        Write(uid, data => data.Profile = data.Profile with { FiscalStartMonth = fiscalStartMonth, PaydayDay = paydayDay });
+
+    // As the Firestore batch: nothing is written when the FY already exists.
+    public Task<bool> StartFiscalYearAsync(string uid, FiscalYear fiscalYear, IReadOnlyList<PlanAmounts> plans) => Change(uid, data =>
+    {
+        if (data.FiscalYears.Any(stored => stored.Id == fiscalYear.Id))
+        {
+            return false;
+        }
+        data.FiscalYears.Add(fiscalYear);
+        foreach (var plan in plans)
+        {
+            data.Plans[$"{fiscalYear.Id}_{plan.SubCategoryId}"] = (fiscalYear.Id, plan);
+        }
+        return true;
+    });
+
+    public Task ChangeSalaryAsync(string uid, IReadOnlyList<IncomeItem> ended, IReadOnlyList<string> replacedIds, IncomeItem created) =>
+        Write(uid, data =>
+        {
+            foreach (var item in ended)
+            {
+                var index = data.Incomes.FindIndex(stored => stored.Id == item.Id);
+                data.Incomes[index] = data.Incomes[index] with { ToPeriodKey = item.ToPeriodKey };
+            }
+            data.Incomes.RemoveAll(stored => replacedIds.Contains(stored.Id));
+            data.Incomes.Add(created);
+        });
+
+    public Task AddIncomeAsync(string uid, IncomeItem income) => Write(uid, data => data.Incomes.Add(income));
+
+    public Task<bool> UpdateIncomeAsync(string uid, IncomeItem income) => Change(uid, data => Replace(data.Incomes, income, item => item.Id == income.Id));
+
+    public Task<bool> DeleteIncomeAsync(string uid, string id) => Change(uid, data => data.Incomes.RemoveAll(item => item.Id == id) > 0);
+
+    public Task AddBankAccountAsync(string uid, BankAccount account) => Write(uid, data => data.BankAccounts.Add(account));
+
+    public Task<bool> UpdateBankAccountAsync(string uid, BankAccount account) =>
+        Change(uid, data => Replace(data.BankAccounts, account, item => item.Id == account.Id));
+
+    public Task<bool> UpdateCategoryAsync(string uid, Category category) =>
+        Change(uid, data => Replace(data.Categories, category, item => item.Id == category.Id));
+
+    public Task<bool> UpdateSubCategoryAsync(string uid, SubCategory subCategory) =>
+        Change(uid, data => Replace(data.SubCategories, subCategory, item => item.Id == subCategory.Id));
+
+    // Keeps the item's place in the list, as createdAt is kept in Firestore.
+    private static bool Replace<T>(List<T> list, T item, Predicate<T> match)
+    {
+        var index = list.FindIndex(match);
+        if (index < 0)
+        {
+            return false;
+        }
+        list[index] = item;
+        return true;
+    }
 
     private Task<IReadOnlyList<T>> Read<T>(string uid, Func<UserData, IEnumerable<T>> select)
     {

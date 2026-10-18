@@ -1,42 +1,51 @@
-// docs/DESIGN.md: section cards, outline inputs, one filled button (Save), tokens only.
+// docs/DESIGN.md: section cards, tokens only. The page has no filled button; the editor dialog's
+// Save is the one.
+.page-head,
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.page-head h1 {
+  margin: 0 0 16px;
+}
+
 .fy {
-  margin: -16px 0 0;
+  margin: 0;
+}
+
+.fy-select {
+  width: 100%;
+  max-width: 420px;
 }
 
 .status {
   min-height: 24px;
-  margin: 0 0 8px;
+  margin: 4px 0;
   color: var(--text-2);
 }
 
-.cards {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
 .card {
+  margin-bottom: 16px;
+  padding: 24px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 24px;
 }
 
-.card-title {
-  margin: 0 0 8px;
+.card-head {
   padding-bottom: 12px;
   border-bottom: 1px solid var(--divider);
-}
-
-.category-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
 
   h2 {
     margin: 0;
   }
+}
+
+.caption.line {
+  display: block;
 }
 
 .note,
@@ -45,6 +54,7 @@
 }
 
 .note {
+  padding: 12px 0;
   color: var(--text-2);
 }
 
@@ -60,170 +70,172 @@
   color: var(--danger);
 }
 
-// PLN-03 totals: a table on desktop, one small card per month on phones.
+// PLN-03 sideways: sticky on desktop, so a saved change is seen while editing lower down.
+.totals-card {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.scroll {
+  overflow-x: auto;
+}
+
 .totals {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
 
-  th,
-  td {
-    height: 48px;
-    padding: 4px 8px;
-    border-bottom: 1px solid var(--divider);
+  caption {
+    padding-top: 8px;
+    caption-side: bottom;
     text-align: left;
-    font-weight: 400;
   }
 
-  thead th {
-    font-size: 13px;
+  // Each month's header and numbers are centered in its column, so they read as one column.
+  th,
+  td {
+    height: 36px;
+    padding: 0 4px;
+    text-align: center;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
+  // The row labels stay in view when the table scrolls sideways.
+  tbody th,
+  thead td {
+    position: sticky;
+    left: 0;
+    width: 112px;
+    padding-left: 0;
+    background: var(--surface);
+    text-align: left;
     color: var(--text-muted);
   }
 
-  .num {
-    text-align: right;
+  thead th {
+    padding: 0;
   }
 
-  .dates {
-    display: block;
-  }
-
-  tbody tr:hover {
-    background: var(--surface-2);
+  .selected {
+    background: var(--primary-soft);
   }
 }
 
+// A month header selects its column: the whole cell, at least 44px tall.
+.month {
+  width: 100%;
+  min-height: 44px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+
+  .caption {
+    display: block;
+  }
+}
+
+.folded {
+  margin: 12px 0 0;
+}
+
+.fold {
+  display: none;
+}
+
+.list,
 .subs {
   margin: 0;
   padding: 0;
   list-style: none;
-
-  > li {
-    border-bottom: 1px solid var(--divider);
-  }
 }
 
-.sub-row {
+.row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 48px;
+  gap: 8px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--divider);
 
-  .sub-name {
+  .name {
     flex: 1;
+    min-width: 0;
     overflow-wrap: anywhere;
   }
 }
 
-.editor {
+.strong {
+  font-weight: 600;
+}
+
+// A category row: the whole row opens its sub-categories.
+.expand {
   display: flex;
-  flex-direction: column;
+  flex: 1;
+  align-items: center;
   gap: 8px;
-  padding: 8px 0 16px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.months {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px 12px;
-}
+.chevron {
+  flex: none;
+  transition: transform 0.15s;
 
-.month {
-  display: flex;
-  align-items: flex-start;
-  gap: 4px;
-
-  mat-form-field {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .copy {
-    flex: none;
-    width: 44px;
-    margin-top: 4px;
+  &.open {
+    transform: rotate(90deg);
   }
 }
 
-.add-row {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  padding-top: 16px;
-
-  mat-form-field {
-    flex: 1;
-    min-width: 0;
-  }
-
-  button {
-    margin-top: 4px;
-  }
+.subs {
+  padding-left: 32px;
 }
 
-.actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
+// The sub-category saved last.
+.flash {
+  background: var(--surface-2);
+  transition: background 0.6s;
 }
 
-@media (max-width: 1023.98px) {
-  .months {
-    grid-template-columns: repeat(2, 1fr);
+.add-sub {
+  margin: 4px 0 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron,
+  .flash {
+    transition: none;
   }
 }
 
 @media (max-width: 767.98px) {
-  .cards {
-    gap: 12px;
-  }
-
   .card {
+    margin-bottom: 12px;
     padding: 16px;
   }
 
-  .months {
-    grid-template-columns: 1fr;
+  // Phones: not sticky (it would take a third of the screen); it can be folded instead.
+  .totals-card {
+    position: static;
   }
 
-  .totals {
-    thead {
-      display: none;
-    }
+  .fold {
+    display: inline-flex;
+  }
 
-    tr {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 4px 8px;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--divider);
-    }
-
-    th,
-    td {
-      height: auto;
-      padding: 0;
-      border: 0;
-    }
-
-    th[scope='row'] {
-      grid-column: 1 / -1;
-      font-weight: 500;
-    }
-
-    .dates {
-      display: inline;
-      margin-left: 8px;
-    }
-
-    td.num {
-      text-align: left;
-    }
-
-    td::before {
-      content: attr(data-label);
-      display: block;
-      font-size: 13px;
-      color: var(--text-muted);
-    }
+  .subs {
+    padding-left: 12px;
   }
 }

@@ -213,11 +213,126 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
         }
     }
 
-    public async Task<bool> DeleteEntryAsync(string uid, string id)
+    public Task<bool> DeleteEntryAsync(string uid, string id) => DeleteAsync(User(uid).Collection("entries").Document(id));
+
+    public Task UpdateProfileAsync(string uid, string displayName, string projectName, string currency, string timezone) =>
+        User(uid).UpdateAsync(new Dictionary<string, object>
+        {
+            ["displayName"] = displayName,
+            ["projectName"] = projectName,
+            ["currency"] = currency,
+            ["timezone"] = timezone,
+            ["updatedAt"] = FieldValue.ServerTimestamp,
+        });
+
+    public Task UpdateCalendarAsync(string uid, int fiscalStartMonth, int paydayDay) =>
+        User(uid).UpdateAsync(new Dictionary<string, object>
+        {
+            ["fiscalStartMonth"] = fiscalStartMonth,
+            ["paydayDay"] = paydayDay,
+            ["updatedAt"] = FieldValue.ServerTimestamp,
+        });
+
+    // FY-02: the FY document is created, not set, so a second start of the same FY fails as a whole.
+    public async Task<bool> StartFiscalYearAsync(string uid, FiscalYear fiscalYear, IReadOnlyList<PlanAmounts> plans)
+    {
+        var user = User(uid);
+        var batch = db.StartBatch();
+        batch.Create(user.Collection("fiscalYears").Document(fiscalYear.Id), FirestoreDocuments.ToDocument(fiscalYear));
+        foreach (var plan in plans)
+        {
+            batch.Create(user.Collection("plans").Document($"{fiscalYear.Id}_{plan.SubCategoryId}"), FirestoreDocuments.ToDocument(fiscalYear.Id, plan));
+        }
+        try
+        {
+            await batch.CommitAsync();
+            return true;
+        }
+        catch (RpcException e) when (e.StatusCode == StatusCode.AlreadyExists)
+        {
+            return false;
+        }
+    }
+
+    // Ended items keep createdAt (Update); replaced items are deleted (owner's rule, M2).
+    public Task ChangeSalaryAsync(string uid, IReadOnlyList<IncomeItem> ended, IReadOnlyList<string> replacedIds, IncomeItem created)
+    {
+        var incomes = User(uid).Collection("incomes");
+        var batch = db.StartBatch();
+        foreach (var item in ended)
+        {
+            batch.Update(incomes.Document(item.Id), new Dictionary<string, object>
+            {
+                // An ended item always has its last month (R-INC-02).
+                ["toPeriodKey"] = item.ToPeriodKey!,
+                ["updatedAt"] = FieldValue.ServerTimestamp,
+            });
+        }
+        foreach (var id in replacedIds)
+        {
+            batch.Delete(incomes.Document(id));
+        }
+        batch.Create(incomes.Document(created.Id), FirestoreDocuments.ToDocument(created));
+        return batch.CommitAsync();
+    }
+
+    public Task AddIncomeAsync(string uid, IncomeItem income) =>
+        User(uid).Collection("incomes").Document(income.Id).CreateAsync(FirestoreDocuments.ToDocument(income));
+
+    public Task<bool> UpdateIncomeAsync(string uid, IncomeItem income)
+    {
+        var document = FirestoreDocuments.ToDocument(income);
+        return UpdateAsync(User(uid).Collection("incomes").Document(income.Id), new Dictionary<string, object>
+        {
+            ["label"] = document.Label,
+            ["amountMinor"] = document.AmountMinor,
+            ["fromPeriodKey"] = document.FromPeriodKey,
+            // null is stored as null: open ended (PRD 7.4).
+            ["toPeriodKey"] = document.ToPeriodKey!,
+        });
+    }
+
+    public Task<bool> DeleteIncomeAsync(string uid, string id) => DeleteAsync(User(uid).Collection("incomes").Document(id));
+
+    public Task AddBankAccountAsync(string uid, BankAccount account) =>
+        User(uid).Collection("bankAccounts").Document(account.Id).CreateAsync(FirestoreDocuments.ToDocument(account));
+
+    public Task<bool> UpdateBankAccountAsync(string uid, BankAccount account) =>
+        UpdateAsync(User(uid).Collection("bankAccounts").Document(account.Id), NameFields(account.Name, account.Archived));
+
+    public Task<bool> UpdateCategoryAsync(string uid, Category category) =>
+        UpdateAsync(User(uid).Collection("categories").Document(category.Id), NameFields(category.Name, category.Archived));
+
+    public Task<bool> UpdateSubCategoryAsync(string uid, SubCategory subCategory) =>
+        UpdateAsync(User(uid).Collection("subCategories").Document(subCategory.Id), NameFields(subCategory.Name, subCategory.Archived));
+
+    private static Dictionary<string, object> NameFields(string name, bool archived) => new()
+    {
+        ["name"] = name,
+        ["nameLower"] = Names.Lower(name),
+        ["archived"] = archived,
+    };
+
+    // UpdateAsync requires the document to exist (Precondition.MustExist), so createdAt is kept.
+    private static async Task<bool> UpdateAsync(DocumentReference reference, Dictionary<string, object> fields)
+    {
+        fields["updatedAt"] = FieldValue.ServerTimestamp;
+        try
+        {
+            await reference.UpdateAsync(fields);
+            return true;
+        }
+        catch (RpcException e) when (e.StatusCode == StatusCode.NotFound)
+        {
+            return false;
+        }
+    }
+
+    private static async Task<bool> DeleteAsync(DocumentReference reference)
     {
         try
         {
-            await User(uid).Collection("entries").Document(id).DeleteAsync(Precondition.MustExist);
+            await reference.DeleteAsync(Precondition.MustExist);
             return true;
         }
         catch (RpcException e) when (e.StatusCode == StatusCode.NotFound)

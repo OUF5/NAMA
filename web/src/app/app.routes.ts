@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { allowedGuard, authGuard, setupGuard } from './core/guards';
+import { settingsMatcher } from './features/settings/settings-sections';
 
 // PRD 7.7. The setup wizard itself comes with M3.
 export const routes: Routes = [
@@ -51,7 +52,7 @@ export const routes: Routes = [
     loadComponent: () => import('./features/plan/plan').then((m) => m.Plan),
   },
   {
-    path: 'settings',
+    matcher: settingsMatcher,
     title: 'NAMA · Settings',
     canActivate: [authGuard, setupGuard],
     loadComponent: () => import('./features/settings/settings').then((m) => m.Settings),

@@ -94,4 +94,33 @@ public interface IUserStore
 
     // TBL-03. False when the entry no longer exists.
     Task<bool> DeleteEntryAsync(string uid, string id);
+
+    // STG-01. The other profile fields are not changed.
+    Task UpdateProfileAsync(string uid, string displayName, string projectName, string currency, string timezone);
+
+    // STG-02, R-CAL-07: used for the next FY created.
+    Task UpdateCalendarAsync(string uid, int fiscalStartMonth, int paydayDay);
+
+    // FY-02: the FY and its copied plans in one batch. False when the FY already exists (409).
+    Task<bool> StartFiscalYearAsync(string uid, FiscalYear fiscalYear, IReadOnlyList<PlanAmounts> plans);
+
+    // R-INC-02 in one batch: the salary items that now end earlier, the ones replaced, and the new one.
+    Task ChangeSalaryAsync(string uid, IReadOnlyList<IncomeItem> ended, IReadOnlyList<string> replacedIds, IncomeItem created);
+
+    // R-INC-03. Update and delete return false when the item no longer exists.
+    Task AddIncomeAsync(string uid, IncomeItem income);
+
+    Task<bool> UpdateIncomeAsync(string uid, IncomeItem income);
+
+    Task<bool> DeleteIncomeAsync(string uid, string id);
+
+    // STG-04, STG-05: add, rename, archive. Names are checked by the caller (PRD 4.7). Updates
+    // return false when the item no longer exists. There is no delete (PRD 4.6).
+    Task AddBankAccountAsync(string uid, BankAccount account);
+
+    Task<bool> UpdateBankAccountAsync(string uid, BankAccount account);
+
+    Task<bool> UpdateCategoryAsync(string uid, Category category);
+
+    Task<bool> UpdateSubCategoryAsync(string uid, SubCategory subCategory);
 }

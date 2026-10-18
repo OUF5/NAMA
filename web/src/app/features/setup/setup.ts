@@ -25,7 +25,7 @@ import { AuthService } from '../../core/auth';
 import { Me, MeService } from '../../core/me';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
 import { CURRENCIES, amountValidator, formatMoney, parseAmount } from '../../shared/money';
-import { PeriodInfo, formatDate, formatDay, periodWithDates } from '../../shared/month-label';
+import { MONTH_NAMES, PeriodInfo, formatDate, formatDay, periodWithDates } from '../../shared/month-label';
 import { NAME_MAX_LENGTH, isValidName, nameValidator, notInListValidator, sameName } from '../../shared/names';
 import { SetupDraft, clearDraft, loadDraft, saveDraft } from './setup-draft';
 
@@ -36,11 +36,6 @@ interface Preview {
 }
 
 type IncomeType = 'once' | 'monthly';
-
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
 
 // PRD 5.2 step 5: optional suggestions you can tap.
 const SUGGESTED_CATEGORIES = [

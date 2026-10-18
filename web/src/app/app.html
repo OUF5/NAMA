@@ -17,6 +17,10 @@
     <a mat-icon-button routerLink="/settings" routerLinkActive="active" aria-label="Settings">
       <mat-icon>settings</mat-icon>
     </a>
+    <!-- Phones: the bottom bar has no room, so Sign out is here (desktop: the bottom of the side bar). -->
+    <button mat-icon-button type="button" class="top-sign-out" aria-label="Sign out" title="Sign out" (click)="signOut()">
+      <mat-icon>logout</mat-icon>
+    </button>
   }
 </mat-toolbar>
 
@@ -35,6 +39,28 @@
           <span>{{ item.label }}</span>
         </a>
       }
+      <!-- Desktop only: Settings, with its sections while you are in Settings (owner's choice, M8). -->
+      <div class="settings-group">
+        <a class="nav-item" routerLink="/settings" [class.open]="inSettings()" [attr.aria-expanded]="inSettings()">
+          <mat-icon aria-hidden="true">settings</mat-icon>
+          <span>Settings</span>
+          <mat-icon class="chevron" aria-hidden="true">{{ inSettings() ? 'expand_less' : 'expand_more' }}</mat-icon>
+        </a>
+        @if (inSettings()) {
+          <div class="sub-nav" role="group" aria-label="Settings sections">
+            @for (section of settingsSections; track section.id) {
+              <a class="nav-item sub" [routerLink]="['/settings', section.id]" routerLinkActive="active">
+                {{ section.label }}
+              </a>
+            }
+          </div>
+        }
+      </div>
+      <!-- AUTH-04, owner's choice (M8): outside Settings, after a confirmation. -->
+      <button mat-stroked-button type="button" class="nav-sign-out" (click)="signOut()">
+        <mat-icon>logout</mat-icon>
+        Sign out
+      </button>
     </nav>
   }
 

@@ -119,9 +119,21 @@ public static class FiscalCalendar
         return null;
     }
 
+    // The stored FY with the latest start date, or null when there is none.
+    public static FiscalYear? Latest(IEnumerable<FiscalYear> fiscalYears) =>
+        fiscalYears.MaxBy(fiscalYear => fiscalYear.StartDate);
+
+    // FY-01, FY-02: the next FY can be started during the last month of the latest FY and after it ends.
+    public static bool CanStartNext(FiscalYear latest, DateOnly today) => today >= latest.Periods[^1].StartDate;
+
     // The month key before a YYYY-MM key.
-    public static string PreviousKey(string key) =>
-        Key(DateOnly.ParseExact(key, "yyyy-MM", CultureInfo.InvariantCulture).AddMonths(-1));
+    public static string PreviousKey(string key) => AddMonthsToKey(key, -1);
+
+    // FY-02 plan copy (owner's choice, M8): the same month a year earlier.
+    public static string YearEarlierKey(string key) => AddMonthsToKey(key, -MonthsPerYear);
+
+    private static string AddMonthsToKey(string key, int months) =>
+        Key(DateOnly.ParseExact(key, "yyyy-MM", CultureInfo.InvariantCulture).AddMonths(months));
 
     private static Period NewPeriod(DateOnly start, DateOnly end) =>
         new(Key(start), start.ToString("MMM yyyy", CultureInfo.InvariantCulture), start, end);

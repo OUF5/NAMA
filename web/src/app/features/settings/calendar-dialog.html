@@ -1,0 +1,33 @@
+<h2 mat-dialog-title>Fiscal year</h2>
+<form [formGroup]="form" (ngSubmit)="save()" novalidate>
+  <mat-dialog-content>
+    <!-- STG-02, R-CAL-07 -->
+    <p class="note">
+      Takes effect from the fiscal year starting {{ formatDate(calendar.takesEffectFrom) }}. The current fiscal year
+      keeps its dates.
+    </p>
+    <div class="row">
+      <mat-form-field>
+        <mat-label>Fiscal year starts in</mat-label>
+        <mat-select formControlName="fiscalStartMonth">
+          @for (name of monthNames; track name; let i = $index) {
+            <mat-option [value]="i + 1">{{ name }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Payday</mat-label>
+        <input matInput formControlName="paydayDay" type="number" inputmode="numeric" min="1" max="31" />
+        <mat-hint>1 to 31. 1 = calendar months.</mat-hint>
+        <mat-error>Enter a day from 1 to 31.</mat-error>
+      </mat-form-field>
+    </div>
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+  </mat-dialog-content>
+  <mat-dialog-actions>
+    <button mat-stroked-button type="button" mat-dialog-close>Cancel</button>
+    <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+  </mat-dialog-actions>
+</form>

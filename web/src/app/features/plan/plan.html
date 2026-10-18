@@ -1,190 +1,184 @@
-<h1>Plan</h1>
+<div class="page-head">
+  <h1>Plan</h1>
+  @if (data()) {
+    <!-- PLN-05 -->
+    <button mat-stroked-button type="button" (click)="addCategory()">
+      <mat-icon>add</mat-icon>
+      Add category
+    </button>
+  }
+</div>
 
 @if (loadError()) {
   <p class="error" role="alert">{{ loadError() }}</p>
 } @else if (data(); as d) {
-  <p class="caption fy">
-    {{ d.fiscalYear.label }} · {{ formatDate(d.fiscalYear.startDate) }} to {{ formatDate(d.fiscalYear.endDate) }}
-  </p>
+  <!-- Owner's choice (M8): an FY selector when more than one FY exists, as MON-03. -->
+  @if (d.fiscalYears.length > 1) {
+    <mat-form-field subscriptSizing="dynamic" class="fy-select">
+      <mat-label>Fiscal year</mat-label>
+      <mat-select [value]="d.fiscalYear.id" (selectionChange)="setFiscalYear($event.value)">
+        @for (fy of d.fiscalYears; track fy.id) {
+          <mat-option [value]="fy.id">{{ fy.label }} · {{ formatDate(fy.startDate) }} to {{ formatDate(fy.endDate) }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  } @else {
+    <p class="caption fy">
+      {{ d.fiscalYear.label }} · {{ formatDate(d.fiscalYear.startDate) }} to {{ formatDate(d.fiscalYear.endDate) }}
+    </p>
+  }
   <p class="status" aria-live="polite">{{ status() }}</p>
 
-  <div class="cards">
-    <!-- PLN-03: planned, income and unplanned income per month (R-PLN-03), shown as "Unassigned". -->
-    <section class="card">
-      <h2 class="card-title">Totals per month</h2>
-      <table class="totals">
-        <thead>
-          <tr>
-            <th scope="col">Month</th>
-            <th scope="col" class="num">Planned</th>
-            <th scope="col" class="num">Income</th>
-            <th scope="col" class="num">Unassigned</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (row of totalRows(); track row.period.key) {
+  <!-- PLN-03, R-PLN-03: every month's planned, income and unassigned at once (owner's choice, M8:
+       the table turned sideways). Sticky on desktop; it can be folded on phones. -->
+  <section class="card totals-card" aria-labelledby="totals-title">
+    <div class="card-head">
+      <h2 id="totals-title">Totals per month <span class="caption">({{ currency() }})</span></h2>
+      <button mat-button type="button" class="fold" [attr.aria-expanded]="totalsOpen()" (click)="totalsOpen.set(!totalsOpen())">
+        {{ totalsOpen() ? 'Hide' : 'Show' }}
+      </button>
+    </div>
+    @if (totalsOpen()) {
+      <div class="scroll">
+        <!-- Equal month columns; the table scrolls sideways when they do not fit. -->
+        <table class="totals" [style.min-width.px]="labelWidth + columns().length * columnWidth">
+          <caption class="caption">Select a month to see its amounts below.</caption>
+          <thead>
             <tr>
-              <th scope="row">
-                {{ row.period.label }}
-                <span class="caption dates">{{ formatDay(row.period.startDate) }} to {{ formatDay(row.period.endDate) }}</span>
-              </th>
-              <td class="num money" data-label="Planned">{{ money(row.totals?.planned) }}</td>
-              <td class="num money" data-label="Income">{{ money(row.totals?.income) }}</td>
-              <td
-                class="num money"
-                data-label="Unassigned"
-                [class.ok]="(row.totals?.unplanned ?? 0) >= 0"
-                [class.danger]="(row.totals?.unplanned ?? 0) < 0"
-              >
-                {{ money(row.totals?.unplanned) }}
-              </td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </section>
-
-    <!-- PLN-06 -->
-    @if (!hasSubCategories()) {
-      <section class="card empty">
-        <h2>Add your first sub-category</h2>
-        <p class="note">
-          Choose a category below and add a sub-category, for example Groceries under Food. Then enter the
-          planned amount for each month.
-        </p>
-      </section>
-    }
-
-    @for (category of activeCategories(); track category.id) {
-      <section class="card">
-        <div class="card-title category-title">
-          <h2>{{ category.name }}</h2>
-          <span class="money">{{ money(categoryTotal(category.id)) }}</span>
-        </div>
-
-        <ul class="subs">
-          @for (sub of category.subCategories; track sub.id) {
-            <li>
-              <div class="sub-row">
-                <span class="sub-name">{{ sub.name }}</span>
-                <span class="money">{{ money(subTotal(sub.id)) }}</span>
-                @if (editing()?.id !== sub.id) {
-                  <button mat-button type="button" (click)="openEditor(sub)" [attr.aria-label]="'Edit amounts of ' + sub.name">
-                    Edit
+              <td></td>
+              @for (column of columns(); track column.period.key) {
+                <th scope="col" [class.selected]="column.period.key === selected()?.key">
+                  <button
+                    type="button"
+                    class="month"
+                    [attr.aria-pressed]="column.period.key === selected()?.key"
+                    [title]="column.period.label + ' · ' + formatDay(column.period.startDate) + ' to ' + formatDay(column.period.endDate)"
+                    (click)="selectMonth(column.period.key)"
+                  >
+                    {{ column.month }}
+                    <span class="caption">{{ column.year }}</span>
                   </button>
-                }
-              </div>
-
-              @if (editing()?.id === sub.id) {
-                <div class="editor" role="group" [attr.aria-label]="'Amounts of ' + sub.name">
-                  <div class="add-row">
-                    <mat-form-field>
-                      <mat-label>Same amount for all months</mat-label>
-                      <input
-                        matInput
-                        [formControl]="sameAmount"
-                        inputmode="decimal"
-                        autocomplete="off"
-                        (keydown.enter)="$event.preventDefault(); applyToAll()"
-                      />
-                      @if (sameAmount.invalid) {
-                        <mat-error>Enter 0 to 10,000,000 with at most 2 decimals.</mat-error>
-                      }
-                    </mat-form-field>
-                    <button mat-stroked-button type="button" (click)="applyToAll()">Apply to all</button>
-                  </div>
-
-                  <div class="months">
-                    @for (period of periods(); track period.key; let i = $index) {
-                      <div class="month">
-                        <mat-form-field>
-                          <mat-label>{{ period.label }}</mat-label>
-                          <input matInput [formControl]="months.at(i)" inputmode="decimal" autocomplete="off" />
-                          <mat-hint>{{ formatDay(period.startDate) }} to {{ formatDay(period.endDate) }}</mat-hint>
-                          @if (months.at(i).invalid) {
-                            <mat-error>0 to 10,000,000, at most 2 decimals.</mat-error>
-                          }
-                        </mat-form-field>
-                        @if (i > 0) {
-                          <button
-                            mat-icon-button
-                            type="button"
-                            class="copy"
-                            (click)="copyPrevious(i)"
-                            [attr.aria-label]="'Copy from ' + periods()[i - 1].label"
-                            [title]="'Copy from ' + periods()[i - 1].label"
-                          >
-                            <mat-icon>arrow_downward</mat-icon>
-                          </button>
-                        } @else {
-                          <span class="copy" aria-hidden="true"></span>
-                        }
-                      </div>
-                    }
-                  </div>
-
-                  <p class="caption">Leave a month empty or enter 0 when nothing is planned.</p>
-                  @if (saveError()) {
-                    <p class="error" role="alert">{{ saveError() }}</p>
-                  }
-                  <div class="actions">
-                    <button mat-stroked-button type="button" (click)="cancel()">Cancel</button>
-                    <button mat-flat-button type="button" [disabled]="busy()" (click)="save()">Save</button>
-                  </div>
-                </div>
+                </th>
               }
-            </li>
-          }
-        </ul>
-
-        <div class="add-row">
-          <mat-form-field>
-            <mat-label>New sub-category in {{ category.name }}</mat-label>
-            <input
-              matInput
-              [formControl]="newSubCategory(category)"
-              [maxlength]="nameMax"
-              autocomplete="off"
-              (keydown.enter)="$event.preventDefault(); addSubCategory(category)"
-            />
-            @if (newSubCategory(category).hasError('duplicate')) {
-              <mat-error>{{ category.name }} already has this sub-category.</mat-error>
-            } @else if (newSubCategory(category).hasError('name')) {
-              <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
-            } @else if (newSubCategory(category).hasError('failed')) {
-              <mat-error>It could not be added. Please try again.</mat-error>
-            }
-          </mat-form-field>
-          <button mat-stroked-button type="button" [disabled]="busy()" (click)="addSubCategory(category)">Add</button>
-        </div>
-      </section>
-    }
-
-    <!-- PLN-05 -->
-    <section class="card">
-      <h2 class="card-title">Add a category</h2>
-      <div class="add-row">
-        <mat-form-field>
-          <mat-label>Category name</mat-label>
-          <input
-            matInput
-            [formControl]="newCategory"
-            [maxlength]="nameMax"
-            autocomplete="off"
-            (keydown.enter)="$event.preventDefault(); addCategory()"
-          />
-          @if (newCategory.hasError('duplicate')) {
-            <mat-error>This category already exists.</mat-error>
-          } @else if (newCategory.hasError('name')) {
-            <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
-          } @else if (newCategory.hasError('failed')) {
-            <mat-error>It could not be added. Please try again.</mat-error>
-          }
-        </mat-form-field>
-        <button mat-stroked-button type="button" [disabled]="busy()" (click)="addCategory()">Add</button>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Planned</th>
+              @for (column of columns(); track column.period.key) {
+                <td class="money" [class.selected]="column.period.key === selected()?.key">{{ column.planned }}</td>
+              }
+            </tr>
+            <tr>
+              <th scope="row">Income</th>
+              @for (column of columns(); track column.period.key) {
+                <td class="money" [class.selected]="column.period.key === selected()?.key">{{ column.income }}</td>
+              }
+            </tr>
+            <tr>
+              <!-- R-PLN-03 "unplanned income", shown as "Unassigned" (owner's choice, M6). -->
+              <th scope="row">Unassigned</th>
+              @for (column of columns(); track column.period.key) {
+                <td
+                  class="money"
+                  [class.selected]="column.period.key === selected()?.key"
+                  [class.ok]="!column.over"
+                  [class.danger]="column.over"
+                >
+                  {{ column.unplanned }}
+                </td>
+              }
+            </tr>
+          </tbody>
+        </table>
       </div>
+    } @else if (selectedColumn(); as column) {
+      <p class="folded">
+        {{ column.period.label }} · Unassigned
+        <span class="money" [class.ok]="!column.over" [class.danger]="column.over">{{ column.unplanned }}</span>
+      </p>
+    }
+  </section>
+
+  <!-- PLN-06 -->
+  @if (!hasSubCategories()) {
+    <section class="card empty">
+      <h2>Add your first sub-category</h2>
+      <p class="note">
+        Open a category below and add a sub-category, for example Groceries under Food. Then enter the planned
+        amount for each month.
+      </p>
     </section>
-  </div>
+  }
+
+  <!-- PLN-01: categories (closed at first) with their sub-categories. -->
+  <section class="card" aria-labelledby="list-title">
+    <div class="card-head">
+      <h2 id="list-title">
+        Planned in {{ selected()?.label }}
+        @if (selected(); as month) {
+          <span class="caption">{{ formatDay(month.startDate) }} to {{ formatDay(month.endDate) }}</span>
+        }
+      </h2>
+      <a routerLink="/months" [queryParams]="{ fyId: d.fiscalYear.id, view: 'year' }">See the year grid</a>
+    </div>
+    <ul class="list">
+      @for (category of rows(); track category.id) {
+        <li>
+          <div class="row category">
+            <button type="button" class="expand" [attr.aria-expanded]="isOpen(category.id)" (click)="toggle(category.id)">
+              <mat-icon class="chevron" [class.open]="isOpen(category.id)" aria-hidden="true">chevron_right</mat-icon>
+              <span class="name">
+                <span class="strong">{{ category.name }}</span>
+                @if (category.archived) {
+                  <span class="caption"> (archived)</span>
+                }
+                <span class="caption line">FY total {{ money(category.total) }}</span>
+              </span>
+              <span class="money">{{ money(category.month) }}</span>
+            </button>
+          </div>
+          @if (isOpen(category.id)) {
+            <ul class="subs">
+              @for (sub of category.subs; track sub.id) {
+                <li class="row sub" [class.flash]="flashId() === sub.id">
+                  <span class="name">
+                    {{ sub.name }}
+                    @if (sub.hidden) {
+                      <span class="caption">(archived)</span>
+                    }
+                    <span class="caption line">FY total {{ money(sub.total) }}</span>
+                  </span>
+                  <span class="money">{{ money(sub.month) }}</span>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    (click)="edit(sub, category.name)"
+                    [attr.aria-label]="'Edit amounts of ' + sub.name"
+                    [title]="'Edit amounts of ' + sub.name"
+                  >
+                    <mat-icon>edit</mat-icon>
+                  </button>
+                </li>
+              } @empty {
+                <li class="note">No sub-categories yet.</li>
+              }
+              @if (!category.archived) {
+                <li>
+                  <button mat-button type="button" class="add-sub" (click)="addSubCategory(category)">
+                    <mat-icon>add</mat-icon>
+                    Add sub-category
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+        </li>
+      } @empty {
+        <li class="note">No categories yet. Use "Add category" above.</li>
+      }
+    </ul>
+  </section>
 } @else {
   <p class="caption">Loading…</p>
 }

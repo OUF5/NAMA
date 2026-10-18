@@ -3,6 +3,10 @@
 @if (loadError()) {
   <p class="error" role="alert">{{ loadError() }}</p>
 } @else if (data(); as d) {
+  <!-- FY-01: during the last month of the latest FY and after it ends. -->
+  @if (d.rollover; as rollover) {
+    <app-rollover-banner [rollover]="rollover" (started)="rolledOver($event.fiscalYear.label)" />
+  }
   <div class="toolbar">
     <!-- MON-03: the FY selector appears when more than one FY exists. -->
     @if (d.fiscalYears.length > 1) {

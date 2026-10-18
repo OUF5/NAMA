@@ -2,10 +2,12 @@ using Api.Features.BankAccounts;
 using Api.Features.Categories;
 using Api.Features.Entries;
 using Api.Features.FiscalYears;
+using Api.Features.Income;
 using Api.Features.Indicator;
 using Api.Features.Overview;
 using Api.Features.Plans;
 using Api.Features.Profile;
+using Api.Features.Settings;
 using Api.Features.Setup;
 using Api.Infrastructure;
 
@@ -59,11 +61,14 @@ api.MapGet("/health", (IConfiguration config) =>
     .AllowAnonymous();
 
 api.MapMe();
+api.MapProfile();
+api.MapSettings();
 api.MapSetup();
 api.MapFiscalYears();
 api.MapCategories();
 api.MapPlans();
 api.MapBankAccounts();
+api.MapIncome();
 api.MapEntries();
 api.MapIndicator();
 api.MapOverview();

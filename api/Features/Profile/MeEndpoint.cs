@@ -16,7 +16,11 @@ public static class MeEndpoint
         string Timezone,
         int FiscalStartMonth,
         int PaydayDay,
-        string? LastBankAccountId);
+        string? LastBankAccountId)
+    {
+        public static ProfileDto From(UserProfile profile) => new(profile.DisplayName, profile.Email, profile.ProjectName,
+            profile.Currency, profile.Timezone, profile.FiscalStartMonth, profile.PaydayDay, profile.LastBankAccountId);
+    }
 
     // DateOnly is sent as YYYY-MM-DD.
     public record PeriodDto(string Key, string Label, DateOnly StartDate, DateOnly EndDate)
@@ -58,8 +62,7 @@ public static class MeEndpoint
         var current = FiscalCalendar.FindPeriod(fiscalYears, today);
         return new MeResponse(
             profile.SetupCompleted,
-            new ProfileDto(profile.DisplayName, profile.Email, profile.ProjectName, profile.Currency,
-                profile.Timezone, profile.FiscalStartMonth, profile.PaydayDay, profile.LastBankAccountId),
+            ProfileDto.From(profile),
             current?.FiscalYear.Id,
             current?.Period.Key,
             current is { } found ? PeriodDto.From(found.Period) : null,

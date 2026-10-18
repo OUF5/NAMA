@@ -1,0 +1,84 @@
+// docs/DESIGN.md "Dialogs": outline inputs, Save as the one filled button, full screen on phones
+// (set when the dialog opens). Tokens only.
+form {
+  display: contents;
+}
+
+h2 .caption {
+  display: block;
+  font-weight: 400;
+}
+
+.same {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+
+  mat-form-field {
+    flex: 1;
+    min-width: 0;
+  }
+
+  button {
+    margin-top: 4px;
+  }
+}
+
+.months {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+// Input, copy button, then "Unassigned after".
+.month {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px 180px;
+  align-items: start;
+  gap: 4px 8px;
+
+  .copy {
+    margin-top: 4px;
+  }
+
+  .after {
+    padding-top: 12px;
+    text-align: right;
+  }
+}
+
+.ok {
+  color: var(--ok);
+}
+
+.danger {
+  color: var(--danger);
+}
+
+p {
+  margin: 8px 0 0;
+}
+
+.error {
+  color: var(--danger);
+}
+
+mat-dialog-actions {
+  gap: 8px;
+}
+
+@media (max-width: 767.98px) {
+  .month {
+    grid-template-columns: minmax(0, 1fr) 44px;
+
+    .after {
+      grid-column: 1 / -1;
+      padding: 0 0 8px;
+      text-align: left;
+    }
+  }
+
+  mat-dialog-actions button {
+    height: 44px;
+  }
+}

@@ -1,4 +1,4 @@
-import { formatDate, fromDateString, periodWithDates, toDateString } from './month-label';
+import { formatDate, fromDateString, monthKeyLabel, periodWithDates, toDateString } from './month-label';
 
 describe('month label and dates', () => {
   it('shows a month with its dates (R-CAL-03)', () => {
@@ -6,6 +6,11 @@ describe('month label and dates', () => {
       'Sep 2026 · 27 Sep to 26 Oct',
     );
     expect(formatDate('2027-01-26')).toBe('26 Jan 2027');
+  });
+
+  it('labels a month key by the month it starts in', () => {
+    expect(monthKeyLabel('2026-03')).toBe('Mar 2026');
+    expect(monthKeyLabel('2027-12')).toBe('Dec 2027');
   });
 
   // The date picker works with local dates; the API takes YYYY-MM-DD.

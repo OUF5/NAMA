@@ -377,6 +377,38 @@ public class FiscalCalendarTests
         Assert.Equal(expected, FiscalCalendar.PreviousKey(key));
     }
 
+    [Theory]
+    [InlineData("2027-03", "2026-03")]
+    [InlineData("2028-01", "2027-01")]
+    public void Year_earlier_key(string key, string expected)
+    {
+        Assert.Equal(expected, FiscalCalendar.YearEarlierKey(key));
+    }
+
+    // FY-01, FY-02: Dec 2026 (27 Dec 2026 to 26 Jan 2027) is the last month of FY 2026.
+    [Theory]
+    [InlineData("2026-10-17", false)]
+    [InlineData("2026-12-26", false)]
+    [InlineData("2026-12-27", true)]
+    [InlineData("2027-01-26", true)]
+    [InlineData("2027-03-01", true)]
+    public void Next_fiscal_year_can_start_in_the_last_month_and_after(string today, bool expected)
+    {
+        var fy2026 = FiscalCalendar.FirstFiscalYear(Today, fiscalStartMonth: 1, payday: 27);
+
+        Assert.Equal(expected, FiscalCalendar.CanStartNext(fy2026, Date(today)));
+    }
+
+    [Fact]
+    public void Latest_is_the_fiscal_year_that_starts_last()
+    {
+        var fy2026 = FiscalCalendar.FirstFiscalYear(Today, fiscalStartMonth: 1, payday: 27);
+        var transition = FiscalCalendar.NextFiscalYear(fy2026, fiscalStartMonth: 7, payday: 27);
+
+        Assert.Equal(transition, FiscalCalendar.Latest([transition, fy2026]));
+        Assert.Null(FiscalCalendar.Latest([]));
+    }
+
     // PRD 4.7: payday is 1 to 31, FY start month is 1 to 12.
     [Theory]
     [InlineData(1, 0)]

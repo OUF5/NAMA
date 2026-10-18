@@ -2,6 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PeriodInfo } from '../../shared/month-label';
+import { Rollover } from '../../shared/rollover-banner';
 import { Category, FiscalYear } from '../plan/plan-api';
 
 // GET /api/fiscal-years/{fyId}/overview (PRD 7.5). Amounts are decimals in JSON (R-MON-01); every
@@ -49,7 +50,7 @@ export interface Totals {
 }
 
 // fiscalYears (oldest first) feed the MON-03 selector; categories is GET /api/categories (names and
-// the edit dialog's pickers).
+// the edit dialog's pickers). rollover is the FY-01 banner (null when hidden).
 export interface OverviewResponse {
   fiscalYears: FiscalYear[];
   fyId: string;
@@ -57,6 +58,7 @@ export interface OverviewResponse {
   categories: Category[];
   rows: CategoryRow[];
   totals: Totals;
+  rollover: Rollover | null;
 }
 
 @Injectable({ providedIn: 'root' })

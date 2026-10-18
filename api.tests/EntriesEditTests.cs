@@ -17,7 +17,7 @@ public class EntriesEditTests(ApiFactory factory) : IClassFixture<ApiFactory>
         await factory.Store.AddSubCategoryAsync(sub, new SubCategory("groceries", "food", "Groceries", 0));
         await factory.Store.AddSubCategoryAsync(sub, new SubCategory("fuel", "transport", "Fuel", 0));
         await factory.Store.AddSubCategoryAsync(sub, new SubCategory("old", "food", "Old", 1, Archived: true));
-        await factory.Store.AddBankAccount(sub, new BankAccount("closed", "Closed account", Archived: true));
+        await factory.Store.AddBankAccountAsync(sub, new BankAccount("closed", "Closed account", Archived: true));
         await factory.Store.SetPlanAsync(sub, "2026-01",
             new PlanAmounts("groceries", "food", new Dictionary<string, long> { ["2026-09"] = 150_000 }));
         return sub;

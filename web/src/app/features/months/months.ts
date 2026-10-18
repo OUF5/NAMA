@@ -15,6 +15,7 @@ import { MeService } from '../../core/me';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
 import { formatMoney, toMinor } from '../../shared/money';
 import { formatDate, formatDay } from '../../shared/month-label';
+import { RolloverBanner } from '../../shared/rollover-banner';
 import { EntriesResponse, Entry, EntryApi } from '../add-entry/entry-api';
 import { openEntryDialog } from '../entries/entry-dialog';
 import { PlanApi } from '../plan/plan-api';
@@ -46,6 +47,7 @@ interface MonthEntries {
     MatIconModule,
     MatProgressBarModule,
     MatSelectModule,
+    RolloverBanner,
     YearGrid,
   ],
   providers: [OUTLINE_FORM_FIELDS],
@@ -155,6 +157,11 @@ export class Months {
   constructor() {
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       this.urlFyId = params.get('fyId');
+      // Plan's "See the year grid" link (M8) opens the Year view.
+      const view = params.get('view');
+      if (view === 'months' || view === 'year') {
+        this.setView(view);
+      }
       void this.load(true);
     });
   }
@@ -212,6 +219,13 @@ export class Months {
         void this.load(false);
       }
     });
+  }
+
+  // FY-01, FY-02: the new FY exists, so the banner goes and the months are loaded again. Without an
+  // FY in the URL the page follows the new /api/me (the FY that now contains today).
+  protected rolledOver(label: string): void {
+    this.status.set(`${label} started.`);
+    void this.load(true);
   }
 
   // A new FY (fresh = true) starts with only the in-progress month open, scrolled into view

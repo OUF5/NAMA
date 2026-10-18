@@ -1,0 +1,31 @@
+<h2 mat-dialog-title>Change salary</h2>
+<form [formGroup]="form" (ngSubmit)="save()" novalidate>
+  <mat-dialog-content>
+    <p class="note">Months before the one you pick keep the old salary.</p>
+    <mat-form-field>
+      <mat-label>New salary ({{ data.currency }})</mat-label>
+      <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
+      <mat-error>Enter 0 to 10,000,000 with at most 2 decimals.</mat-error>
+    </mat-form-field>
+    <mat-form-field>
+      <mat-label>Effective from</mat-label>
+      <mat-select formControlName="from">
+        @for (group of data.groups; track group.label) {
+          <mat-optgroup [label]="group.label">
+            @for (month of group.months; track month.key) {
+              <mat-option [value]="month.key">{{ month.text }}</mat-option>
+            }
+          </mat-optgroup>
+        }
+      </mat-select>
+      <mat-error>Pick a month.</mat-error>
+    </mat-form-field>
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+  </mat-dialog-content>
+  <mat-dialog-actions>
+    <button mat-stroked-button type="button" mat-dialog-close>Cancel</button>
+    <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+  </mat-dialog-actions>
+</form>

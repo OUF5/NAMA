@@ -4,7 +4,8 @@ using static Api.Tests.ApiCalls;
 
 namespace Api.Tests;
 
-// PRD 7.5 categories and sub-categories: list and add (PLN-01, PLN-05, PRD 4.7). No DELETE (PRD 4.6).
+// PRD 7.5 categories and sub-categories: list and add (PLN-01, PLN-05, PRD 4.7), rename, archive and
+// restore (STG-05). No DELETE (PRD 4.6).
 public class CategoriesTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     private Task<HttpResponseMessage> AddCategory(string sub, JsonNode body) =>
@@ -118,11 +119,82 @@ public class CategoriesTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(["Food", "Transport"], (await GetCategories(other)).Select(c => c!["name"]!.GetValue<string>()));
     }
 
+    private Task<HttpResponseMessage> Update(string sub, string url, string? name, bool? archived) =>
+        Send(factory, HttpMethod.Put, url, sub, new JsonObject { ["name"] = name, ["archived"] = archived });
+
+    // STG-05: rename, archive and restore a category. The answer has its sub-categories.
+    [Fact]
+    public async Task A_category_can_be_renamed_archived_and_restored()
+    {
+        var sub = await SetUpUser(factory);
+        Assert.Equal(HttpStatusCode.Created, (await AddSubCategory(sub, "food", "Groceries")).StatusCode);
+
+        var response = await Update(sub, "/api/categories/food", "  Groceries & food ", true);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var category = await Json(response);
+        Assert.Equal(("Groceries & food", true, 0, 1),
+            (category["name"]!.GetValue<string>(), category["archived"]!.GetValue<bool>(), category["sortOrder"]!.GetValue<int>(),
+                category["subCategories"]!.AsArray().Count));
+        // The sub-category keeps its own flag (no cascade).
+        Assert.False((await GetCategories(sub))[0]!["subCategories"]![0]!["archived"]!.GetValue<bool>());
+
+        Assert.Equal(HttpStatusCode.OK, (await Update(sub, "/api/categories/food", "Food", false)).StatusCode);
+        Assert.False((await GetCategories(sub))[0]!["archived"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task A_renamed_category_must_stay_unique_ignoring_case()
+    {
+        var sub = await SetUpUser(factory);
+
+        await AssertError(await Update(sub, "/api/categories/food", "TRANSPORT", false), "Name");
+        Assert.Equal(HttpStatusCode.OK, (await Update(sub, "/api/categories/food", "FOOD", false)).StatusCode);
+        await AssertError(await Update(sub, "/api/categories/food", "", false), "Name");
+        await AssertError(await Update(sub, "/api/categories/food", "Food", null), "Archived");
+        Assert.Equal(["FOOD", "Transport"], (await GetCategories(sub)).Select(c => c!["name"]!.GetValue<string>()));
+    }
+
+    [Fact]
+    public async Task A_sub_category_can_be_renamed_archived_and_restored_within_its_category()
+    {
+        var sub = await SetUpUser(factory);
+        var groceries = (await Json(await AddSubCategory(sub, "food", "Groceries")))["id"]!.GetValue<string>();
+        Assert.Equal(HttpStatusCode.Created, (await AddSubCategory(sub, "food", "Dining out")).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, (await AddSubCategory(sub, "transport", "Fuel")).StatusCode);
+
+        await AssertError(await Update(sub, $"/api/sub-categories/{groceries}", "dining OUT", false), "Name");
+        var response = await Update(sub, $"/api/sub-categories/{groceries}", " Fuel ", true);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = await Json(response);
+        Assert.Equal(("Fuel", true, "food", 0),
+            (updated["name"]!.GetValue<string>(), updated["archived"]!.GetValue<bool>(), updated["categoryId"]!.GetValue<string>(),
+                updated["sortOrder"]!.GetValue<int>()));
+        Assert.Equal(HttpStatusCode.OK, (await Update(sub, $"/api/sub-categories/{groceries}", "Fuel", false)).StatusCode);
+        Assert.False((await GetCategories(sub))[0]!["subCategories"]![0]!["archived"]!.GetValue<bool>());
+    }
+
+    [Fact]
+    public async Task Unknown_or_other_users_items_return_404()
+    {
+        var owner = await SetUpUser(factory);
+        var groceries = (await Json(await AddSubCategory(owner, "food", "Groceries")))["id"]!.GetValue<string>();
+        var health = (await Json(await AddCategory(owner, new JsonObject { ["name"] = "Health" })))["id"]!.GetValue<string>();
+        var other = await SetUpUser(factory);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await Update(other, $"/api/categories/{health}", "Health", false)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Update(other, $"/api/sub-categories/{groceries}", "Groceries", false)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Update(owner, "/api/categories/missing", "X", false)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await Update(owner, "/api/sub-categories/missing", "X", false)).StatusCode);
+    }
+
     // PRD 4.6: categories and sub-categories cannot be deleted.
     [Theory]
     [InlineData("/api/categories")]
     [InlineData("/api/categories/food")]
     [InlineData("/api/sub-categories")]
+    [InlineData("/api/sub-categories/groceries")]
     public async Task There_is_no_delete(string url)
     {
         var sub = await SetUpUser(factory);
@@ -137,6 +209,8 @@ public class CategoriesTests(ApiFactory factory) : IClassFixture<ApiFactory>
     [InlineData("GET", "/api/categories")]
     [InlineData("POST", "/api/categories")]
     [InlineData("POST", "/api/sub-categories")]
+    [InlineData("PUT", "/api/categories/food")]
+    [InlineData("PUT", "/api/sub-categories/groceries")]
     public async Task Calls_without_a_token_return_401(string method, string url)
     {
         var response = await factory.CreateClient().SendAsync(new HttpRequestMessage(new HttpMethod(method), url));
