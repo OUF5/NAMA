@@ -2,6 +2,7 @@
 
 ## Status
 
+- **Phase 1: complete (18 Oct 2026).** Every milestone (M0 to M10) is deployed, every Definition of Done item below is ticked, and the owner confirmed every open production check. Phase 2 (the full dashboard, PRD 10) is not started.
 - **M0 Skeleton and pipeline: done (17 Oct 2026).** A push to `main` deployed commit `c1205d6`. https://nama-b6bda.web.app returns 200, and `/api/health` returns `{"status":"ok","version":"c1205d60220e24b1d2ad98f025ce79fef2f75f1f"}`. One-time setup is complete: Firestore (default) database in `me-central1`, Workload Identity for `OUF5/NAMA`, 5 GitHub variables, and the Artifact Registry cleanup policy (keep 5 newest).
 - **M1 Sign-in: done (17 Oct 2026).** All three "Done when" checks pass on production (https://nama-b6bda.web.app):
   - The owner's email signs in and lands on Setup (owner confirmed).
@@ -74,7 +75,7 @@
   - The owner checked the page locally (emulator) and approved the push. That check led to four changes before the push: the "Upcoming" label, 5 entries per card with a link to Entries, one-line entries, and Remaining in the status color (see Decisions).
   - Commit `42be360` deployed, and every CI step passed (`dotnet test`: 358 of 358).
   - On production, `/api/health` returns version `42be360…`. `GET /api/fiscal-years/2026-01/overview` returns 401 with `Cache-Control: no-store` without a token, and `/months` returns 200.
-  - Still open: the owner's production check that Sep 2026 shows In progress on `/months` and that a few Year cells match their Entries totals.
+  - The owner confirmed on 18 Oct 2026 that Sep 2026 shows In progress on `/months` on production and that the Year cells match their Entries totals.
 - **M8 Settings and FY rollover: done (18 Oct 2026).** The Settings page (STG-01 to STG-06), the rollover (FY-01 to FY-03, R-CAL-07, R-CAL-08) with the FY-01 banner on Months, salary history and additional income (R-INC-02, R-INC-03), rename/archive/restore for accounts, categories and sub-categories, and Plan's FY selector.
   - New endpoints: `GET /api/settings`, `PUT /api/profile`, `PUT /api/settings/calendar`, `POST /api/fiscal-years/next`, `GET /api/income`, `POST /api/income/salary`, `POST`/`PUT`/`DELETE /api/income/additional[/{id}]`, `POST /api/bank-accounts`, `PUT /api/bank-accounts/{id}`, `PUT /api/categories/{id}`, `PUT /api/sub-categories/{id}`. No DELETE for categories, sub-categories or accounts.
   - Locally: `dotnet test api.tests` passed 434 of 434 (358 before). `npm run build` passed with no warnings: initial 535.01 kB (533.96 kB before), Settings chunk 58.40 kB lazy. `npx ng test --watch=false` passed 96 of 96 (86 before), 3 runs in a row. No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
@@ -92,7 +93,7 @@
   - The owner checked everything locally with the recipe under Decisions and approved it. That check led to the Settings, Sign out and Plan design changes under Decisions; the final local run passed `dotnet test` 434 of 434, `npm run build` with no warnings (initial 540.26 kB) and `npx ng test --watch=false` 105 of 105.
   - Commit `90b0534` deployed, and every CI step passed (`dotnet test`: 434 of 434).
   - On production, `/api/health` returns version `90b0534…`. All 13 new routes return 401 with `Cache-Control: no-store` without a token, and `/settings`, `/settings/income` and `/plan` return 200.
-  - Still open: the owner's production check of Settings and Plan (and the M7 one above).
+  - The owner checked Settings and Plan on production and confirmed them (18 Oct 2026).
 - **M9 Dashboard preview and polish: deployed (18 Oct 2026).** Dashboard (DSH-01 to DSH-03) with the FY-01 banner, UX-03 empty states, UX-06 PWA (manifest and icons, no service worker). The overview response gets `toDate` (DSH-02).
   - Locally: `dotnet test api.tests` passed 449 of 449 (434 before; 15 new). `npm run build` passed with no warnings: initial 539.98 kB (540.26 kB before), Dashboard chunk 14.37 kB lazy. `npx ng test --watch=false` passed 119 of 119 (105 before). No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
   - Hand check (`OverviewTests`, the M7 data, today 17 Oct 2026). FY to date covers Jan to Sep 2026:
@@ -108,7 +109,7 @@
     - `/api/health` returns version `678ffcb…`.
     - `/api/me` and `/api/fiscal-years/2026-01/overview` return 401 with `Cache-Control: no-store` without a token.
     - `/manifest.webmanifest` is served as `application/manifest+json`, and `favicon.svg`, `favicon.ico`, `sign-in-bg.svg` and the 4 icons return 200. `index.html` links the manifest, both tab icons and the apple-touch-icon.
-  - Still open: the owner's look at the deployed M9 pages (the owner's earlier production check ran while the deploy was still in progress), the iPhone Home Screen sign-in, and the budget alert.
+  - The owner checked the deployed M9 pages, Google sign-in inside the iPhone Home Screen app, and the budget alert, and confirmed all three (18 Oct 2026).
 - **M10 Invite links: done (18 Oct 2026).** AUTH-02 (changed), AUTH-06, AUTH-07 and STG-07: admins from `ALLOWED_EMAILS`, single-use invite links that expire after 7 days, Settings → People, and the new no-access sentence. The PRD changes are in sections 1, 5.1, 5.7, 7.4 to 7.7, NFR-03, 8 (the M10 row) and 11.
   - New endpoints: `POST /api/invites`, `DELETE /api/invites/{id}`, `DELETE /api/people/{memberId}` (admins only) and `POST /api/invites/accept` (signed in, not yet allowed). `/api/me` gets `isAdmin`, and `/api/settings` gets `people` (null unless you are an admin).
   - Locally: `dotnet test api.tests` passed 478 of 478 (449 before; 29 new in `InvitesDomainTests`, `InvitesTests`, `PeopleTests`, `MemberCacheTests` and `FirestoreMappingTests`). `npm run build` passed with no warnings: initial 540.34 kB (539.98 kB before), Settings chunk 72.23 kB lazy. `npx ng test --watch=false` passed 134 of 134 (119 before). No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
@@ -165,14 +166,14 @@ Checked on 18 Oct 2026, before and after the M9 push (`678ffcb`). Ticked items h
   - End to end: `RolloverTests.Example_A_…` and `Example_B_…`.
 - [x] **No `double` or `float` in the API:** `grep -rnwE "double|float" api api.tests --include='*.cs' --exclude-dir=bin --exclude-dir=obj` finds nothing.
 - [x] **Firestore rules deny all browser access.** `firestore.rules` is `allow read, write: if false` on `/{document=**}`, and the workflow deploys it (`--only hosting,firestore`). An unauthenticated read of `https://firestore.googleapis.com/v1/projects/nama-b6bda/databases/(default)/documents/users` answers `403 PERMISSION_DENIED` ("Missing or insufficient permissions.").
-- [ ] **Works on a 360 px phone and on desktop.** The owner checked every page locally, and production up to M8. Waits for the owner's look at the deployed M9 pages.
-- [ ] **The budget alert exists, and Cloud Run max instances = 1.**
+- [x] **Works on a 360 px phone and on desktop.** The owner checked every page locally, and every page on production, M9 and M10 included (confirmed 18 Oct 2026).
+- [x] **The budget alert exists, and Cloud Run max instances = 1.**
   - Max instances, checked read-only with `gcloud run services describe nama-api --region=me-central1 --format=yaml`:
     - The revision has `autoscaling.knative.dev/maxScale: '1'` (the workflow's `--max-instances=1`).
     - The service has `run.googleapis.com/maxScale: '20'` (service level; nobody set it on purpose).
     - Cloud Run's docs say the effective limit is the lower of the two, so it is **1**.
   - Billing is enabled (`gcloud billing projects describe nama-b6bda`: account `01DEB3-536911-FBAE34`).
-  - Budget: `gcloud billing budgets list` failed. The local credentials have no quota project, and `billingbudgets.googleapis.com` is disabled for the gcloud client. Changing that would change settings, so **the owner confirms the 5 USD budget in the console** (Billing → Budgets & alerts).
+  - Budget: `gcloud billing budgets list` failed. The local credentials have no quota project, and `billingbudgets.googleapis.com` is disabled for the gcloud client. Changing that would change settings, so the owner checked the 5 USD budget in the console (Billing → Budgets & alerts) and confirmed it (18 Oct 2026).
 - [x] **The README covers local setup, deploy, environment variables and the one-time setup:**
   - local setup: the emulator, the API, the web app, and the three test and build commands;
   - deploy: the workflow steps and the GitHub variables;
@@ -460,13 +461,11 @@ Checked on 18 Oct 2026, before and after the M9 push (`678ffcb`). Ticked items h
 
 ### Before Phase 1 is done
 
-- The Angular CLI added an `analytics` id to `web/angular.json` during a local run. It is not committed. Keep it out of the repo (and turn it off with `ng analytics disable`)?
-- The owner's production checks still open from M7 (Sep 2026 In progress on `/months`, a few Year cells equal to their Entries totals) and M8 (Settings and Plan).
-- M9: on an iPhone, does Google sign-in (`signInWithPopup`) work inside the installed Home Screen app? If not, it is reported, not worked around.
-
-Answered in M9: "Dashboard will get `categories` and `rows`" (kept; see Decisions).
-
-- M10: The People list shows the email a person had when they joined. If they change the email on their Google account, the list keeps the old one. Is that fine?
+Nothing is open. Answered on 18 Oct 2026:
+- The Angular CLI's `analytics` id stays out of `web/angular.json`. The local change was discarded and never committed.
+- The M7 and M8 production checks, and Google sign-in inside the iPhone Home Screen app: confirmed by the owner (see Status).
+- M10: the People list keeps the email a person had when they joined. That is fine.
+- M9: "Dashboard will get `categories` and `rows`" (kept; see Decisions).
 
 ### Phase 2 / later
 
