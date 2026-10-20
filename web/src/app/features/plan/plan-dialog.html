@@ -23,13 +23,23 @@
 
     <ul class="months">
       @for (period of periods; track period.key; let i = $index) {
+        <!-- One compact row: the month and its dates (the visible label), the amount, copy, Unassigned after. -->
         <li class="month">
-          <mat-form-field>
-            <mat-label>{{ period.label }}</mat-label>
-            <input matInput [formControl]="months.at(i)" inputmode="decimal" autocomplete="off" />
-            <mat-hint>{{ formatDay(period.startDate) }} to {{ formatDay(period.endDate) }}</mat-hint>
+          <label class="when" [for]="'plan-month-' + i">
+            {{ period.label }}
+            <span class="caption">{{ formatDay(period.startDate) }} to {{ formatDay(period.endDate) }}</span>
+          </label>
+          <mat-form-field subscriptSizing="dynamic">
+            <input
+              matInput
+              [id]="'plan-month-' + i"
+              [formControl]="months.at(i)"
+              [attr.aria-label]="period.label"
+              inputmode="decimal"
+              autocomplete="off"
+            />
             @if (months.at(i).invalid) {
-              <mat-error>0 to 10,000,000, at most 2 decimals.</mat-error>
+              <mat-error>0 to 10,000,000, 2 decimals.</mat-error>
             }
           </mat-form-field>
           @if (i > 0) {

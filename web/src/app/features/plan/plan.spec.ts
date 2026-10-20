@@ -112,7 +112,9 @@ describe('Plan (PRD 5.3)', () => {
 
   function inputLabeled(root: ParentNode, label: string): HTMLInputElement {
     return Array.from(root.querySelectorAll('input')).find(
-      (el) => el.closest('mat-form-field')?.querySelector('mat-label')?.textContent?.trim() === label,
+      (el) =>
+        el.closest('mat-form-field')?.querySelector('mat-label')?.textContent?.trim() === label ||
+        el.getAttribute('aria-label') === label,
     )!;
   }
 

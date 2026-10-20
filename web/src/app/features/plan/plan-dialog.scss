@@ -17,6 +17,7 @@ h2 .caption {
   mat-form-field {
     flex: 1;
     min-width: 0;
+    max-width: 320px;
   }
 
   button {
@@ -24,30 +25,27 @@ h2 .caption {
   }
 }
 
-// Each month's dates sit in its field's hint line, and the next field's outline label rises above
-// its border, so the rows need a gap or the two lines touch.
 .months {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
   margin: 8px 0 0;
   padding: 0;
   list-style: none;
 }
 
-// Input, copy button, then "Unassigned after".
+// Month and dates, amount, copy button, then "Unassigned after". Rows are split by a divider.
 .month {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 44px 180px;
-  align-items: start;
-  gap: 4px 8px;
+  grid-template-columns: 140px 160px 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 0 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--divider);
 
-  .copy {
-    margin-top: 4px;
+  .when {
+    display: flex;
+    flex-direction: column;
   }
 
   .after {
-    padding-top: 12px;
     text-align: right;
   }
 }
@@ -74,11 +72,11 @@ mat-dialog-actions {
 
 @media (max-width: 767.98px) {
   .month {
-    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-columns: minmax(0, 1fr) 120px 44px;
+    gap: 4px 8px;
 
     .after {
       grid-column: 1 / -1;
-      padding: 0 0 8px;
       text-align: left;
     }
   }
