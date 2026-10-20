@@ -44,7 +44,7 @@ export const routes: Routes = [
   { path: 'months', redirectTo: 'tracker' },
   {
     path: 'add',
-    title: 'NAMA · Add',
+    title: 'NAMA · Add expense',
     canActivate: [authGuard, setupGuard],
     loadComponent: () => import('./features/add-entry/add-entry').then((m) => m.AddEntry),
   },

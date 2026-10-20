@@ -56,10 +56,10 @@ Use at most 3 sizes per screen, not counting KPIs.
 
 - **Spacing:** only 4, 8, 12, 16, 24 and 32px.
 - **Page:** content max-width 1100px, centered. Padding is 32px on desktop and 16px on phones (this lives in the shell's `.page`).
-- **Desktop:** a 240px sidebar on `--surface` with a right `--border`. The active item has a `--primary-soft` background, `--primary-text` color and 500 weight.
+- **Desktop:** a 240px sidebar on `--surface` with a right `--border`. The active item has a `--primary-soft` background, `--primary-text` color and 500 weight. "Add expense" is a filled bar (`--primary` background, `--on-primary` text, 500 weight, 0.9 opacity on hover and while open), so the main action stands apart; it is the shell's, not the page's, so a page keeps its own one filled button.
 - **Phones (under 768px):**
   - The sidebar is replaced by a bottom bar on `--surface` with a top `--border`.
-  - The bar has 5 items; Add sits in the center as a round 52px `--primary` button with a white plus.
+  - The bar has 5 items; Add expense sits in the center as a round 52px `--primary` button with a white plus (the label is for screen readers only).
   - The active item uses `--primary-text` and 600 weight.
   - Space is left for the iPhone home bar.
   - The Settings gear is a 44px icon button in the top bar, which also serves as the page header (17 / 600).

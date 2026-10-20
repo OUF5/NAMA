@@ -64,7 +64,7 @@ describe('App', () => {
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     const labels = Array.from(compiled.querySelectorAll('.nav > .nav-item span')).map((el) => el.textContent?.trim());
-    expect(labels).toEqual(['Dashboard', 'Entries', 'Add', 'Plan', 'Tracker']);
+    expect(labels).toEqual(['Dashboard', 'Entries', 'Add expense', 'Plan', 'Tracker']);
   });
 
   // Owner's choice (M8): Settings in the side bar, with its sections while you are in Settings.
@@ -128,11 +128,13 @@ describe('App', () => {
     });
   });
 
-  it('should show the Add button in the top bar (PRD 5.4)', async () => {
+  // PRD 5.4 (owner's choice, 20 Oct 2026): Add expense is one tap away in the nav; the top bar has no copy.
+  it('should show Add expense in the nav and not in the top bar', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.top-add')?.getAttribute('href')).toBe('/add');
+    expect(compiled.querySelector('.nav-add')?.getAttribute('href')).toBe('/add');
+    expect(compiled.querySelector('.top-bar a[href="/add"]')).toBeNull();
   });
 
   it('should hide navigation and settings when signed out or not allowed', async () => {
@@ -152,7 +154,7 @@ describe('App', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.nav')).toBeNull();
     expect(compiled.querySelector('[aria-label="Settings"]')).toBeNull();
-    expect(compiled.querySelector('.top-add')).toBeNull();
+    expect(compiled.querySelector('.nav-add')).toBeNull();
   });
 });
 

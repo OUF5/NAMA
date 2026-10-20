@@ -77,7 +77,7 @@ export class App {
   protected readonly navItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: 'dashboard' },
     { path: '/entries', label: 'Entries', icon: 'receipt_long' },
-    { path: '/add', label: 'Add', icon: 'add', prominent: true },
+    { path: '/add', label: 'Add expense', icon: 'add', prominent: true },
     { path: '/plan', label: 'Plan', icon: 'event_note' },
     { path: '/tracker', label: 'Tracker', icon: 'query_stats' },
   ];

@@ -270,7 +270,7 @@ Page **Plan** (`/plan`). It opens right after the wizard and is always in the na
 
 ### 5.4 Daily input: Add entry (ENT)
 
-Page **Add** (`/add`). Always one tap away: center button on phones, button in the top bar on desktop. 🆕 ADDED · Nice
+Page **Add** (`/add`). Always one tap away: center button on phones, the filled "Add expense" item in the side bar on desktop (✅ DECIDED 20 Oct 2026; the desktop top-bar button was removed as a repeat). 🆕 ADDED · Nice
 
 Fields in this order: **Category → Sub-category** (filtered by the category) **→ Amount → Bank account** (defaults to the last used one, ✅ DECIDED) **→ Date** (defaults to today, 🆕 ADDED · Must) **→ Note** (optional).
 
@@ -334,7 +334,7 @@ Page **Dashboard** (`/`), the landing page. Labeled "Preview: the full dashboard
 
 ### 5.10 Navigation and UX rules (UX)
 
-- **UX-01** Always-visible navigation with 5 items: Dashboard, Entries, **Add** (prominent, in the middle), Plan, Tracker (the Months page, 5.6). Plan and Tracker sit side by side because Tracker compares the plan with actual spending. ✅ DECIDED (20 Oct 2026; was Dashboard, Months, Add, Entries, Plan). Settings is a gear icon that is always visible in the top bar. Bottom bar on phones (under 768 px wide), side bar on desktop. No "More" menu. 🆕 ADDED · Must (your "no hidden things")
+- **UX-01** Always-visible navigation with 5 items: Dashboard, Entries, **Add expense** (prominent, in the middle; "Add" until 20 Oct 2026), Plan, Tracker (the Months page, 5.6). Plan and Tracker sit side by side because Tracker compares the plan with actual spending. ✅ DECIDED (20 Oct 2026; was Dashboard, Months, Add, Entries, Plan). Settings is a gear icon that is always visible in the top bar. Bottom bar on phones (under 768 px wide), side bar on desktop. No "More" menu. 🆕 ADDED · Must (your "no hidden things")
 - **UX-02** The top bar shows the NAMA name, your project name and the current month label.
 - **UX-03** Every page has a helpful empty state that says what to do next. 🆕 ADDED · Nice
 - **UX-04** Confirmations only for destructive actions (delete entry). Dialogs are never stacked. 🆕 ADDED · Nice

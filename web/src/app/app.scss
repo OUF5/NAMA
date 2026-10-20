@@ -56,11 +56,6 @@
   flex: 1;
 }
 
-// PRD 5.4: the desktop Add button in the top bar. Outlined, so a page's Save stays the one filled button.
-.top-add {
-  margin-right: 8px;
-}
-
 .layout {
   flex: 1;
   min-height: 0;
@@ -104,14 +99,20 @@
   }
 }
 
-// The circle grows outward (negative margin), so the Add label lines up with the others.
-.nav-add mat-icon {
-  box-sizing: content-box;
-  margin: -4px;
-  padding: 4px;
-  border-radius: 50%;
+// Desktop: Add expense is a filled bar, so the main action stands apart from the pages
+// (owner's choice, 20 Oct 2026). Phones keep the round center button (below).
+.nav-add {
+  margin: 4px 0;
   color: var(--on-primary);
   background: var(--primary);
+  font-weight: 500;
+
+  &:hover,
+  &.active {
+    color: var(--on-primary);
+    background: var(--primary);
+    opacity: 0.9;
+  }
 }
 
 // Settings and its sections, under a divider (desktop only).
@@ -159,10 +160,6 @@
 @media (max-width: 767.98px) {
   .top-bar {
     padding: 0 4px 0 16px;
-  }
-
-  .top-add {
-    display: none;
   }
 
   // Two lines: NAMA · project (cut with "…"), then the month caption.
@@ -225,8 +222,21 @@
     }
   }
 
+  // Phones: no bar, only the round center button.
+  .nav-add,
+  .nav-add:hover,
+  .nav-add.active {
+    margin: 0;
+    color: var(--text-2);
+    background: none;
+    opacity: 1;
+  }
+
   .nav-add mat-icon {
     display: inline-flex;
+    border-radius: 50%;
+    color: var(--on-primary);
+    background: var(--primary);
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
