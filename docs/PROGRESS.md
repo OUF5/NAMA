@@ -2,6 +2,10 @@
 
 ## Status
 
+- **Owner notes after Phase 1 (from 20 Oct 2026).** Each note is weighed for how people really budget before it is built.
+  - **Note 1, wizard income months: done (20 Oct 2026).** In the wizard, additional income goes in the months you pick (PRD 5.2 step 3, R-INC-03, SET-02); Settings already had the pickers. See Decisions.
+    - Locally: `dotnet test api.tests` passed 484 of 484 (478 before; `Additional_income_goes_in_the_chosen_months` and 5 new invalid cases in `SetupTests`). `npm run build` passed with no warnings: initial 540.34 kB (unchanged). `npx ng test --watch=false` passed 139 of 139 (134 before; 5 new in `setup.spec.ts`), 3 runs in a row. No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
+    - The owner marked it done and approved the push (20 Oct 2026).
 - **Phase 1: complete (18 Oct 2026).** Every milestone (M0 to M10) is deployed, every Definition of Done item below is ticked, and the owner confirmed every open production check. Phase 2 (the full dashboard, PRD 10) is not started.
 - **M0 Skeleton and pipeline: done (17 Oct 2026).** A push to `main` deployed commit `c1205d6`. https://nama-b6bda.web.app returns 200, and `/api/health` returns `{"status":"ok","version":"c1205d60220e24b1d2ad98f025ce79fef2f75f1f"}`. One-time setup is complete: Firestore (default) database in `me-central1`, Workload Identity for `OUF5/NAMA`, 5 GitHub variables, and the Artifact Registry cleanup policy (keep 5 newest).
 - **M1 Sign-in: done (17 Oct 2026).** All three "Done when" checks pass on production (https://nama-b6bda.web.app):
@@ -219,7 +223,7 @@ Checked on 18 Oct 2026, before and after the M9 push (`678ffcb`). Ticked items h
 
 - 17 Oct 2026, M3: New library `Google.Cloud.Firestore` 4.5.0 (PRD 7.2 data access). The `FirestoreDb` is built on first use with `EmulatorDetection.EmulatorOrProduction`; `launchSettings.json` sets `FIRESTORE_EMULATOR_HOST=localhost:8080`, so `dotnet run` never touches production.
 - 17 Oct 2026, M3: **Live preview endpoint** (owner's choice, adds to PRD 7.5): `GET /api/setup/preview?fiscalStartMonth=&paydayDay=&timezone=` returns the first FY and the current month from `FiscalCalendar`, so the month and FY rules exist only in `api/Domain`. The Review step reuses it.
-- 17 Oct 2026, M3: **Wizard income months** (owner's choice): salary and Monthly items run from the FY's first month, open ended; Once items are in the current month. There are no month pickers in the wizard. "Total monthly income" = salary + Monthly items; Once items are listed on their own.
+- 17 Oct 2026, M3: **Wizard income months** (owner's choice): salary and Monthly items run from the FY's first month, open ended; Once items are in the current month. There are no month pickers in the wizard. "Total monthly income" = salary + Monthly items; Once items are listed on their own. *(Replaced on 20 Oct 2026 for additional income, see "Wizard income month pickers" below; the salary still runs from the FY's first month.)*
 - 17 Oct 2026, M3: `allowZero: true` only for the wizard salary (SET-01). Additional income items must be more than 0. The salary change in M8 decides for itself.
 - 17 Oct 2026, M3: **Currency list** (owner's choice): SAR (default), QAR, AED, USD, EUR, GBP. `Money.Currencies` in the API and `CURRENCIES` in `web/src/app/shared/money.ts` must stay equal.
 - 17 Oct 2026, M3: An additional income label is trimmed and 1 to 40 characters; duplicates are allowed (owner's choice). Names (4.7) live in `api/Domain/Names.cs`.
@@ -457,6 +461,13 @@ Checked on 18 Oct 2026, before and after the M9 push (`678ffcb`). Ticked items h
 - 18 Oct 2026, M10: **People dates** (`joinedOn`, `createdOn`, `expiresOn`) are `YYYY-MM-DD` in the admin's profile time zone, or UTC before setup. They come from the new `FiscalCalendar.DateIn`, which `Today` now uses too.
 - 18 Oct 2026, M10: **Settings stays at 2 calls** (NFR-01). People rides on `GET /api/settings`. Create, revoke and remove answer with the whole People list. A 404 on revoke or remove reads `/api/settings` again ("That changed in the meantime").
 - 18 Oct 2026, after Phase 1: **The app icons are the NAMA mark** (owner's request), replacing the "N" from M9. The Home Screen icon, the 192 and 512 icons and the maskable one now show the black square with a light border, centered on black (56%; the maskable one 50%, inside the safe zone). Same render commands (README); no new tool or package. An existing Home Screen icon on the iPhone only changes after it is removed and added again.
+- 20 Oct 2026, owner note 1: **Wizard income month pickers** (owner's choice; replaces the M3 "Wizard income months" for additional income, PRD 5.2 step 3).
+  - Why: most one-off income is known ahead (annual or Eid bonus, housing allowance paid in advance, leave pay, a tax refund), and most people set up partway through the FY. A fixed month put the money in the wrong month: Plan's Unassigned was too high in the current month and too low in the real one, and Dashboard's FY to date counted it too early or too late.
+  - Each item has its months, picked from the first FY's 12 months, each shown with its dates ("Mar 2026 · 27 Mar to 26 Apr"), because a payday month can start in the calendar month before. Once: "Month", default the current month. Monthly: "From", default the FY's first month (like the salary), and "Until (optional)", default "No end". A month still at one type's default follows a type change; a picked month stays.
+  - `GET /api/setup/preview` now returns the FY as `FiscalYearDto` (adds `isTransition` and `periods`), from `FiscalCalendar`. `POST /api/setup` items carry `fromPeriodKey` (required) and `toPeriodKey` (Monthly only, empty = open ended; ignored for Once, stored as `to = from`). A month outside the first FY gets 400 on `AdditionalIncome[i].FromPeriodKey` or `.ToPeriodKey`, as does Until before From. Settings uses the same rules (M8).
+  - When step 2 changes, a month the new FY does not have goes back to its default, and Until to "No end". A draft saved before this change (SET-03) has no months and gets the defaults.
+  - "Total monthly income" is now "Income in Sep 2026": the salary plus every item received in the current month, the same number as Settings' total (STG-03). It is a preview only (like the ENT-01 preview); saved totals come from `IncomeCalculator`. The Review step shows it and lists each item ("Bonus · SAR 500 · Mar 2026").
+  - `untilNotBeforeFrom` and `incomeMonths` moved to `web/src/app/shared/income-months.ts`, shared by the wizard and the Settings income dialog. No new packages.
 
 ## Open questions
 
@@ -488,3 +499,5 @@ Nothing here is built without the owner's answer.
 - M8: The Settings income totals and pickers use the stored FYs only. An additional income item can't run "until" a month of an FY that is not started yet (open ended works). Is that fine?
 - M9: Cloud Run has a service-level `run.googleapis.com/maxScale: '20'` next to the revision's `1`. The effective limit is 1, but Google recommends the service-level setting (`--max`). Set the service-level maximum to 1 in the workflow?
 - M9: Dashboard ideas for Phase 2: an FY selector, a link from each bar row to its Months card.
+- Owner note 1 (20 Oct 2026): income that repeats but not every month (quarterly, twice a year, yearly, for example a housing allowance paid every 6 months). Today each payment is its own Once item. Add a repeat rule?
+- Owner note 1 (20 Oct 2026): "expected" and "received" income. Careful budgeting does not spend a bonus before it arrives. Mark an item as expected until it is received, and show Unassigned with and without expected income?

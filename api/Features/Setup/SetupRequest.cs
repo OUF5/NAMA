@@ -68,6 +68,17 @@ public sealed class SetupRequest : IValidatableObject
             {
                 yield return Error($"{nameof(AdditionalIncome)}[{i}].{nameof(item.Type)}", "Type is once or monthly.");
             }
+            // The months must also be months of the first FY; the endpoint checks that, because it
+            // needs today. Month keys are YYYY-MM, so ordinal order is calendar order.
+            if (string.IsNullOrEmpty(item.FromPeriodKey))
+            {
+                yield return Error($"{nameof(AdditionalIncome)}[{i}].{nameof(item.FromPeriodKey)}", "Pick a month.");
+            }
+            else if (item.Type == AdditionalIncomeRequest.Monthly && !string.IsNullOrEmpty(item.ToPeriodKey)
+                && string.CompareOrdinal(item.ToPeriodKey, item.FromPeriodKey) < 0)
+            {
+                yield return Error($"{nameof(AdditionalIncome)}[{i}].{nameof(item.ToPeriodKey)}", "Until is the same month as From or later.");
+            }
         }
 
         foreach (var error in ValidateNames(nameof(BankAccounts), "bank account", BankAccounts))
@@ -103,7 +114,8 @@ public sealed class SetupRequest : IValidatableObject
     private static ValidationResult Error(string member, string message) => new(message, [member]);
 }
 
-// R-INC-03: Once is one month, Monthly runs on from a month.
+// R-INC-03: Once is one month (ToPeriodKey is ignored); Monthly runs from a month, optionally
+// until a month. The months are months of the first FY.
 public sealed class AdditionalIncomeRequest
 {
     public const string Once = "once";
@@ -112,4 +124,6 @@ public sealed class AdditionalIncomeRequest
     public string? Label { get; init; }
     public decimal? Amount { get; init; }
     public string? Type { get; init; }
+    public string? FromPeriodKey { get; init; }
+    public string? ToPeriodKey { get; init; }
 }

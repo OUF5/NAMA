@@ -248,7 +248,7 @@ A 6-step wizard (Angular Material stepper) with Back and Next, visible progress 
 
 1. **Project:** project name, your name (prefilled from Google), currency (default SAR). 🆕 ADDED · Must (currency)
 2. **Fiscal year:** FY start month and payday (1 to 31, hint "1 = calendar months"). ✅ DECIDED. A live preview shows the current FY and current month with dates, for example "FY 2026: 27 Jan 2026 to 26 Jan 2027. You are in Sep 2026 (27 Sep to 26 Oct)". 🆕 ADDED · Must (prevents a wrong setup)
-3. **Income:** monthly salary, then optional additional income items (label, amount, Once or Monthly). Shows **Total monthly income**.
+3. **Income:** monthly salary, then optional additional income items (label, amount, Once or Monthly) with their months, picked from the first FY's months with their dates: **Once** in one month (default: the current month), **Monthly** from a month (default: the FY's first month), optionally until a month (R-INC-03). Shows the **total income of the current month** (salary + the items received in it). ✅ DECIDED (20 Oct 2026; replaces "Total monthly income" and the fixed months)
 4. **Bank accounts:** at least one account name. 🆕 ADDED · Must (entries require an account)
 5. **General categories:** add category names. Optional suggestion chips you can tap: Housing, Food, Transport, Bills & Utilities, Health, Family, Education, Entertainment, Savings, Other. 🆕 ADDED · Nice
 6. **Review and finish:** a summary of everything, then Finish.

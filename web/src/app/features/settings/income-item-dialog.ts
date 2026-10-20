@@ -1,17 +1,18 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { AbstractControl, NonNullableFormBuilder, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
+import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
+import { incomeMonths, untilNotBeforeFrom } from '../../shared/income-months';
 import { amountValidator, formatMoney, minorToInput, parseAmount, toMinor } from '../../shared/money';
 import { NAME_MAX_LENGTH, nameValidator } from '../../shared/names';
 import { Income, IncomeItem, SettingsApi } from './settings-api';
-import { MonthGroup, incomeMonths } from './settings-lines';
+import { MonthGroup } from './settings-lines';
 
 export interface IncomeItemDialogData {
   // null adds a new item.
@@ -19,12 +20,6 @@ export interface IncomeItemDialogData {
   groups: MonthGroup[];
   defaultKey: string | null;
   currency: string;
-}
-
-// Month keys are YYYY-MM, so string order is calendar order.
-function untilNotBeforeFrom(group: AbstractControl): ValidationErrors | null {
-  const { type, from, to } = group.value as { type: string; from: string; to: string };
-  return type === 'monthly' && from && to && to < from ? { untilBeforeFrom: true } : null;
 }
 
 // R-INC-03: an additional income item, Once (one month) or Monthly (from a month, optionally until a

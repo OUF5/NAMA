@@ -20,8 +20,8 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
         ["paydayDay"] = 27,
         ["salary"] = 15000.50m,
         ["additionalIncome"] = new JsonArray(
-            new JsonObject { ["label"] = "Rent", ["amount"] = 2000, ["type"] = "monthly" },
-            new JsonObject { ["label"] = "Bonus", ["amount"] = 500.25m, ["type"] = "once" }),
+            new JsonObject { ["label"] = "Rent", ["amount"] = 2000, ["type"] = "monthly", ["fromPeriodKey"] = "2026-01" },
+            new JsonObject { ["label"] = "Bonus", ["amount"] = 500.25m, ["type"] = "once", ["fromPeriodKey"] = "2026-09" }),
         ["bankAccounts"] = new JsonArray("Al Rajhi", " SNB "),
         ["categories"] = new JsonArray("Food", "Housing", "Transport"),
     };
@@ -70,7 +70,7 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal("Jan 2026", fy.Periods[0].Label);
         Assert.Equal("Dec 2026", fy.Periods[^1].Label);
 
-        // Owner's choice (M3): salary and Monthly items from the FY's first month, Once in the current month.
+        // The salary runs from the FY's first month (owner's choice, M3); additional income uses the chosen months.
         Assert.Equal(
             [
                 (IncomeKind.Salary, "Salary", 1_500_050L, "2026-01", (string?)null),
@@ -85,6 +85,30 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var me = await response.Content.ReadFromJsonAsync<JsonObject>();
         Assert.True(me!["setupCompleted"]!.GetValue<bool>());
         Assert.Equal("2026-09", me["currentPeriodKey"]!.GetValue<string>());
+    }
+
+    // R-INC-03: a bonus that came earlier in the FY or comes later goes in its own month, and a
+    // side income can start and end mid-year. Once ignores the until month.
+    [Fact]
+    public async Task Additional_income_goes_in_the_chosen_months()
+    {
+        var body = ValidRequest();
+        body["additionalIncome"] = new JsonArray(
+            new JsonObject { ["label"] = "Annual bonus", ["amount"] = 5000, ["type"] = "once", ["fromPeriodKey"] = "2026-03", ["toPeriodKey"] = "2026-05" },
+            new JsonObject { ["label"] = "Eid bonus", ["amount"] = 1000, ["type"] = "once", ["fromPeriodKey"] = "2026-12" },
+            new JsonObject { ["label"] = "Freelance", ["amount"] = 1500, ["type"] = "monthly", ["fromPeriodKey"] = "2026-06", ["toPeriodKey"] = "2026-11" },
+            new JsonObject { ["label"] = "Rent", ["amount"] = 2000, ["type"] = "monthly", ["fromPeriodKey"] = "2026-10", ["toPeriodKey"] = "" });
+        var sub = NewSub();
+
+        Assert.Equal(HttpStatusCode.Created, (await PostSetup(sub, body)).StatusCode);
+        Assert.Equal(
+            [
+                ("Annual bonus", "2026-03", (string?)"2026-03"),
+                ("Eid bonus", "2026-12", "2026-12"),
+                ("Freelance", "2026-06", "2026-11"),
+                ("Rent", "2026-10", null),
+            ],
+            factory.Store.Saved(sub)!.Incomes.Skip(1).Select(i => (i.Label, i.FromPeriodKey, i.ToPeriodKey)));
     }
 
     [Fact]
@@ -158,6 +182,11 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
         { "additional amount missing", b => b["additionalIncome"]![1]!.AsObject().Remove("amount"), "AdditionalIncome[1].Amount" },
         { "additional without label", b => b["additionalIncome"]![0]!["label"] = " ", "AdditionalIncome[0].Label" },
         { "additional with unknown type", b => b["additionalIncome"]![0]!["type"] = "weekly", "AdditionalIncome[0].Type" },
+        { "additional without a month", b => b["additionalIncome"]![1]!.AsObject().Remove("fromPeriodKey"), "AdditionalIncome[1].FromPeriodKey" },
+        { "additional month before the FY", b => b["additionalIncome"]![1]!["fromPeriodKey"] = "2025-12", "AdditionalIncome[1].FromPeriodKey" },
+        { "additional month after the FY", b => b["additionalIncome"]![0]!["fromPeriodKey"] = "2027-01", "AdditionalIncome[0].FromPeriodKey" },
+        { "additional until before from", b => { b["additionalIncome"]![0]!["fromPeriodKey"] = "2026-05"; b["additionalIncome"]![0]!["toPeriodKey"] = "2026-04"; }, "AdditionalIncome[0].ToPeriodKey" },
+        { "additional until after the FY", b => b["additionalIncome"]![0]!["toPeriodKey"] = "2027-01", "AdditionalIncome[0].ToPeriodKey" },
         { "no bank account", b => b["bankAccounts"] = new JsonArray(), "BankAccounts" },
         { "bank account names repeat ignoring case", b => b["bankAccounts"] = new JsonArray("SNB", " snb"), "BankAccounts" },
         { "bank account name over 40", b => b["bankAccounts"] = new JsonArray(new string('a', 41)), "BankAccounts[0]" },
@@ -184,16 +213,30 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Null(factory.Store.Saved(sub));
     }
 
-    // Step 2 live preview (owner's choice, M3), from FiscalCalendar.
+    // Step 2 live preview (owner's choice, M3), from FiscalCalendar. The FY's months give step 3's
+    // income month pickers (R-INC-03).
     [Fact]
     public async Task Preview_shows_the_current_fiscal_year_and_month()
     {
         var response = await Send(HttpMethod.Get, "/api/setup/preview?fiscalStartMonth=1&paydayDay=27&timezone=Asia/Riyadh", NewSub());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var preview = (await response.Content.ReadFromJsonAsync<JsonObject>())!;
+        var fy = preview["fiscalYear"]!;
+        Assert.Equal(("2026-01", "FY 2026", "2026-01-27", "2027-01-26", false),
+            (fy["id"]!.GetValue<string>(), fy["label"]!.GetValue<string>(), fy["startDate"]!.GetValue<string>(),
+                fy["endDate"]!.GetValue<string>(), fy["isTransition"]!.GetValue<bool>()));
+        var periods = fy["periods"]!.AsArray();
+        Assert.Equal(12, periods.Count);
         Assert.Equal(
-            """{"fiscalYear":{"id":"2026-01","label":"FY 2026","startDate":"2026-01-27","endDate":"2027-01-26"},"currentPeriod":{"key":"2026-09","label":"Sep 2026","startDate":"2026-09-27","endDate":"2026-10-26"}}""",
-            await response.Content.ReadAsStringAsync());
+            """{"key":"2026-01","label":"Jan 2026","startDate":"2026-01-27","endDate":"2026-02-26"}""",
+            periods[0]!.ToJsonString());
+        Assert.Equal(
+            """{"key":"2026-12","label":"Dec 2026","startDate":"2026-12-27","endDate":"2027-01-26"}""",
+            periods[^1]!.ToJsonString());
+        Assert.Equal(
+            """{"key":"2026-09","label":"Sep 2026","startDate":"2026-09-27","endDate":"2026-10-26"}""",
+            preview["currentPeriod"]!.ToJsonString());
     }
 
     [Theory]

@@ -1,6 +1,6 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   AbstractControl,
@@ -24,18 +24,21 @@ import { catchError, debounceTime, firstValueFrom, map, merge, of, startWith, sw
 import { AuthService } from '../../core/auth';
 import { Me, MeService } from '../../core/me';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
+import { incomeMonths, untilNotBeforeFrom } from '../../shared/income-months';
 import { CURRENCIES, amountValidator, formatMoney, parseAmount } from '../../shared/money';
 import { MONTH_NAMES, PeriodInfo, formatDate, formatDay, periodWithDates } from '../../shared/month-label';
 import { NAME_MAX_LENGTH, isValidName, nameValidator, notInListValidator, sameName } from '../../shared/names';
 import { SetupDraft, clearDraft, loadDraft, saveDraft } from './setup-draft';
 
-// GET /api/setup/preview: step 2's live preview, computed by FiscalCalendar in the API.
+// GET /api/setup/preview: step 2's live preview, computed by FiscalCalendar in the API. The FY's
+// months give step 3's income month pickers.
 interface Preview {
-  fiscalYear: { id: string; label: string; startDate: string; endDate: string };
+  fiscalYear: { id: string; label: string; startDate: string; endDate: string; periods: PeriodInfo[] };
   currentPeriod: PeriodInfo;
 }
 
 type IncomeType = 'once' | 'monthly';
+type IncomeItemValue = SetupDraft['additional'][number];
 
 // PRD 5.2 step 5: optional suggestions you can tap.
 const SUGGESTED_CATEGORIES = [
@@ -150,20 +153,27 @@ export class Setup {
     { initialValue: null },
   );
 
-  // Owner's choice (M3): Total monthly income = salary + Monthly items. Once items fall in
-  // the current month and are listed on their own.
-  protected readonly totalMonthlyMinor = computed(() => {
-    const value = this.incomeValue();
-    const items = (value.additional ?? []) as { amount: string; type: IncomeType }[];
-    return items
-      .filter((item) => item.type === 'monthly')
-      .reduce((sum, item) => sum + (parseAmount(item.amount) ?? 0), parseAmount(value.salary, true) ?? 0);
+  // Step 3's income month pickers: the months of the first FY (R-INC-03).
+  protected readonly months = computed(() => this.preview()?.fiscalYear.periods ?? []);
+
+  private readonly incomeItems = computed(() => (this.incomeValue().additional ?? []) as IncomeItemValue[]);
+
+  // R-INC-01 for the current month, as Settings shows it (STG-03): the salary plus every item
+  // active in that month. A preview only; the saved totals come from IncomeCalculator.
+  protected readonly currentIncomeMinor = computed(() => {
+    const key = this.preview()?.currentPeriod.key;
+    return this.incomeItems()
+      .filter((item) => key && this.isActiveIn(item, key))
+      .reduce((sum, item) => sum + (parseAmount(item.amount) ?? 0), parseAmount(this.incomeValue().salary, true) ?? 0);
   });
 
-  protected readonly onceItems = computed(() =>
-    ((this.incomeValue().additional ?? []) as { label: string; amount: string; type: IncomeType }[])
-      .filter((item) => item.type === 'once' && parseAmount(item.amount) !== null)
-      .map((item) => ({ label: item.label.trim(), minor: parseAmount(item.amount)! })),
+  // Step 6: "Bonus · SAR 500.25 · Mar 2026".
+  protected readonly incomeLines = computed(() =>
+    this.incomeItems().map((item) => {
+      const amount = parseAmount(item.amount);
+      const months = item.from ? incomeMonths({ fromPeriodKey: item.from, toPeriodKey: item.type === 'once' ? item.from : item.to || null }) : '';
+      return [item.label.trim(), amount === null ? '' : this.money(amount), months].filter(Boolean).join(' · ');
+    }),
   );
 
   protected readonly unusedSuggestions = computed(() =>
@@ -177,6 +187,26 @@ export class Setup {
     } else {
       this.project.controls.displayName.setValue((this.auth.user()?.displayName ?? '').slice(0, NAME_MAX_LENGTH));
     }
+
+    // A new FY start month or payday gives other months: a month that is no longer offered goes
+    // back to its default, and an until month to "No end". Items added before the preview
+    // arrived, or restored from a draft, get their default here too.
+    effect(() => {
+      const preview = this.preview();
+      if (!preview) {
+        return;
+      }
+      const keys = new Set(preview.fiscalYear.periods.map((period) => period.key));
+      for (const item of this.additional.controls) {
+        const { type, from, to } = item.getRawValue() as IncomeItemValue;
+        if (!keys.has(from)) {
+          item.controls['from'].setValue(this.defaultFrom(type));
+        }
+        if (to && !keys.has(to)) {
+          item.controls['to'].setValue('');
+        }
+      }
+    });
 
     // SET-03: keep the typed values in browser storage.
     merge(this.project.valueChanges, this.calendar.valueChanges, this.income.valueChanges,
@@ -198,7 +228,11 @@ export class Setup {
   }
 
   protected addIncomeItem(): void {
-    this.additional.push(this.incomeItem('', '', 'monthly'));
+    this.additional.push(this.incomeItem('', '', 'monthly', this.defaultFrom('monthly'), ''));
+  }
+
+  protected itemType(index: number): IncomeType | undefined {
+    return this.incomeItems()[index]?.type;
   }
 
   protected removeIncomeItem(index: number): void {
@@ -276,6 +310,8 @@ export class Setup {
         label: item.label.trim(),
         amount: parseAmount(item.amount)! / 100,
         type: item.type,
+        fromPeriodKey: item.from,
+        toPeriodKey: item.type === 'monthly' && item.to ? item.to : null,
       })),
       bankAccounts: this.bankAccounts.getRawValue(),
       categories: this.categories.getRawValue(),
@@ -297,12 +333,43 @@ export class Setup {
     return true;
   }
 
-  private incomeItem(label: string, amount: string, type: IncomeType): FormGroup {
-    return this.fb.group({
-      label: [label, nameValidator()],
-      amount: [amount, amountValidator()],
-      type: [type as IncomeType, Validators.required],
+  // R-INC-03: Once is one month; Monthly runs from a month, optionally until a month.
+  private incomeItem(label: string, amount: string, type: IncomeType, from: string, to: string): FormGroup {
+    const group = this.fb.group(
+      {
+        label: [label, nameValidator()],
+        amount: [amount, amountValidator()],
+        type: [type, Validators.required],
+        from: [from, Validators.required],
+        to: [to],
+      },
+      { validators: untilNotBeforeFrom },
+    );
+    // A month still at the other type's default follows the type.
+    group.controls.type.valueChanges.subscribe((next) => {
+      if (group.controls.from.value === this.defaultFrom(next === 'once' ? 'monthly' : 'once')) {
+        group.controls.from.setValue(this.defaultFrom(next));
+      }
     });
+    return group;
+  }
+
+  // Once: the current month. Monthly: the FY's first month, like the salary (owner's choice, M3).
+  // Empty until the preview is there.
+  private defaultFrom(type: IncomeType): string {
+    const preview = this.preview();
+    if (!preview) {
+      return '';
+    }
+    return type === 'once' ? preview.currentPeriod.key : preview.fiscalYear.periods[0].key;
+  }
+
+  private isActiveIn(item: IncomeItemValue, key: string): boolean {
+    if (item.type === 'once') {
+      return item.from === key;
+    }
+    // Month keys are YYYY-MM, so string order is calendar order.
+    return !!item.from && item.from <= key && (!item.to || key <= item.to);
   }
 
   private draft(): SetupDraft {
@@ -332,7 +399,9 @@ export class Setup {
     });
     this.income.controls.salary.setValue(draft.salary ?? '');
     for (const item of draft.additional ?? []) {
-      this.additional.push(this.incomeItem(item.label ?? '', item.amount ?? '', item.type === 'once' ? 'once' : 'monthly'));
+      this.additional.push(
+        this.incomeItem(item.label ?? '', item.amount ?? '', item.type === 'once' ? 'once' : 'monthly', item.from ?? '', item.to ?? ''),
+      );
     }
     for (const name of draft.bankAccounts ?? []) {
       this.bankAccounts.push(this.fb.control(name));

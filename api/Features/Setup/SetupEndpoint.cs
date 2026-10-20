@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Api.Domain;
+using Api.Features.FiscalYears;
 using Api.Features.Profile;
 using Api.Infrastructure;
 
@@ -9,9 +10,8 @@ namespace Api.Features.Setup;
 // PRD 5.2 setup wizard: the live preview (step 2) and POST /api/setup (SET-02).
 public static class SetupEndpoint
 {
-    public record FiscalYearSummary(string Id, string Label, DateOnly StartDate, DateOnly EndDate);
-
-    public record PreviewResponse(FiscalYearSummary FiscalYear, MeEndpoint.PeriodDto CurrentPeriod);
+    // The FY's months give step 3's income month pickers (R-INC-03).
+    public record PreviewResponse(FiscalYearsEndpoint.FiscalYearDto FiscalYear, MeEndpoint.PeriodDto CurrentPeriod);
 
     public static IEndpointRouteBuilder MapSetup(this IEndpointRouteBuilder api)
     {
@@ -30,7 +30,7 @@ public static class SetupEndpoint
             var today = FiscalCalendar.Today(time, timezone);
             var fiscalYear = FiscalCalendar.FirstFiscalYear(today, fiscalStartMonth, paydayDay);
             return Results.Ok(new PreviewResponse(
-                new FiscalYearSummary(fiscalYear.Id, fiscalYear.Label, fiscalYear.StartDate, fiscalYear.EndDate),
+                FiscalYearsEndpoint.FiscalYearDto.From(fiscalYear),
                 MeEndpoint.PeriodDto.From(FiscalCalendar.PeriodContaining(today, paydayDay))));
         });
 
@@ -38,7 +38,14 @@ public static class SetupEndpoint
         {
             // AUTH-03: the user id and email come from the token, never from the body.
             var uid = user.FindFirstValue("sub")!;
-            if (await store.GetProfileAsync(uid) is not null || !await store.CreateSetupAsync(uid, Build(request, user, time)))
+            // R-CAL-05: the first FY contains today in the chosen time zone.
+            var fiscalYear = FiscalCalendar.FirstFiscalYear(
+                FiscalCalendar.Today(time, request.Timezone!), request.FiscalStartMonth, request.PaydayDay);
+            if (MonthErrors(request, fiscalYear) is { Count: > 0 } errors)
+            {
+                return Results.ValidationProblem(errors);
+            }
+            if (await store.GetProfileAsync(uid) is not null || !await store.CreateSetupAsync(uid, Build(request, user, fiscalYear)))
             {
                 return Results.Problem(statusCode: StatusCodes.Status409Conflict, detail: "Setup is already complete.");
             }
@@ -48,22 +55,42 @@ public static class SetupEndpoint
         return api;
     }
 
-    // R-CAL-05: the first FY contains today in the chosen time zone. Income months (owner's
-    // choice, M3): salary and Monthly items run from the FY's first month, open ended; Once
-    // items are in the current month.
-    private static SetupData Build(SetupRequest request, ClaimsPrincipal user, TimeProvider time)
+    // R-INC-03: every additional income month is a month of the first FY. The wizard offers
+    // only those, but the FY can change between the preview and Finish (a new day).
+    private static Dictionary<string, string[]> MonthErrors(SetupRequest request, FiscalYear fiscalYear)
     {
-        var today = FiscalCalendar.Today(time, request.Timezone!);
-        var fiscalYear = FiscalCalendar.FirstFiscalYear(today, request.FiscalStartMonth, request.PaydayDay);
-        var currentKey = FiscalCalendar.PeriodContaining(today, request.PaydayDay).Key;
+        var months = fiscalYear.Periods.Select(period => period.Key).ToHashSet(StringComparer.Ordinal);
+        var errors = new Dictionary<string, string[]>();
+        var items = request.AdditionalIncome ?? [];
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (!months.Contains(items[i].FromPeriodKey!))
+            {
+                errors[$"{nameof(SetupRequest.AdditionalIncome)}[{i}].{nameof(AdditionalIncomeRequest.FromPeriodKey)}"] = ["Pick a month of the fiscal year."];
+            }
+            if (items[i].Type == AdditionalIncomeRequest.Monthly && !string.IsNullOrEmpty(items[i].ToPeriodKey) && !months.Contains(items[i].ToPeriodKey!))
+            {
+                errors[$"{nameof(SetupRequest.AdditionalIncome)}[{i}].{nameof(AdditionalIncomeRequest.ToPeriodKey)}"] = ["Pick a month of the fiscal year."];
+            }
+        }
+        return errors;
+    }
 
+    // The salary runs from the FY's first month, open ended (owner's choice, M3). Additional
+    // income uses the chosen months: Once is stored with to = from (R-INC-03).
+    private static SetupData Build(SetupRequest request, ClaimsPrincipal user, FiscalYear fiscalYear)
+    {
         var incomes = new List<IncomeItem>
         {
             new(DocumentIds.New(), IncomeKind.Salary, IncomeCalculator.SalaryLabel, Money.ToMinor(request.Salary!.Value), fiscalYear.Id, null),
         };
-        incomes.AddRange((request.AdditionalIncome ?? []).Select(item => item.Type == AdditionalIncomeRequest.Once
-            ? new IncomeItem(DocumentIds.New(), IncomeKind.Additional, Names.Normalize(item.Label), Money.ToMinor(item.Amount!.Value), currentKey, currentKey)
-            : new IncomeItem(DocumentIds.New(), IncomeKind.Additional, Names.Normalize(item.Label), Money.ToMinor(item.Amount!.Value), fiscalYear.Id, null)));
+        incomes.AddRange((request.AdditionalIncome ?? []).Select(item => new IncomeItem(
+            DocumentIds.New(),
+            IncomeKind.Additional,
+            Names.Normalize(item.Label),
+            Money.ToMinor(item.Amount!.Value),
+            item.FromPeriodKey!,
+            item.Type == AdditionalIncomeRequest.Once ? item.FromPeriodKey : string.IsNullOrEmpty(item.ToPeriodKey) ? null : item.ToPeriodKey)));
 
         var profile = new UserProfile(
             DisplayName: Names.Normalize(request.DisplayName),

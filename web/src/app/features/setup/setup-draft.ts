@@ -7,7 +7,8 @@ export interface SetupDraft {
   fiscalStartMonth: number | null;
   paydayDay: number | null;
   salary: string;
-  additional: { label: string; amount: string; type: 'once' | 'monthly' }[];
+  // from and to are month keys of the first FY; to is '' for Once and for no end (R-INC-03).
+  additional: { label: string; amount: string; type: 'once' | 'monthly'; from: string; to: string }[];
   bankAccounts: string[];
   categories: string[];
 }

@@ -11,6 +11,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom, map } from 'rxjs';
 import { Me, MeService } from '../../core/me';
 import { dialogSize } from '../../shared/dialog';
+import { incomeMonths } from '../../shared/income-months';
 import { formatMoney, toMinor } from '../../shared/money';
 import { MONTH_NAMES, formatDate, monthKeyLabel, periodWithDates } from '../../shared/month-label';
 import { BankAccount } from '../add-entry/entry-api';
@@ -22,7 +23,7 @@ import { InviteLinkDialog, InviteLinkDialogData, RemovePersonDialog } from './pe
 import { ProfileDialog } from './profile-dialog';
 import { SalaryDialog, SalaryDialogData } from './salary-dialog';
 import { Calendar, Income, IncomeItem, Invite, Member, People, SettingsApi, SettingsResponse } from './settings-api';
-import { incomeMonths, monthGroups } from './settings-lines';
+import { monthGroups } from './settings-lines';
 import { SETTINGS_SECTIONS, SettingsSectionId, visibleSections } from './settings-sections';
 
 const PHONE = '(max-width: 767.98px)';

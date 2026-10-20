@@ -8,7 +8,7 @@ describe('setup draft (SET-03)', () => {
     fiscalStartMonth: 1,
     paydayDay: 27,
     salary: '15000',
-    additional: [{ label: 'Rent', amount: '2000', type: 'monthly' }],
+    additional: [{ label: 'Rent', amount: '2000', type: 'monthly', from: '2026-01', to: '' }],
     bankAccounts: ['SNB'],
     categories: ['Food'],
   };

@@ -48,6 +48,23 @@ h2 {
   align-items: start;
 }
 
+// Each item has two lines, so a divider keeps items apart.
+.income-row + .income-row {
+  padding-top: 8px;
+  border-top: 1px solid var(--divider);
+}
+
+.income-months {
+  grid-column: 1 / 4;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.income-error {
+  grid-column: 1 / -1;
+}
+
 .add-row {
   display: flex;
   gap: 8px;
@@ -120,9 +137,16 @@ h2 {
   .income-row {
     grid-template-columns: 1fr 1fr 44px;
 
-    mat-form-field:first-child {
+    > mat-form-field:first-child {
       grid-column: 1 / -1;
     }
+  }
+
+  // "Mar 2026 · 27 Mar to 26 Apr" needs the full width on phones.
+  .income-months {
+    grid-column: 1 / -1;
+    grid-template-columns: 1fr;
+    gap: 0;
   }
 
   .summary {

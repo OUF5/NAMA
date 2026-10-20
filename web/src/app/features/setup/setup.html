@@ -110,6 +110,34 @@
               <button mat-icon-button type="button" (click)="removeIncomeItem(i)" [attr.aria-label]="'Remove income item ' + (i + 1)">
                 <mat-icon>close</mat-icon>
               </button>
+              <!-- R-INC-03: the months it is received in, with their dates (a payday month can start in the calendar month before). -->
+              <div class="income-months">
+                <mat-form-field>
+                  <mat-label>{{ itemType(i) === 'once' ? 'Month' : 'From' }}</mat-label>
+                  <mat-select formControlName="from">
+                    @for (period of months(); track period.key) {
+                      <mat-option [value]="period.key">{{ periodWithDates(period) }}</mat-option>
+                    }
+                  </mat-select>
+                  @if (item.controls['from'].invalid) {
+                    <mat-error>Pick a month.</mat-error>
+                  }
+                </mat-form-field>
+                @if (itemType(i) === 'monthly') {
+                  <mat-form-field>
+                    <mat-label>Until (optional)</mat-label>
+                    <mat-select formControlName="to">
+                      <mat-option value="">No end</mat-option>
+                      @for (period of months(); track period.key) {
+                        <mat-option [value]="period.key">{{ periodWithDates(period) }}</mat-option>
+                      }
+                    </mat-select>
+                  </mat-form-field>
+                }
+              </div>
+              @if (item.hasError('untilBeforeFrom')) {
+                <p class="error income-error" role="alert">Until is the same month as From or later.</p>
+              }
             </div>
           }
         </div>
@@ -120,13 +148,10 @@
           </button>
         </div>
 
-        <p class="total">
-          <span class="caption">Total monthly income</span>
-          <span class="money">{{ money(totalMonthlyMinor()) }}</span>
-        </p>
-        @for (item of onceItems(); track $index) {
-          <p class="caption">
-            + <span class="money">{{ money(item.minor) }}</span> once ({{ item.label }})@if (preview(); as p) { in {{ p.currentPeriod.label }}}
+        @if (preview(); as p) {
+          <p class="total">
+            <span class="caption">Income in {{ p.currentPeriod.label }}</span>
+            <span class="money">{{ money(currentIncomeMinor()) }}</span>
           </p>
         }
 
@@ -247,8 +272,21 @@
           </dd>
           <dt>Time zone</dt>
           <dd>{{ timezone }}</dd>
-          <dt>Total monthly income</dt>
-          <dd class="money">{{ money(totalMonthlyMinor()) }}</dd>
+          @if (preview(); as p) {
+            <dt>Income in {{ p.currentPeriod.label }}</dt>
+            <dd class="money">{{ money(currentIncomeMinor()) }}</dd>
+          }
+          @if (incomeLines().length) {
+            <dt>Additional income</dt>
+            <dd>
+              @for (line of incomeLines(); track $index) {
+                @if (!$first) {
+                  <br />
+                }
+                {{ line }}
+              }
+            </dd>
+          }
           <dt>Bank accounts</dt>
           <dd>{{ bankAccounts.value.join(', ') }}</dd>
           <dt>Categories</dt>
