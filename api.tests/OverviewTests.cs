@@ -124,6 +124,16 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(139_600.25m, Dec(overview["toDate"]!["plannedSaved"]));
     }
 
+    // DSH-02 "planned until now": Jan to Aug 8 × 1,500 + Sep 1,900 = 13,900. DSH-04: the closed months
+    // (Jan to Aug) added 8 × 17,000 − 50 = 135,950; Sep is still in progress.
+    [Fact]
+    public async Task To_date_has_planned_and_what_the_closed_months_saved()
+    {
+        var overview = await GetOk(await SetUp());
+
+        Assert.Equal((13_900m, 135_950m), (Dec(overview["toDate"]!["planned"]), Dec(overview["toDate"]!["savedClosed"])));
+    }
+
     // Every entry of a started month counts, also one dated after today (25 Oct is in Sep 2026).
     [Fact]
     public async Task To_date_counts_entries_dated_later_in_the_current_month()

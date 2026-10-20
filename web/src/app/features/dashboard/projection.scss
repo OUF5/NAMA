@@ -1,0 +1,93 @@
+// DSH-05: the hero number, then the breakdown rows of a Banks card (docs/DESIGN.md "Banks"), then the
+// "How?" fold. Tokens only.
+:host {
+  display: block;
+}
+
+.hero {
+  display: block;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.sub,
+.note,
+.how {
+  margin: 0;
+}
+
+.sub {
+  margin-top: 4px;
+}
+
+.note {
+  color: var(--text-2);
+}
+
+.how {
+  margin-top: 4px;
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.breakdown {
+  margin: 16px 0 0;
+
+  div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 32px;
+    align-items: center;
+    border-bottom: 1px solid var(--divider);
+  }
+
+  dt {
+    color: var(--text-2);
+  }
+
+  dd {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .result {
+    border-bottom: 0;
+    font-weight: 600;
+
+    dt {
+      color: var(--text);
+    }
+  }
+}
+
+.months {
+  margin-top: 8px;
+
+  div:last-child {
+    border-bottom: 0;
+  }
+}
+
+.op {
+  display: inline-block;
+  width: 16px;
+  color: var(--text-muted);
+}
+
+.fold {
+  margin: 4px 0 0 -12px;
+}
+
+.chevron {
+  flex: none;
+  transition: transform 0.15s;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}

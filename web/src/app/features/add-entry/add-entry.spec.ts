@@ -323,6 +323,7 @@ describe('Add transfer (PRD 5.4, TRF-01)', () => {
       { id: 'snb', name: 'SNB', balance: 23900 },
     ],
     month: null,
+    projection: null,
   };
 
   async function open(url = '/?type=transfer', bankAccounts = accounts): Promise<ComponentFixture<AddEntry>> {

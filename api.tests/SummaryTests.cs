@@ -44,6 +44,8 @@ public class SummaryTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var month = (await Get(await SetUp()))["month"]!;
 
         Assert.Equal(("2026-09", 10), (month["period"]!["key"]!.GetValue<string>(), month["daysLeft"]!.GetValue<int>()));
+        // DSH-01: 17 Oct is day 21 of the 30 days from 27 Sep to 26 Oct.
+        Assert.Equal((21, 30), (month["day"]!.GetValue<int>(), month["days"]!.GetValue<int>()));
         Assert.Equal((17_000m, 11_950m, 1_500m, 1_199.99m, 12_250.01m, 139_500m),
             (Dec(month["income"]), Dec(month["carriedIn"]), Dec(month["planned"]), Dec(month["spent"]), Dec(month["remaining"]),
                 Dec(month["unassigned"])));
@@ -90,6 +92,54 @@ public class SummaryTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var summary = await Get(await SetUp(), new DateTimeOffset(2027, 1, 27, 9, 0, 0, TimeSpan.Zero));
 
         Assert.Null(summary["month"]);
+    }
+
+    // R-PLN-07, R-PLN-08 with the hand-check data: Sep has 12,250.01 left to spend; Oct, Nov and Dec
+    // each leave 17,000 − 1,500 = 15,500 (46,500). Saved to date 9 × 17,000 − 1,249.99 = 151,750.01, so
+    // the projected saving is 151,750.01 − 12,250.01 + 46,500 = 186,000, the planned saved (12 × 15,500).
+    // The balance (1,000 − 1,199.99 + 500 = 300.01, see above) ends at 300.01 − 12,250.01 + 46,500 = 34,550.
+    [Fact]
+    public async Task The_projection_matches_the_hand_check()
+    {
+        var sub = await SetUp([
+            new BankAccount("bank", "SNB", Opening: new OpeningBalance(100_000, new DateOnly(2026, 10, 1))),
+            new BankAccount("rajhi", "Al Rajhi", Opening: new OpeningBalance(50_000, new DateOnly(2026, 10, 1))),
+        ]);
+
+        var projection = (await Get(sub))["projection"]!;
+
+        Assert.Equal(("FY 2026", "2027-01-26"), (projection["fiscalYearLabel"]!.GetValue<string>(), projection["endDate"]!.GetValue<string>()));
+        Assert.Equal((300.01m, 12_250.01m, 46_500m, 34_550m),
+            (Dec(projection["balanceToday"]), Dec(projection["stillToSpend"]), Dec(projection["futureUnallocated"]),
+                Dec(projection["projectedBalance"])));
+        Assert.Equal([("2026-10", 15_500m), ("2026-11", 15_500m), ("2026-12", 15_500m)],
+            projection["futureMonths"]!.AsArray().Select(month => (month!["period"]!["key"]!.GetValue<string>(), Dec(month["unallocated"]))));
+        Assert.Equal((151_750.01m, 186_000m, 186_000m),
+            (Dec(projection["savedToDate"]), Dec(projection["plannedSaved"]), Dec(projection["projectedSaving"])));
+    }
+
+    // Until the balance is complete, the projected saving is known but the projected balance is not.
+    [Fact]
+    public async Task Without_a_complete_balance_there_is_no_projected_balance()
+    {
+        var sub = await SetUp([
+            new BankAccount("bank", "SNB", Opening: new OpeningBalance(100_000, new DateOnly(2026, 10, 1))),
+            new BankAccount("rajhi", "Al Rajhi"),
+        ]);
+
+        var projection = (await Get(sub))["projection"]!;
+
+        Assert.Null(projection["balanceToday"]);
+        Assert.Null(projection["projectedBalance"]);
+        Assert.Equal(186_000m, Dec(projection["projectedSaving"]));
+    }
+
+    [Fact]
+    public async Task No_projection_after_the_last_fiscal_year()
+    {
+        var summary = await Get(await SetUp(), new DateTimeOffset(2027, 1, 27, 9, 0, 0, TimeSpan.Zero));
+
+        Assert.Null(summary["projection"]);
     }
 
     // One entries read serves the balances and the month (the top bar loads after every change).

@@ -21,6 +21,20 @@ public sealed record CarriedMonth(long CarriedIn, long Planned, long Spent)
     public long Remaining => Available - Spent;
 }
 
+// R-PLN-07, R-PLN-08 (owner note 8): how the FY that contains today ends if every month from now on
+// is spent as planned. Leftovers carry (R-PLN-05), so they are spent: only this month's remaining
+// above 0 is still to spend. FutureMonths are the months yet to come, each with its income minus its
+// planned (ThisMonth). BalanceToday is null until the balance is complete (BNK-05).
+public sealed record Projection(
+    long StillToSpend, IReadOnlyList<UnassignedMonth> FutureMonths, long SavedToDate, long PlannedSaved, long? BalanceToday)
+{
+    public long FutureUnallocated => FutureMonths.Sum(month => month.ThisMonth);
+
+    public long? ProjectedBalance => BalanceToday - StillToSpend + FutureUnallocated;
+
+    public long ProjectedSaving => SavedToDate - StillToSpend + FutureUnallocated;
+}
+
 // PRD 4.4. Amounts are long minor units (R-MON-01).
 public static class PlanCalculator
 {
@@ -98,6 +112,20 @@ public static class PlanCalculator
             carried = month.Remaining;
         }
         return result;
+    }
+
+    // R-PLN-07, R-PLN-08. Months is the whole FY's Unassigned (R-PLN-03); toToday is the whole budget
+    // carried (R-PLN-05) from the FY's first month to the month in progress, its last item. Saved to
+    // date counts the months from the first that carries (R-PLN-06), like DSH-02.
+    public static Projection Project(
+        IReadOnlyList<UnassignedMonth> months, IReadOnlyList<CarriedMonth> toToday, int carryStart, long? balanceToday)
+    {
+        var current = toToday.Count - 1;
+        var saved = Enumerable.Range(0, toToday.Count)
+            .Where(i => i >= carryStart)
+            .Sum(i => Saved(months[i].Income, toToday[i].Spent));
+        return new Projection(
+            Math.Max(0, toToday[current].Remaining), months.Skip(current + 1).ToList(), saved, PlannedSaved(months), balanceToday);
     }
 
     // ENT-01: available minus spent; negative means over plan.

@@ -1,0 +1,92 @@
+// docs/DESIGN.md "Pie (DSH-04)": wedges with a 2px --surface edge, the legend beside it (under it on
+// phones). Colors come from the --series-* tokens only.
+:host {
+  display: block;
+}
+
+.pie-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.pie {
+  flex: none;
+  width: 168px;
+  height: 168px;
+}
+
+.slice {
+  stroke: var(--surface);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  transition: opacity 0.15s;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
+.legend {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    border-bottom: 1px solid var(--divider);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+}
+
+.key {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.percent {
+  flex: none;
+}
+
+.amount {
+  flex: none;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.outside-title {
+  margin: 12px 0 0;
+}
+
+.danger {
+  color: var(--danger);
+}
+
+@media (max-width: 599.98px) {
+  .pie-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pie {
+    align-self: center;
+  }
+}

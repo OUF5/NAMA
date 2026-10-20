@@ -1,23 +1,41 @@
 import { Component, computed, inject, signal } from '@angular/core';
+import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { MeService } from '../../core/me';
 import { SummaryService } from '../../core/summary';
 import { formatMoney, toMinor } from '../../shared/money';
 import { formatDate, formatDay } from '../../shared/month-label';
-import { MonthSummary } from '../../shared/month-summary';
 import { RolloverBanner } from '../../shared/rollover-banner';
-import { STATUS_LABELS } from '../months/month-lines';
-import { OverviewApi, OverviewResponse } from '../months/overview-api';
+import { STATUS_LABELS, availableMinor, nameMaps, spendLine } from '../months/month-lines';
+import { MonthOverview, OverviewApi, OverviewResponse } from '../months/overview-api';
 import { PlanApi } from '../plan/plan-api';
+import { BankPie } from './bank-pie';
 import { MonthBars } from './month-bars';
+import { Projection } from './projection';
 
-// PRD 5.9 Dashboard preview (DSH-01 to DSH-03) and the FY-01 banner. It shows the FY that contains
-// today, else the latest; there is no FY selector. One call: the overview (NFR-01), plus
-// GET /api/fiscal-years only when no FY contains today. The bank balances come from the top bar's
-// summary (UX-08), so they cost no call. The API makes every sum (R-MON-01).
+// PRD 5.9 Dashboard (DSH-01 to DSH-06) and the FY-01 banner (owner note 8). It shows the FY that
+// contains today, else the latest; there is no FY selector. One call: the overview (NFR-01), plus
+// GET /api/fiscal-years only when no FY contains today. The projection, today's day of the month and
+// the bank balances come from the top bar's summary (UX-08), so they cost no call. The API makes every
+// sum (R-MON-01); this page picks, ranks and formats.
 @Component({
   selector: 'app-dashboard',
-  imports: [RouterLink, MonthBars, MonthSummary, RolloverBanner],
+  imports: [
+    RouterLink,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatProgressBarModule,
+    MatSelectModule,
+    BankPie,
+    MonthBars,
+    Projection,
+    RolloverBanner,
+  ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
@@ -33,6 +51,9 @@ export class Dashboard {
   protected readonly loadError = signal('');
   protected readonly data = signal<OverviewResponse | null>(null);
   protected readonly status = signal('');
+  // DSH-03: the chart's category, '' for all. Not kept in the URL.
+  protected readonly categoryId = signal('');
+  protected readonly savingHow = signal(false);
 
   protected readonly currency = computed(() => this.meService.me()?.profile?.currency ?? 'SAR');
   protected readonly fiscalYear = computed(() => {
@@ -40,12 +61,106 @@ export class Dashboard {
     return data?.fiscalYears.find((fiscalYear) => fiscalYear.id === data.fyId) ?? null;
   });
 
-  // DSH-01: the month in progress, with its dates.
+  // DSH-03: only categories with a plan or spending in the FY have a row, so only they are offered.
+  protected readonly chartCategories = computed(() => {
+    const data = this.data();
+    if (!data) {
+      return [];
+    }
+    const names = nameMaps(data.categories).categories;
+    return data.rows.map((row) => ({ id: row.categoryId, name: names.get(row.categoryId) ?? '' }));
+  });
+
+  // The whole budget, or the picked category's cells (the API's sums) in the months' shape.
+  protected readonly chartMonths = computed((): MonthOverview[] => {
+    const data = this.data();
+    if (!data) {
+      return [];
+    }
+    const row = data.rows.find((item) => item.categoryId === this.categoryId());
+    if (!row) {
+      return data.months;
+    }
+    const cells = new Map(row.months.map((cell) => [cell.periodKey, cell]));
+    return data.months.map((month) => {
+      const cell = cells.get(month.period.key);
+      return {
+        ...month,
+        income: null,
+        carriedIn: cell?.carriedIn ?? 0,
+        planned: cell?.planned ?? 0,
+        spent: cell?.spent ?? 0,
+        remaining: cell?.remaining ?? 0,
+      };
+    });
+  });
+
+  // DSH-01: the month in progress, its status line and today's marker (from the summary, when it is
+  // the same month).
   protected readonly current = computed(() => {
     const month = this.data()?.months.find((m) => m.status === 'inProgress');
-    return month
-      ? { month, dates: `${formatDay(month.period.startDate)} to ${formatDay(month.period.endDate)}` }
-      : null;
+    if (!month) {
+      return null;
+    }
+    const line = spendLine(availableMinor(month), toMinor(month.spent), this.currency());
+    const today = this.summaryService.summary()?.month;
+    const day = today && today.period.key === month.period.key ? today : null;
+    return {
+      month,
+      line,
+      dates: `${formatDay(month.period.startDate)} to ${formatDay(month.period.endDate)}`,
+      remaining: this.money(month.remaining),
+      kpis: [
+        { label: 'From last month', value: this.money(month.carriedIn) },
+        { label: 'Planned', value: this.money(month.planned) },
+        { label: 'Spent', value: this.money(month.spent) },
+        ...(month.income === null ? [] : [{ label: 'Income', value: this.money(month.income) }]),
+      ],
+      day: day
+        ? {
+            marker: (day.day * 100) / day.days,
+            text: `Day ${day.day} of ${day.days} · ${day.daysLeft} ${day.daysLeft === 1 ? 'day' : 'days'} left`,
+          }
+        : null,
+    };
+  });
+
+  // DSH-01: the 3 sub-categories nearest to or over their plan this month (Near limit or Over),
+  // over plan first, then by the share of the available amount spent.
+  protected readonly watch = computed(() => {
+    const data = this.data();
+    const key = this.current()?.month.period.key;
+    if (!data || !key) {
+      return [];
+    }
+    const names = nameMaps(data.categories).subs;
+    return data.rows
+      .flatMap((row) =>
+        row.subCategories.map((sub) => {
+          const cell = sub.months.find((item) => item.periodKey === key);
+          const available = cell ? availableMinor(cell) : 0;
+          const spent = cell ? toMinor(cell.spent) : 0;
+          return { categoryId: row.categoryId, subCategoryId: sub.subCategoryId, available, spent };
+        }),
+      )
+      .map((item) => ({ ...item, line: spendLine(item.available, item.spent, this.currency()) }))
+      .filter((item) => item.line.status === 'warn' || item.line.status === 'danger')
+      .sort((a, b) => {
+        if (a.line.status !== b.line.status) {
+          return a.line.status === 'danger' ? -1 : 1;
+        }
+        const share = (item: typeof a) => (item.available > 0 ? item.spent / item.available : Infinity);
+        return share(b) - share(a);
+      })
+      .slice(0, 3)
+      .map((item) => ({
+        id: item.subCategoryId,
+        name: names.get(item.subCategoryId) ?? '',
+        spent: formatMoney(item.spent, this.currency()),
+        of: formatMoney(item.available, this.currency()),
+        line: item.line,
+        query: { fyId: data.fyId, categoryId: item.categoryId, subCategoryId: item.subCategoryId },
+      }));
   });
 
   // When no month is in progress: the FY ended (the FY-01 banner is above), or it has not started.
@@ -81,45 +196,92 @@ export class Dashboard {
   });
 
   protected readonly toDate = computed(() => {
-    const data = this.data();
-    const toDate = data?.toDate;
+    const toDate = this.data()?.toDate;
     if (!toDate) {
       return null;
     }
+    const currency = this.currency();
+    const under = toMinor(toDate.planned) - toMinor(toDate.spent);
     const ahead = toMinor(toDate.saved) - toMinor(toDate.plannedSaved);
     return {
       income: this.money(toDate.income),
+      planned: this.money(toDate.planned),
       spent: this.money(toDate.spent),
       saved: this.money(toDate.saved),
       negative: toDate.saved < 0,
-      plannedSaved: this.money(toDate.plannedSaved),
-      plannedNegative: toDate.plannedSaved < 0,
-      // How saved compares with the plan, in words (color is never the only signal).
-      versus:
+      // How spent compares with the plan, in words (UX-07: color is never the only signal).
+      spentVersus:
+        under === 0
+          ? 'On plan'
+          : under > 0
+            ? `${formatMoney(under, currency)} under plan`
+            : `${formatMoney(-under, currency)} over plan`,
+      spentOver: under < 0,
+      // R-PLN-03: the Unassigned of the latest started month, what the plan meant to keep by now.
+      savedVersus:
         ahead === 0
-          ? 'Saved matches the plan'
+          ? 'As planned'
           : ahead > 0
-            ? `Saved ${formatMoney(ahead, this.currency())} more`
-            : `Saved ${formatMoney(-ahead, this.currency())} less`,
-      fyPlannedSaved: data.totals.plannedSaved === null ? null : this.money(data.totals.plannedSaved),
+            ? `${formatMoney(ahead, currency)} more than planned`
+            : `${formatMoney(-ahead, currency)} less than planned`,
     };
   });
 
-  // R-BAL-03, from the top bar's summary.
+  // DSH-05, from the top bar's summary: null until it loads; its projection is null when no FY
+  // contains today.
+  protected readonly projection = computed(() => {
+    const summary = this.summaryService.summary();
+    if (!summary) {
+      return null;
+    }
+    const projection = summary.projection;
+    return {
+      data: projection,
+      monthLabel: summary.month?.period.label ?? '',
+      end: projection ? `End of ${projection.fiscalYearLabel} · ${formatDate(projection.endDate)}` : '',
+    };
+  });
+
+  // DSH-06, R-PLN-08: planned saving at the FY's end next to the projected saving. Leftovers are spent
+  // (they carry), so the projection is lower only by what was overspent.
+  protected readonly saving = computed(() => {
+    const projection = this.summaryService.summary()?.projection;
+    if (!projection) {
+      return null;
+    }
+    const currency = this.currency();
+    const below = toMinor(projection.plannedSaved) - toMinor(projection.projectedSaving);
+    return {
+      fy: projection.fiscalYearLabel,
+      planned: this.money(projection.plannedSaved),
+      projected: this.money(projection.projectedSaving),
+      plannedNegative: projection.plannedSaved < 0,
+      projectedNegative: projection.projectedSaving < 0,
+      onTrack: below <= 0,
+      verdict: below <= 0 ? 'On track' : `${formatMoney(below, currency)} below plan`,
+      reason: below <= 0 ? 'Your plan is covered so far.' : 'You have spent more than planned so far.',
+      lines: [
+        { op: '', label: 'Saved so far', value: this.money(projection.savedToDate) },
+        { op: '−', label: 'Still to spend this month', value: this.money(projection.stillToSpend) },
+        { op: '+', label: 'Future unallocated', value: this.money(projection.futureUnallocated) },
+      ],
+    };
+  });
+
+  // DSH-04, R-BAL-03, from the top bar's summary; savedClosed is the overview's (closed months).
   protected readonly banks = computed(() => {
     const summary = this.summaryService.summary();
     if (!summary) {
       return null;
     }
+    const savedClosed = this.data()?.toDate.savedClosed;
     return {
       total: summary.balance === null ? null : this.money(summary.balance),
       negative: (summary.balance ?? 0) < 0,
-      accounts: summary.accounts.map((account) => ({
-        id: account.id,
-        name: account.name,
-        balance: account.balance === null ? null : this.money(account.balance),
-        negative: (account.balance ?? 0) < 0,
-      })),
+      count: `${summary.accounts.length} ${summary.accounts.length === 1 ? 'account' : 'accounts'}`,
+      accounts: summary.accounts,
+      added: savedClosed === undefined ? null : this.money(savedClosed),
+      addedNegative: (savedClosed ?? 0) < 0,
     };
   });
 
@@ -143,6 +305,7 @@ export class Dashboard {
         return;
       }
       this.data.set(await this.overviewApi.overview(fyId));
+      this.categoryId.set('');
       this.loadError.set('');
     } catch {
       this.loadError.set('The dashboard could not be loaded. Please reload the page.');

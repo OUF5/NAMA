@@ -60,11 +60,15 @@ export interface Totals {
 // DSH-02 (owner's choice, M9): the months that started on or before today, each with its full income
 // and every entry in it. saved is income minus spent and can be negative. plannedSaved is the
 // Unassigned of the latest started month (R-PLN-03): what the plan meant to keep by now.
+// planned is the started months' planned spending; savedClosed is income minus spent of the closed
+// months only (DSH-04 "this FY added").
 export interface ToDate {
   income: number;
+  planned: number;
   spent: number;
   saved: number;
   plannedSaved: number;
+  savedClosed: number;
 }
 
 // fiscalYears (oldest first) feed the MON-03 selector; categories is GET /api/categories (names and

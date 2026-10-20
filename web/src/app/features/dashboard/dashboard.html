@@ -1,5 +1,9 @@
-<h1>Dashboard</h1>
-<p class="caption preview">Preview: the full dashboard comes in Phase 2</p>
+<div class="page-head">
+  <h1>Dashboard</h1>
+  @if (fiscalYear(); as fy) {
+    <span class="caption fy">{{ fy.label }} · {{ formatDate(fy.startDate) }} to {{ formatDate(fy.endDate) }}</span>
+  }
+</div>
 
 @if (loadError()) {
   <p class="error" role="alert">{{ loadError() }}</p>
@@ -11,14 +15,42 @@
       (started)="rolledOver($event.fiscalYear.label, $event.fiscalYear.id)"
     />
   }
-  @if (fiscalYear(); as fy) {
-    <p class="caption fy">
-      {{ fy.label }} · {{ formatDate(fy.startDate) }} to {{ formatDate(fy.endDate) }}
-    </p>
-  }
   <p class="status" aria-live="polite">{{ status() }}</p>
 
   <div class="cards">
+    <!-- DSH-03: planned vs spent per month, on top (owner note 8). -->
+    <section class="card wide" aria-labelledby="bars-title">
+      <div class="card-head">
+        <div class="title">
+          <h2 id="bars-title">Planned vs spent</h2>
+          <span class="caption">Every month of {{ fiscalYear()?.label }}</span>
+        </div>
+        @if (chartCategories().length > 0) {
+          <mat-form-field subscriptSizing="dynamic" class="filter">
+            <mat-label>Category</mat-label>
+            <mat-select [value]="categoryId()" (selectionChange)="categoryId.set($event.value)">
+              <mat-option value="">All categories</mat-option>
+              @for (category of chartCategories(); track category.id) {
+                <mat-option [value]="category.id">{{ category.name }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
+      </div>
+      @if (d.rows.length === 0) {
+        <!-- UX-03 -->
+        <div class="empty">
+          <p class="empty-title">Nothing planned or spent in {{ fiscalYear()?.label }} yet</p>
+          <p class="note">
+            Plan amounts on <a routerLink="/plan">Plan</a>, and add spending on
+            <a routerLink="/add">Add</a>.
+          </p>
+        </div>
+      } @else {
+        <app-month-bars [months]="chartMonths()" [currency]="currency()" />
+      }
+    </section>
+
     <!-- DSH-01: the current month. -->
     <section class="card current" aria-labelledby="current-title">
       @if (current(); as c) {
@@ -29,12 +61,79 @@
           </div>
           <span class="now-chip">{{ inProgressLabel }}</span>
         </div>
-        <app-month-summary [month]="c.month" [currency]="currency()" />
+        <span class="caption">Remaining</span>
+        <div class="hero-line">
+          <span class="money hero" [class]="c.line.status">{{ c.remaining }}</span>
+          @if (c.line.status) {
+            <span class="chip" [class]="c.line.status">{{ c.line.chip }}</span>
+          }
+        </div>
+        <div class="bar">
+          @if (c.line.bar !== null) {
+            <mat-progress-bar
+              mode="determinate"
+              [class]="c.line.status"
+              [value]="c.line.bar"
+              [attr.aria-label]="'Share of the available amount spent: ' + c.line.chip"
+            />
+          } @else {
+            <div class="empty-bar"></div>
+          }
+          @if (c.day; as day) {
+            <span class="marker" [style.left.%]="day.marker" aria-hidden="true"></span>
+          }
+        </div>
+        @if (c.day; as day) {
+          <p class="caption day">{{ day.text }}</p>
+        }
+        <div class="mini">
+          @for (kpi of c.kpis; track kpi.label) {
+            <div>
+              <span class="caption">{{ kpi.label }}</span>
+              <span class="money">{{ kpi.value }}</span>
+            </div>
+          }
+        </div>
+        <h3 class="sub-title">Watch</h3>
+        @if (watch().length > 0) {
+          <ul class="watch">
+            @for (item of watch(); track item.id) {
+              <li>
+                <a routerLink="/tracker" [queryParams]="item.query" class="row-link">
+                  <span class="name">{{ item.name }}</span>
+                  <span class="caption money">{{ item.spent }} of {{ item.of }}</span>
+                  <span class="chip" [class]="item.line.status">{{ item.line.chip }}</span>
+                </a>
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="note">Every sub-category is within plan.</p>
+        }
       } @else {
-        <h2 id="current-title">Current month</h2>
+        <div class="card-head">
+          <h2 id="current-title">Current month</h2>
+        </div>
         <p class="note">No month is in progress. {{ noMonthText() }}</p>
       }
     </section>
+
+    <!-- DSH-05: the projection (R-PLN-07). -->
+    @if (projection(); as p) {
+      <section class="card" aria-labelledby="projection-title">
+        <div class="card-head">
+          <div class="title">
+            <h2 id="projection-title">Projection</h2>
+            <span class="caption">{{ p.end }}</span>
+          </div>
+        </div>
+        @if (p.data; as data) {
+          <app-projection [projection]="data" [monthLabel]="p.monthLabel" [currency]="currency()" />
+        } @else {
+          <p class="note">The projection shows while a month of a fiscal year is in progress.</p>
+        }
+      </section>
+    }
 
     <!-- DSH-02: FY to date. -->
     @if (toDate(); as t) {
@@ -51,83 +150,98 @@
             <span class="money value">{{ t.income }}</span>
           </div>
           <div class="kpi">
+            <span class="caption">Planned until now</span>
+            <span class="money value">{{ t.planned }}</span>
+          </div>
+          <div class="kpi spent">
             <span class="caption">Spent</span>
             <span class="money value">{{ t.spent }}</span>
+            <span class="caption" [class.danger]="t.spentOver">{{ t.spentVersus }}</span>
           </div>
           <div class="kpi saved">
             <span class="caption">Saved</span>
             <span class="money value" [class.danger]="t.negative">{{ t.saved }}</span>
             @if (t.negative) {
               <span class="caption danger">Spent more than income</span>
+            } @else {
+              <span class="caption">{{ t.savedVersus }}</span>
             }
           </div>
-          <!-- R-PLN-03: the Unassigned of the latest started month, what the plan meant to keep by now. -->
+        </div>
+      </section>
+    }
+
+    <!-- DSH-06: planned saving vs projection (R-PLN-08). -->
+    @if (saving(); as s) {
+      <section class="card" aria-labelledby="saving-title">
+        <div class="card-head">
+          <div class="title">
+            <h2 id="saving-title">Saving: plan vs projection</h2>
+            <span class="caption">By the end of {{ s.fy }}</span>
+          </div>
+          <span class="chip" [class.ok]="s.onTrack" [class.danger]="!s.onTrack">{{ s.verdict }}</span>
+        </div>
+        <div class="kpis two">
           <div class="kpi">
-            <span class="caption">Planned saved</span>
-            <span class="money value" [class.danger]="t.plannedNegative">{{ t.plannedSaved }}</span>
-            <span class="caption">{{ t.versus }}</span>
+            <span class="caption">Planned saving</span>
+            <span class="money value" [class.danger]="s.plannedNegative">{{ s.planned }}</span>
+          </div>
+          <div class="kpi">
+            <span class="caption">Projected saving</span>
+            <span class="money value" [class.danger]="s.projectedNegative">{{ s.projected }}</span>
           </div>
         </div>
-        @if (t.fyPlannedSaved) {
-          <!-- R-PLN-04 -->
-          <p class="caption fy-saved">
-            Planned saved by the end of {{ fiscalYear()?.label }} <span class="money">{{ t.fyPlannedSaved }}</span>
+        <p class="caption reason">{{ s.reason }}</p>
+        <button mat-button type="button" class="fold" [attr.aria-expanded]="savingHow()" (click)="savingHow.set(!savingHow())">
+          <mat-icon class="chevron" [class.open]="savingHow()" aria-hidden="true">chevron_right</mat-icon>
+          How?
+        </button>
+        @if (savingHow()) {
+          <dl class="breakdown">
+            @for (line of s.lines; track line.label) {
+              <div>
+                <dt><span class="op" aria-hidden="true">{{ line.op }}</span>{{ line.label }}</dt>
+                <dd class="money">{{ line.value }}</dd>
+              </div>
+            }
+            <div class="result">
+              <dt><span class="op" aria-hidden="true">=</span>Projected saving</dt>
+              <dd class="money">{{ s.projected }}</dd>
+            </div>
+          </dl>
+          <p class="caption">
+            Planned saving is your plan's income minus planned for the whole year. Leftovers carry into the next
+            month, so they count as still to spend.
           </p>
-          <p class="caption">Saved is what you kept; planned saved is what your plan leaves unallocated.</p>
         }
       </section>
     }
 
-    <!-- R-BAL-03: the balances, as on Banks and in the top bar. -->
+    <!-- DSH-04: the total balance and a pie by account (R-BAL-03). -->
     @if (banks(); as b) {
-      <section class="card" aria-labelledby="banks-title">
+      <section class="card wide" aria-labelledby="banks-title">
         <div class="card-head">
           <div class="title">
-            <h2 id="banks-title">Bank balances</h2>
-            <span class="caption">Today</span>
+            <h2 id="banks-title">Total balance</h2>
+            <span class="caption">Today · {{ b.count }}</span>
           </div>
           <a routerLink="/banks">Open Banks</a>
         </div>
         @if (b.total) {
-          <div class="kpi bank-total">
-            <span class="caption">Total</span>
-            <span class="money value" [class.danger]="b.negative">{{ b.total }}</span>
-          </div>
+          <span class="money hero" [class.danger]="b.negative">{{ b.total }}</span>
+          @if (b.added) {
+            <p class="caption added">
+              This FY added <span class="money" [class.danger]="b.addedNegative">{{ b.added }}</span> · income minus
+              spent in the closed months
+            </p>
+          }
+          <app-bank-pie [accounts]="b.accounts" [currency]="currency()" />
         } @else {
-          <p class="note setup">
+          <p class="note">
             Set the opening balance of every account and the income split on
             <a routerLink="/banks">Banks</a> to see your total.
           </p>
         }
-        <ul class="accounts">
-          @for (account of b.accounts; track account.id) {
-            <li>
-              <span class="name">{{ account.name }}</span>
-              <span class="money" [class.danger]="account.negative" [class.caption]="!account.balance">
-                {{ account.balance ?? 'No balance yet' }}
-              </span>
-            </li>
-          }
-        </ul>
-      </section>
-    }
-
-    <!-- DSH-03: planned vs spent per month. -->
-    @if (d.rows.length === 0) {
-      <!-- UX-03 -->
-      <section class="card empty">
-        <h2>Nothing planned or spent in {{ fiscalYear()?.label }} yet</h2>
-        <p class="note">
-          Plan amounts on <a routerLink="/plan">Plan</a>, and add spending on
-          <a routerLink="/add">Add</a>.
-        </p>
-      </section>
-    } @else {
-      <section class="card" aria-labelledby="bars-title">
-        <div class="card-head">
-          <h2 id="bars-title">Planned vs spent</h2>
-        </div>
-        <app-month-bars [months]="d.months" [currency]="currency()" />
       </section>
     }
   </div>

@@ -295,4 +295,75 @@ public class PlanCalculatorTests
 
         Assert.Equal("fuel", Assert.Single(copied).SubCategoryId);
     }
+
+    // R-PLN-07, R-PLN-08 hand example: income 17,000 and planned 15,000 every month, today in Oct (the
+    // 10th month). Jan to Sep spent 15,000 each and Oct 14,000 so far, so 1,000 is left this month.
+    private static Projection ProjectOct(long octSpent, int carryStart = 0, long? balanceToday = 2_800_000)
+    {
+        var plan = new PlanAmounts("all", "all", EveryMonth(1_500_000));
+        var months = PlanCalculator.RunningUnassigned(Fy.Periods, EveryMonth(1_700_000), [plan], carryStart);
+        var toToday = PlanCalculator.Carry(
+            Fy.Periods.Take(10).Select((_, i) => (1_500_000L, i == 9 ? octSpent : 1_500_000L)), carryStart);
+        return PlanCalculator.Project(months, toToday, carryStart, balanceToday);
+    }
+
+    // 28,000 − 1,000 + 2 × 2,000 = 31,000. Saved to date 170,000 − 149,000 = 21,000, and the projected
+    // saving 21,000 − 1,000 + 4,000 = 24,000 is the planned saved (leftovers are spent).
+    [Fact]
+    public void Projection_matches_the_hand_example()
+    {
+        var projection = ProjectOct(octSpent: 1_400_000);
+
+        Assert.Equal((100_000, 400_000, 3_100_000L), (projection.StillToSpend, projection.FutureUnallocated, projection.ProjectedBalance));
+        Assert.Equal(["2026-11", "2026-12"], projection.FutureMonths.Select(month => month.PeriodKey));
+        Assert.All(projection.FutureMonths, month => Assert.Equal(200_000, month.ThisMonth));
+        Assert.Equal((2_100_000, 2_400_000, 2_400_000), (projection.SavedToDate, projection.ProjectedSaving, projection.PlannedSaved));
+    }
+
+    // 500 overspent: nothing is still to spend, and the projected saving is 500 below plan (23,500).
+    [Fact]
+    public void An_overspend_lowers_the_projected_saving()
+    {
+        var projection = ProjectOct(octSpent: 1_550_000);
+
+        Assert.Equal(0, projection.StillToSpend);
+        Assert.Equal((1_950_000, 2_350_000, 2_400_000), (projection.SavedToDate, projection.ProjectedSaving, projection.PlannedSaved));
+        Assert.Equal(3_200_000L, projection.ProjectedBalance);
+    }
+
+    [Fact]
+    public void Without_a_balance_there_is_no_projected_balance()
+    {
+        var projection = ProjectOct(octSpent: 1_400_000, balanceToday: null);
+
+        Assert.Null(projection.ProjectedBalance);
+        Assert.Equal(2_400_000, projection.ProjectedSaving);
+    }
+
+    // R-PLN-06: set up in Oct, so only Oct counts: saved 3,000, 1,000 left, Nov and Dec 4,000.
+    // 3,000 − 1,000 + 4,000 = 6,000, the planned saved from Oct.
+    [Fact]
+    public void The_projection_counts_from_the_first_month_that_carries()
+    {
+        var projection = ProjectOct(octSpent: 1_400_000, carryStart: 9);
+
+        Assert.Equal((300_000, 100_000, 400_000), (projection.SavedToDate, projection.StillToSpend, projection.FutureUnallocated));
+        Assert.Equal((600_000, 600_000), (projection.ProjectedSaving, projection.PlannedSaved));
+    }
+
+    // In the FY's last month nothing is yet to come.
+    [Fact]
+    public void In_the_last_month_only_what_is_left_counts()
+    {
+        var plan = new PlanAmounts("all", "all", EveryMonth(1_500_000));
+        var months = PlanCalculator.RunningUnassigned(Fy.Periods, EveryMonth(1_700_000), [plan]);
+        var toToday = PlanCalculator.Carry(Fy.Periods.Select(_ => (1_500_000L, 1_400_000L)));
+
+        var projection = PlanCalculator.Project(months, toToday, 0, 1_000_000);
+
+        Assert.Empty(projection.FutureMonths);
+        Assert.Equal((1_200_000, 0L), (projection.StillToSpend, projection.FutureUnallocated));
+        Assert.Equal(-200_000L, projection.ProjectedBalance);
+        Assert.Equal((3_600_000, 2_400_000), (projection.SavedToDate, projection.ProjectedSaving));
+    }
 }

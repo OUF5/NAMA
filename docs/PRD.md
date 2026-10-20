@@ -221,6 +221,10 @@ These are the rules Claude must get exactly right. Put them in pure functions in
     - Example: Groceries 1,500 a month; spent 1,200, 1,700 and 1,500. Remaining is 300, 100 and 100: January's 300 covers February's overspend.
 - **R-PLN-06** NAMA counts from the month you started it. The first month that carries (R-PLN-03, R-PLN-05) is the month that contains the day the wizard was finished, or the FY's first month when that is later. Months before it were never tracked (no entries is not money left), so they stand alone: nothing carries out of them. Dashboard's FY to date (DSH-02) and Plan's FY column start there too. Plan and Tracker say so when it is not the FY's first month. ✅ DECIDED (20 Oct 2026, after the owner's check)
     - Example: the FY starts in Aug, Rent is planned at 1,000 every month, and NAMA is set up on 20 Oct. Oct has 1,000 left, not 3,000.
+- **R-PLN-07** Projected balance at the end of the FY that contains today = balance today (R-BAL-03, which already holds the money you had before NAMA) − still to spend this month + future unallocated. Still to spend this month = the month's remaining for the whole budget (R-PLN-05) when it is above 0, else 0: leftovers are spent, as Tracker carries them. Future unallocated = income − planned of every month yet to come (the FY's last Unassigned − this month's Unassigned, R-PLN-03). It is unknown until the balance is complete (BNK-05). ✅ DECIDED (20 Oct 2026, owner note 8)
+    - Example: income 17,000 and planned 15,000 every month of a 12-month FY, today in the 10th month, balance 28,000 and 1,000 left this month. Projected balance = 28,000 − 1,000 + 2 × 2,000 = 31,000.
+- **R-PLN-08** Projected saving for the FY = saved to date (DSH-02) − still to spend this month + future unallocated (R-PLN-07). It equals planned saved (R-PLN-04) unless the whole budget has overspent so far; then it is lower by that amount. ✅ DECIDED (20 Oct 2026, owner note 8)
+    - Example: the R-PLN-07 example has saved to date 21,000 and projects 21,000 − 1,000 + 4,000 = 24,000, the planned saved. With 500 overspent instead of 1,000 left, it projects 23,500: 500 below plan.
 
 ### 4.5 Status and editing
 
@@ -348,14 +352,16 @@ Without this, the app stops working when the first FY ends.
 - **FY-02** Starting the next FY creates its months using R-CAL-08 and the current settings. A checkbox (on by default) copies the previous FY's planned amounts month by month. Categories and sub-categories carry over automatically because they are not tied to an FY.
 - **FY-03** Entries cannot be dated after the latest FY ends. The date picker only offers dates inside existing FYs (R-STA-03).
 
-### 5.9 Dashboard preview (DSH)
+### 5.9 Dashboard (DSH) ✅ DECIDED (20 Oct 2026, owner note 8; the Phase 1 preview before)
 
-Page **Dashboard** (`/`), the landing page. Labeled "Preview: the full dashboard comes in Phase 2".
+Page **Dashboard** (`/`), the landing page. Under the FY-01 banner, in this order (owner's choice after the first look, 20 Oct 2026): Planned vs spent (DSH-03) across the page, then two columns on wide screens: the current month (DSH-01) and Projection (DSH-05), FY to date (DSH-02) and Planned saving vs projection (DSH-06), then Total balance (DSH-04) across the page. Every card has the in-progress month's border, and says how its numbers are made (the longer explanations fold away under "How?").
 
-- **DSH-01** Current month card: label and dates, income, planned, spent, remaining, progress bar.
-- **DSH-02** FY to date (from the first month that carries, R-PLN-06): total income, total spent, saved (income minus spent), and planned saved: the Unassigned of the latest started month (R-PLN-03), with how saved compares in words. Under it, Planned saved by the end of the FY (R-PLN-04). ✅ DECIDED (20 Oct 2026)
-- **DSH-03** Planned vs spent per month as simple CSS bars. No chart library in Phase 1. The status color counts what carried in (R-PLN-05). 🆕 ADDED · Tech
-- **DSH-04** Bank balances: the total and each active account's balance (R-BAL-03), with a link to Banks. ✅ DECIDED (20 Oct 2026)
+- **DSH-05** Projection (R-PLN-07): the projected balance at the FY's end, then the lines that make it: Balance today, − Still to spend this month, + Future unallocated (folded by month), = Projected balance. Until the balance is complete it says what is missing, with a link to Banks.
+- **DSH-01** Current month card: label and dates, income, planned, spent, remaining, progress bar. The bar has a "today" marker with "Day 24 of 30", and under it the 3 sub-categories nearest to or over their plan this month (warning or danger status, ENT-01), each a link to Tracker filtered to it.
+- **DSH-02** FY to date (from the first month that carries, R-PLN-06): total income, planned until now (the started months' planned), total spent with how it compares in words, saved (income minus spent), and planned saved: the Unassigned of the latest started month (R-PLN-03), with how saved compares in words. Under it, Planned saved by the end of the FY (R-PLN-04). ✅ DECIDED (20 Oct 2026)
+- **DSH-06** Planned saving vs projection (R-PLN-08): planned saved by the FY's end (R-PLN-04) next to the projected saving, with the difference in words ("On track", or "SAR 500 below plan: overspent so far") and the lines that make the projected saving.
+- **DSH-03** Planned vs spent per month as simple CSS bars. No chart library. The status color counts what carried in (R-PLN-05). A category picker ("All categories" first) narrows the bars to one category; it is not kept in the URL. 🆕 ADDED · Tech
+- **DSH-04** Total balance: the bank total today (R-BAL-03), then a pie split by active account, each with its balance and share; accounts at 0 or below (or without a balance) are listed under it, because a pie cannot show them. Under it, what this FY added: income − spent of the closed months. A link to Banks. ✅ DECIDED (20 Oct 2026)
 
 ### 5.10 Navigation and UX rules (UX)
 
@@ -493,9 +499,9 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 | `PUT /api/settings/calendar` | FY start month and payday | Applies from the next FY; returns the date it takes effect |
 | `GET /api/fiscal-years` | List FYs |  |
 | `POST /api/fiscal-years/next` | Start the next FY; body has `copyPlans` | 409 before the last month of the current FY |
-| `GET /api/fiscal-years/{fyId}/overview` | Everything Dashboard and Months need: months with status, income, carried in, planned, spent and remaining (R-PLN-05) per sub-category per month, totals with planned saved, and FY to date with planned saved | One call. Optional `categoryId` and `subCategoryId` (MON-05) narrow rows, months and totals and make income and planned saved null |
+| `GET /api/fiscal-years/{fyId}/overview` | Everything Dashboard and Months need: months with status, income, carried in, planned, spent and remaining (R-PLN-05) per sub-category per month, totals with planned saved, and FY to date with planned and planned saved | One call. Optional `categoryId` and `subCategoryId` (MON-05) narrow rows, months and totals and make income and planned saved null |
 | `GET /api/indicator?subCategoryId=&date=` | Carried in, planned, available, spent, remaining and percent for one sub-category in the month of that date (R-PLN-05) | Used by Add entry |
-| `GET /api/summary` | The top bar (UX-08): the month in progress (days left, income, carried in, planned, spent, remaining, unassigned) and the balances | Loaded once setup is complete and after every change |
+| `GET /api/summary` | The top bar (UX-08): the month in progress (day, days, days left, income, carried in, planned, spent, remaining, unassigned), the balances, and the projection (R-PLN-07, R-PLN-08) for Dashboard | Loaded once setup is complete and after every change |
 | `GET /api/banks` | Banks (BNK-01 to BNK-05): accounts with opening balance, share, this month's income share and balance breakdown, the total, the split and its history, the FYs, income per month, transfers | One call |
 | `PUT /api/income-split` | Set the split from a month (R-BAL-02): `effectiveFromPeriodKey`, `shares` (percent per account) | Answers like `GET /api/banks` |
 | `POST /api/transfers`, `PUT /api/transfers/{id}`, `DELETE /api/transfers/{id}` | Add, edit, delete a transfer (R-TRF-01) | 422 if the date is outside existing FYs |
@@ -714,9 +720,9 @@ Do them in order. Each milestone ends with its checks passing and a push to `mai
 
 ---
 
-## 10. Phase 2: Full dashboard (placeholder)
+## 10. Phase 2: Full dashboard
 
-The scope will be defined later. Phase 1 already prepares for it:
+Started on 20 Oct 2026 (owner note 8): the scope is section 5.9. Phase 1 prepared for it:
 
 - The overview endpoint (`GET /api/fiscal-years/{fyId}/overview`) is the data source.
 - The Dashboard route exists with preview cards that Phase 2 replaces.

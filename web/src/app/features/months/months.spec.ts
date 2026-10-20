@@ -149,7 +149,7 @@ function overview(
       },
     ],
     totals: { income: 51500.25, planned: 5300, spent: 1379.99, remaining: 3920.01, plannedSaved: 46200.25 },
-    toDate: { income: 34500.25, spent: 1379.99, saved: 33120.26, plannedSaved: 31100.25 },
+    toDate: { income: 34500.25, planned: 3400, spent: 1379.99, saved: 33120.26, plannedSaved: 31100.25, savedClosed: 17000 },
     rollover: null,
     carryFromPeriodKey: '2026-08',
   };

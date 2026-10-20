@@ -8,7 +8,7 @@ import { Summary, SummaryService, summaryInterceptor } from './summary';
 
 // UX-08: the top bar's numbers load again after every change, once a change settles.
 describe('SummaryService', () => {
-  const summary: Summary = { balance: 100, complete: true, accounts: [], month: null };
+  const summary: Summary = { balance: 100, complete: true, accounts: [], month: null, projection: null };
   const me = signal<Me | null>(null);
   let http: HttpTestingController;
 

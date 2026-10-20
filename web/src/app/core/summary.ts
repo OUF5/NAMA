@@ -16,6 +16,9 @@ export interface SummaryAccount {
 // (R-PLN-03). daysLeft counts today.
 export interface SummaryMonth {
   period: PeriodInfo;
+  // Today's day of the month (1 on payday) and the month's length (DSH-01's marker).
+  day: number;
+  days: number;
   daysLeft: number;
   income: number;
   carriedIn: number;
@@ -25,13 +28,37 @@ export interface SummaryMonth {
   unassigned: number;
 }
 
+// A month yet to come with its income minus its planned (R-PLN-07).
+export interface FutureMonth {
+  period: PeriodInfo;
+  unallocated: number;
+}
+
+// Dashboard's Projection and Planned saving vs projection (DSH-05, DSH-06) for the FY that contains
+// today: R-PLN-07 projectedBalance = balanceToday - stillToSpend + futureUnallocated, and R-PLN-08
+// projectedSaving = savedToDate - stillToSpend + futureUnallocated. The API makes every sum.
+// balanceToday and projectedBalance are null until the balance is complete.
+export interface Projection {
+  fiscalYearLabel: string;
+  endDate: string;
+  balanceToday: number | null;
+  stillToSpend: number;
+  futureUnallocated: number;
+  futureMonths: FutureMonth[];
+  projectedBalance: number | null;
+  savedToDate: number;
+  plannedSaved: number;
+  projectedSaving: number;
+}
+
 // balance is the active accounts' total, null until complete (every active account has an opening
-// balance and income has a split). month is null when no FY contains today.
+// balance and income has a split). month and projection are null when no FY contains today.
 export interface Summary {
   balance: number | null;
   complete: boolean;
   accounts: SummaryAccount[];
   month: SummaryMonth | null;
+  projection: Projection | null;
 }
 
 // UX-08: the top bar's numbers. Loaded once the shell shows the navigation, and again after every

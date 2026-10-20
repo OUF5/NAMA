@@ -41,7 +41,9 @@ public static class OverviewEndpoint
     // income and every entry in it, from the first month that carries (R-PLN-06: months before NAMA was
     // set up were never tracked). Saved is income minus spent and can be negative. PlannedSaved is the
     // Unassigned of the latest started month (R-PLN-03): what the plan meant to keep by now.
-    public record ToDateDto(decimal Income, decimal Spent, decimal Saved, decimal PlannedSaved);
+    // Planned is the started months' planned spending (DSH-02 "planned until now"). SavedClosed is
+    // income minus spent of the closed months only: what the FY added to the banks (DSH-04).
+    public record ToDateDto(decimal Income, decimal Planned, decimal Spent, decimal Saved, decimal PlannedSaved, decimal SavedClosed);
 
     // FiscalYears (oldest first) feed the MON-03 selector; Categories is GET /api/categories, for
     // the names and the edit dialog's pickers. Rollover is the FY-01 banner (null when hidden).
@@ -180,6 +182,11 @@ public static class OverviewEndpoint
         var incomeToDate = started.Sum(key => income[key]);
         var spentToDate = allEntries.Where(entry => started.Contains(entry.PeriodKey)).Sum(entry => entry.AmountMinor);
         var plannedSavedToDate = unassigned.LastOrDefault(month => started.Contains(month.PeriodKey))?.Unassigned ?? 0;
+        var plannedToDate = unassigned.Where(month => started.Contains(month.PeriodKey)).Sum(month => month.Planned);
+        var closed = periods.Skip(carryStart).Where(period => FiscalCalendar.Status(period, today) == PeriodStatus.Closed)
+            .Select(period => period.Key).ToHashSet(StringComparer.Ordinal);
+        var savedClosed = PlanCalculator.Saved(
+            closed.Sum(key => income[key]), allEntries.Where(entry => closed.Contains(entry.PeriodKey)).Sum(entry => entry.AmountMinor));
 
         return new OverviewResponse(
             fiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
@@ -202,9 +209,11 @@ public static class OverviewEndpoint
                 scope is null ? Money.FromMinor(PlanCalculator.PlannedSaved(unassigned)) : null),
             new ToDateDto(
                 Money.FromMinor(incomeToDate),
+                Money.FromMinor(plannedToDate),
                 Money.FromMinor(spentToDate),
                 Money.FromMinor(PlanCalculator.Saved(incomeToDate, spentToDate)),
-                Money.FromMinor(plannedSavedToDate)),
+                Money.FromMinor(plannedSavedToDate),
+                Money.FromMinor(savedClosed)),
             FiscalYearsEndpoint.Rollover(fiscalYears, profile, today),
             carryStart < periods.Count ? periods[carryStart].Key : null);
     }

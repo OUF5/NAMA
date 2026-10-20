@@ -1,18 +1,26 @@
-// docs/DESIGN.md: cards, the in-progress month (MON-01), KPI rows, links. The page's one filled
-// button is the FY-01 banner's Start. Tokens only.
-h1 {
-  margin-bottom: 4px;
+// docs/DESIGN.md "Dashboard (DSH)" (owner note 8): every card has the in-progress month's 2px
+// --primary-text border; 2 columns on wide screens, the chart and the balance across both. The page's
+// one filled button is the FY-01 banner's Start. Tokens only.
+@use '../../shared/plan-status';
+
+@include plan-status.styles;
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+
+  h1 {
+    margin: 0;
+  }
 }
 
-.preview,
 .fy,
 .note,
-.error {
+.error,
+.empty-title {
   margin: 0;
-}
-
-.preview {
-  margin-bottom: 16px;
 }
 
 .note {
@@ -31,22 +39,23 @@ h1 {
 }
 
 .cards {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
   gap: 16px;
+  align-items: start;
 }
 
 .card {
   box-sizing: border-box;
+  min-width: 0;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 2px solid var(--primary-text);
   border-radius: 12px;
-  padding: 24px;
+  padding: 20px 24px 24px;
 }
 
-// DSH-01: like the in-progress month card (2px --primary-text border).
-.current {
-  border: 2px solid var(--primary-text);
+.wide {
+  grid-column: 1 / -1;
 }
 
 .card-head {
@@ -54,24 +63,28 @@ h1 {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--divider);
+  margin-bottom: 16px;
 
   h2 {
     margin: 0;
   }
 }
 
-.current > h2,
-.empty h2 {
-  margin-bottom: 8px;
-}
-
 .title {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 12px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.filter {
+  width: 220px;
+  flex: none;
+}
+
+.empty-title {
+  font-weight: 500;
+  margin-bottom: 4px;
 }
 
 .now-chip {
@@ -84,54 +97,135 @@ h1 {
   background: var(--primary-soft);
 }
 
-// DSH-02: Income, Spent, Saved and Planned saved in 4 columns (2 by 2 on phones).
-.kpis {
+// The one big number of a card.
+.hero {
+  display: block;
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+// DSH-01: Remaining in its status color, the bar with today's marker, then the month's numbers.
+.hero-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+
+  .ok {
+    color: var(--ok);
+  }
+
+  .warn {
+    color: var(--warn);
+  }
+
+  .danger {
+    color: var(--danger);
+  }
+}
+
+.bar {
+  position: relative;
+  margin-top: 16px;
+}
+
+.empty-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+}
+
+.marker {
+  position: absolute;
+  top: -6px;
+  width: 2px;
+  height: 16px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+}
+
+.day {
+  margin: 8px 0 0;
+}
+
+.mini {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px 16px;
+  margin-top: 16px;
   padding-top: 16px;
+  border-top: 1px solid var(--divider);
+
+  div {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .money {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
 }
 
-.fy-saved {
-  margin: 12px 0 0;
+.sub-title {
+  margin: 20px 0 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
 }
 
-// R-BAL-03: the total, then one row per account.
-.bank-total {
-  padding-top: 16px;
-}
-
-.setup {
-  padding-top: 12px;
-}
-
-.accounts {
-  margin: 12px 0 0;
+.watch {
+  margin: 0;
   padding: 0;
   list-style: none;
 
   li {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    min-height: 40px;
     border-bottom: 1px solid var(--divider);
 
     &:last-child {
       border-bottom: 0;
     }
   }
+}
+
+// Each row is one link to Tracker filtered to it; not underlined, like the Year grid cells.
+.row-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 8px;
+  margin: 0 -8px;
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+
+  &:hover {
+    background: var(--surface-2);
+  }
 
   .name {
+    flex: 1;
+    min-width: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
   }
 
-  .money {
+  .caption {
     white-space: nowrap;
   }
+}
+
+// DSH-02 and DSH-06: KPIs 2 by 2.
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .kpi {
@@ -140,18 +234,73 @@ h1 {
   min-width: 0;
 
   .value {
-    font-size: 24px;
+    font-size: 22px;
     font-weight: 600;
-    line-height: 1.33;
+    line-height: 1.35;
     overflow-wrap: anywhere;
   }
 }
 
-@media (max-width: 767.98px) {
-  .preview {
-    margin-bottom: 12px;
+.reason {
+  margin: 12px 0 0;
+}
+
+.fold {
+  margin: 4px 0 0 -12px;
+}
+
+.chevron {
+  flex: none;
+  transition: transform 0.15s;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.breakdown {
+  margin: 8px 0;
+
+  div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 32px;
+    align-items: center;
+    border-bottom: 1px solid var(--divider);
   }
 
+  dt {
+    color: var(--text-2);
+  }
+
+  dd {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .result {
+    border-bottom: 0;
+    font-weight: 600;
+
+    dt {
+      color: var(--text);
+    }
+  }
+}
+
+.op {
+  display: inline-block;
+  width: 16px;
+  color: var(--text-muted);
+}
+
+// DSH-04
+.added {
+  margin: 4px 0 20px;
+}
+
+@media (max-width: 767.98px) {
   .cards {
     gap: 12px;
   }
@@ -160,17 +309,23 @@ h1 {
     padding: 16px;
   }
 
-  .kpis {
-    grid-template-columns: repeat(2, 1fr);
+  .card-head {
+    flex-wrap: wrap;
+  }
+
+  .filter {
+    width: 100%;
+  }
+
+  .hero {
+    font-size: 28px;
+  }
+
+  .mini {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .kpi .value {
-    font-size: 15px;
-    font-weight: 500;
-  }
-
-  .bank-total .value {
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 17px;
   }
 }

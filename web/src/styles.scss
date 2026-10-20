@@ -37,6 +37,16 @@
   --danger: #f47a70;
   --danger-bg: #3d1c1b;
 
+  // Chart series (DSH-04 pie), in this fixed order; an account keeps its color. The dataviz
+  // skill's dark categorical slots 1 to 5, validated on --surface (adjacent pairs, the wrap included).
+  // Never reused for a status. --series-other is the "Other" slice from the 6th account on.
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-other: #8a93a2;
+
   // The only shadow: menus and dialogs.
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.4);
 

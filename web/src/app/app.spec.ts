@@ -93,6 +93,8 @@ describe('App', () => {
       ],
       month: {
         period: { key: '2026-09', label: 'Sep 2026', startDate: '2026-09-27', endDate: '2026-10-26' },
+        day: 21,
+        days: 30,
         daysLeft: 10,
         income: 17000,
         carriedIn: 11950,
@@ -101,6 +103,7 @@ describe('App', () => {
         remaining: 12250.01,
         unassigned: 139500,
       },
+      projection: null,
     });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -122,7 +125,7 @@ describe('App', () => {
 
   // BNK-05: until every account has its opening balance, the top bar asks for it.
   it('should ask to set up the balance until it is complete', async () => {
-    summary.set({ balance: null, complete: false, accounts: [{ id: 'main', name: 'Main', balance: null }], month: null });
+    summary.set({ balance: null, complete: false, accounts: [{ id: 'main', name: 'Main', balance: null }], month: null, projection: null });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
