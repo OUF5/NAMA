@@ -82,6 +82,7 @@ Use at most 3 sizes per screen, not counting KPIs.
   - Always a visible label; never rely on a placeholder alone.
   - Input text is 16px on phones, so iPhone doesn't zoom.
   - Amounts use `inputmode="decimal"` (ENT-03).
+  - Stacked inputs get a gap of at least 4px, and 12px when they show a hint (for example a month's dates): the hint fills the line under the input, and the next outline label rises above its border.
 - **Tables:**
   - The header is 13px `--text-muted`, and rows are 48px.
   - Dividers use `--divider` and row hover uses `--surface-2`. No zebra stripes.

@@ -24,7 +24,12 @@ h2 .caption {
   }
 }
 
+// Each month's dates sit in its field's hint line, and the next field's outline label rises above
+// its border, so the rows need a gap or the two lines touch.
 .months {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin: 8px 0 0;
   padding: 0;
   list-style: none;
