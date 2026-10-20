@@ -395,6 +395,15 @@ describe('Months (PRD 5.6)', () => {
     expect(root().querySelector('.empty')).toBeNull();
   });
 
+  // Tracker: plan vs actual, with the way back to Plan for the same FY (owner's choice, 20 Oct 2026).
+  it('is titled Plan vs actual and links to Plan for the shown FY', async () => {
+    await open('/months?fyId=2026-01', overview('2026-01', ['closed', 'closed', 'closed']));
+
+    expect(root().querySelector('h1')?.textContent).toBe('Plan vs actual');
+    expect(root().querySelector('.page-head a')?.getAttribute('href')).toBe('/plan?fyId=2026-01');
+    http.verify();
+  });
+
   it('opens no card when no month is in progress', async () => {
     const past = overview('2026-01', ['closed', 'closed', 'closed']);
     await open('/months?fyId=2026-01', past);

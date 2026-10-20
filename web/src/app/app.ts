@@ -72,12 +72,13 @@ export class App {
     }
   }
 
-  // UX-01: five always-visible items, Add is prominent. Settings lives in the top bar.
+  // UX-01: five always-visible items, Add is prominent and in the middle. Settings lives in the
+  // top bar. Plan and Tracker (plan vs actual) sit side by side (owner's choice, 20 Oct 2026).
   protected readonly navItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: 'dashboard' },
-    { path: '/months', label: 'Months', icon: 'calendar_month' },
-    { path: '/add', label: 'Add', icon: 'add', prominent: true },
     { path: '/entries', label: 'Entries', icon: 'receipt_long' },
+    { path: '/add', label: 'Add', icon: 'add', prominent: true },
     { path: '/plan', label: 'Plan', icon: 'event_note' },
+    { path: '/tracker', label: 'Tracker', icon: 'query_stats' },
   ];
 }

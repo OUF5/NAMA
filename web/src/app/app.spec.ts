@@ -1,7 +1,9 @@
-import { ApplicationRef, signal } from '@angular/core';
+import { ApplicationRef, Component, signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { App } from './app';
+import { routes } from './app.routes';
 import { AuthService } from './core/auth';
 import { Me, MeService } from './core/me';
 import { settingsMatcher } from './features/settings/settings-sections';
@@ -62,7 +64,7 @@ describe('App', () => {
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     const labels = Array.from(compiled.querySelectorAll('.nav > .nav-item span')).map((el) => el.textContent?.trim());
-    expect(labels).toEqual(['Dashboard', 'Months', 'Add', 'Entries', 'Plan']);
+    expect(labels).toEqual(['Dashboard', 'Entries', 'Add', 'Plan', 'Tracker']);
   });
 
   // Owner's choice (M8): Settings in the side bar, with its sections while you are in Settings.
@@ -151,5 +153,21 @@ describe('App', () => {
     expect(compiled.querySelector('.nav')).toBeNull();
     expect(compiled.querySelector('[aria-label="Settings"]')).toBeNull();
     expect(compiled.querySelector('.top-add')).toBeNull();
+  });
+});
+
+// Months is Tracker now (owner's choice, 20 Oct 2026): old bookmarks and Home Screen links still work.
+describe('the old Months address', () => {
+  @Component({ template: '' })
+  class Tracker {}
+
+  it('goes to Tracker with its query', async () => {
+    TestBed.configureTestingModule({
+      providers: [provideRouter([routes.find((route) => route.path === 'months')!, { path: 'tracker', component: Tracker }])],
+    });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/months?fyId=2026-01&view=year');
+
+    expect(TestBed.inject(Router).url).toBe('/tracker?fyId=2026-01&view=year');
   });
 });

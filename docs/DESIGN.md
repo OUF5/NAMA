@@ -114,7 +114,7 @@ Use at most 3 sizes per screen, not counting KPIs.
 - **Folds:** a list part that is closed until opened ("Archived (2)", "History (3)", a category's sub-categories) uses a text button with a chevron that turns 90° when open, and `aria-expanded`.
 - **Dashboard (DSH, preview):**
   - The order is: the title with the caption "Preview: the full dashboard comes in Phase 2", the FY-01 banner (when shown), the FY caption, then one card each for the current month, the FY to date, and planned vs spent. There is no FY selector.
-  - The current month card is the in-progress month card's header (2px `--primary-text` border, the "In progress" chip) with the month KPI block shared with Months (`shared/month-summary.ts`).
+  - The current month card is the in-progress month card's header (2px `--primary-text` border, the "In progress" chip) with the month KPI block shared with Months on Tracker (`shared/month-summary.ts`).
   - FY to date: Income, Spent and Saved in 3 columns (24 / 600 on desktop, body size on phones). Saved stays neutral at 0 or more. A negative Saved is `--danger`, keeps its minus sign, and has the caption "Spent more than income" (color is never the only signal).
 - **Dashboard chart (DSH-03):** a column chart in plain CSS, no chart library.
   - Each month has two columns: Planned in `--text-muted` and Spent in its status color, with rounded tops.

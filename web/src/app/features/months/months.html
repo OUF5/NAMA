@@ -1,4 +1,10 @@
-<h1>Months</h1>
+<!-- Tracker: plan vs actual (owner's choice, 20 Oct 2026). Edit plan goes back to Plan for the same FY. -->
+<div class="page-head">
+  <h1>Plan vs actual</h1>
+  @if (data(); as d) {
+    <a routerLink="/plan" [queryParams]="{ fyId: d.fyId }">Edit plan</a>
+  }
+</div>
 
 @if (loadError()) {
   <p class="error" role="alert">{{ loadError() }}</p>

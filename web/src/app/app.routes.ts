@@ -33,12 +33,15 @@ export const routes: Routes = [
     canActivate: [authGuard, setupGuard],
     loadComponent: () => import('./features/dashboard/dashboard').then((m) => m.Dashboard),
   },
+  // PRD 5.6, named Tracker on screen (owner's choice, 20 Oct 2026). The code keeps "months".
   {
-    path: 'months',
-    title: 'NAMA · Months',
+    path: 'tracker',
+    title: 'NAMA · Tracker',
     canActivate: [authGuard, setupGuard],
     loadComponent: () => import('./features/months/months').then((m) => m.Months),
   },
+  // Old bookmarks and Home Screen links. The query (fyId, view) is kept.
+  { path: 'months', redirectTo: 'tracker' },
   {
     path: 'add',
     title: 'NAMA · Add',

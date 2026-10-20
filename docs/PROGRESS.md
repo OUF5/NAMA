@@ -7,6 +7,9 @@
     - Locally: `dotnet test api.tests` passed 484 of 484 (478 before; `Additional_income_goes_in_the_chosen_months` and 5 new invalid cases in `SetupTests`). `npm run build` passed with no warnings: initial 540.34 kB (unchanged). `npx ng test --watch=false` passed 139 of 139 (134 before; 5 new in `setup.spec.ts`), 3 runs in a row. No hex colors in `web/src/app`, and no `double`/`float` in `api/` or `api.tests/`.
     - The owner marked it done and approved the push (20 Oct 2026).
     - Commit `46606c2` deployed, and every CI step passed (https://github.com/OUF5/NAMA/actions/runs/39403201055; `dotnet test`: 484 of 484). On production, `/api/health` returns version `46606c2…`, `GET /api/setup/preview` and `POST /api/setup` return 401 without a token, and `/setup` returns 200.
+  - **Note 2, Months becomes Tracker next to Plan: done (20 Oct 2026).** UX-01 and PRD 5.6. See Decisions.
+    - Locally: `npx ng test --watch=false` passed 141 of 141 (139 before; the Tracker title and "Edit plan" link in `months.spec.ts`, and the `/months` redirect in `app.spec.ts`). `npm run build` passed with no warnings: initial 540.38 kB (540.34 kB before). No API change, so `dotnet test` is unchanged (484 of 484).
+    - The owner marked it done and approved the push (20 Oct 2026).
 - **Phase 1: complete (18 Oct 2026).** Every milestone (M0 to M10) is deployed, every Definition of Done item below is ticked, and the owner confirmed every open production check. Phase 2 (the full dashboard, PRD 10) is not started.
 - **M0 Skeleton and pipeline: done (17 Oct 2026).** A push to `main` deployed commit `c1205d6`. https://nama-b6bda.web.app returns 200, and `/api/health` returns `{"status":"ok","version":"c1205d60220e24b1d2ad98f025ce79fef2f75f1f"}`. One-time setup is complete: Firestore (default) database in `me-central1`, Workload Identity for `OUF5/NAMA`, 5 GitHub variables, and the Artifact Registry cleanup policy (keep 5 newest).
 - **M1 Sign-in: done (17 Oct 2026).** All three "Done when" checks pass on production (https://nama-b6bda.web.app):
@@ -469,6 +472,11 @@ Checked on 18 Oct 2026, before and after the M9 push (`678ffcb`). Ticked items h
   - When step 2 changes, a month the new FY does not have goes back to its default, and Until to "No end". A draft saved before this change (SET-03) has no months and gets the defaults.
   - "Total monthly income" is now "Income in Sep 2026": the salary plus every item received in the current month, the same number as Settings' total (STG-03). It is a preview only (like the ENT-01 preview); saved totals come from `IncomeCalculator`. The Review step shows it and lists each item ("Bonus · SAR 500 · Mar 2026").
   - `untilNotBeforeFrom` and `incomeMonths` moved to `web/src/app/shared/income-months.ts`, shared by the wizard and the Settings income dialog. No new packages.
+- 20 Oct 2026, owner note 2: **Months is "Tracker", next to Plan** (owner's choice; changes UX-01 and PRD 5.6).
+  - Why: a budget is a loop: set the plan, record spending, compare actual with plan, adjust the plan. The page compares plan and actual, but its name ("Months") said how it is laid out, and the nav put it at the far end from Plan.
+  - Nav order: Dashboard, Entries, **Add**, Plan, Tracker, on phones and desktop. Add stays in the middle (the easiest reach on phones). Tracker's icon is `query_stats` (Material Symbols); Months had `calendar_month`.
+  - The page is `/tracker` ("NAMA · Tracker"), titled "Plan vs actual", with an "Edit plan" link to `/plan?fyId=` for the FY shown. Plan's "See the year grid" and the Settings rollover text point to Tracker. `/months` redirects to `/tracker` and keeps the query (old bookmarks, Home Screen links).
+  - Only the screen names changed: the code folder (`features/months`), the requirement IDs (MON-xx), the Months/Year view toggle, and the overview API keep "months".
 
 ## Open questions
 

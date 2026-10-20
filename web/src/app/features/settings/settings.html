@@ -77,7 +77,7 @@
             <p>Takes effect from the fiscal year starting {{ formatDate(d.calendar.takesEffectFrom) }}.</p>
             <p class="caption">
               Next: {{ nextFiscalYear() }}. The current fiscal year keeps its dates. Start the next one on
-              the <a routerLink="/">Dashboard</a> or <a routerLink="/months">Months</a> when its last month
+              the <a routerLink="/">Dashboard</a> or <a routerLink="/tracker">Tracker</a> when its last month
               begins.
             </p>
           </section>
@@ -91,7 +91,7 @@
             } @else {
               <p class="note">
                 No fiscal year contains today. Start the next fiscal year on the
-                <a routerLink="/">Dashboard</a> or <a routerLink="/months">Months</a>.
+                <a routerLink="/">Dashboard</a> or <a routerLink="/tracker">Tracker</a>.
               </p>
             }
           </section>

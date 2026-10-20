@@ -120,7 +120,7 @@
           <span class="caption">{{ formatDay(month.startDate) }} to {{ formatDay(month.endDate) }}</span>
         }
       </h2>
-      <a routerLink="/months" [queryParams]="{ fyId: d.fiscalYear.id, view: 'year' }">See the year grid</a>
+      <a routerLink="/tracker" [queryParams]="{ fyId: d.fiscalYear.id, view: 'year' }">See the year grid</a>
     </div>
     <ul class="list">
       @for (category of rows(); track category.id) {

@@ -294,7 +294,7 @@ Page **Entries** (`/entries`).
 
 ### 5.6 Months and year view (MON)
 
-Page **Months** (`/months`).
+Page **Tracker** (`/tracker`), titled "Plan vs actual", with an "Edit plan" link to Plan for the same FY. ✅ DECIDED (20 Oct 2026; was **Months** at `/months`, which now redirects to `/tracker` with its query). The requirement IDs (MON-xx), the Months/Year view toggle and the API keep their names.
 
 - **MON-01** Shows every month of the selected FY with a status chip: Closed (gray), In progress (blue), Yet to come (outlined).
 - **MON-02** Two views with a toggle at the top; the last choice is remembered:
@@ -333,7 +333,7 @@ Page **Dashboard** (`/`), the landing page. Labeled "Preview: the full dashboard
 
 ### 5.10 Navigation and UX rules (UX)
 
-- **UX-01** Always-visible navigation with 5 items: Dashboard, Months, **Add** (prominent), Entries, Plan. Settings is a gear icon that is always visible in the top bar. Bottom bar on phones (under 768 px wide), side bar on desktop. No "More" menu. 🆕 ADDED · Must (your "no hidden things")
+- **UX-01** Always-visible navigation with 5 items: Dashboard, Entries, **Add** (prominent, in the middle), Plan, Tracker (the Months page, 5.6). Plan and Tracker sit side by side because Tracker compares the plan with actual spending. ✅ DECIDED (20 Oct 2026; was Dashboard, Months, Add, Entries, Plan). Settings is a gear icon that is always visible in the top bar. Bottom bar on phones (under 768 px wide), side bar on desktop. No "More" menu. 🆕 ADDED · Must (your "no hidden things")
 - **UX-02** The top bar shows the NAMA name, your project name and the current month label.
 - **UX-03** Every page has a helpful empty state that says what to do next. 🆕 ADDED · Nice
 - **UX-04** Confirmations only for destructive actions (delete entry). Dialogs are never stacked. 🆕 ADDED · Nice
@@ -483,7 +483,7 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 
 ### 7.7 Frontend structure
 
-- **Routes:** `/sign-in` (public), `/invite/:token` (public, AUTH-06), `/setup`, `/` (Dashboard), `/add`, `/entries`, `/months`, `/plan`, `/settings`, `/no-access`.
+- **Routes:** `/sign-in` (public), `/invite/:token` (public, AUTH-06), `/setup`, `/` (Dashboard), `/add`, `/entries`, `/tracker` (and `/months`, a redirect to it), `/plan`, `/settings`, `/no-access`.
 - **Guards:** `authGuard` waits for the Firebase auth state; `setupGuard` sends you to `/setup` until setup is complete.
 - **State:** small services using signals. No NgRx. 🆕 ADDED · Tech
 - **UI kit:** Angular Material: stepper (wizard), form field, select, datepicker, table (desktop), cards (phone), expansion panel (months), button toggle (Months or Year), progress bar (indicator), snackbar (messages), chips (status). 🆕 ADDED · Tech
