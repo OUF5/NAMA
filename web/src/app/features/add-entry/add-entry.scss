@@ -5,8 +5,25 @@
   display: block;
 }
 
-h1 {
+// The title and the Expense | Transfer toggle on one line.
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  max-width: 640px;
   margin-bottom: 16px;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+@media (min-width: 1100px) {
+  .head {
+    max-width: 1000px;
+  }
 }
 
 .card {
@@ -78,17 +95,27 @@ form {
 // Phones: a full-width Save right under the plan panel, under the thumb (ENT-03, UX-07). It is
 // sticky, so it stays on screen when the form is taller than the screen (keyboard open).
 // The page fills the screen between the top bar and the bottom bar, and the title and the card
-// are centered in it together (owner's request): 56px top bar + 1px border, the bottom bar (56px
-// items, 8px padding, 1px border) and the page's 16px padding top and bottom (app.scss).
+// are centered in it together (owner's request): 56px top bar + 1px border, the top bar's numbers
+// strip (48px + 1px border, UX-08), the bottom bar (56px items, 8px padding, 1px border) and the
+// page's 16px padding top and bottom (app.scss).
 @media (max-width: 767.98px) {
   :host {
     display: flex;
     flex-direction: column;
-    min-height: calc(100dvh - 57px - 65px - env(safe-area-inset-bottom) - 32px);
+    min-height: calc(100dvh - 57px - 49px - 65px - env(safe-area-inset-bottom) - 32px);
   }
 
-  h1 {
+  .head {
     margin: auto 0 12px;
+  }
+
+  // Full width, 44px high toggles (UX-07).
+  .mode {
+    width: 100%;
+
+    mat-button-toggle {
+      flex: 1;
+    }
   }
 
   .card {

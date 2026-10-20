@@ -2,7 +2,7 @@ using Api.Domain;
 
 namespace Api.Tests;
 
-// R-PLN-01 to R-PLN-03. Amounts are minor units (1,500 SAR = 150,000).
+// R-PLN-01 to R-PLN-05. Amounts are minor units (1,500 SAR = 150,000).
 public class PlanCalculatorTests
 {
     // FY 2026 of the section 3 example: payday 27, Jan 2026 to Dec 2026.
@@ -61,32 +61,119 @@ public class PlanCalculatorTests
         Assert.Equal(100, PlanCalculator.Total(withOtherFy, Fy.Periods));
     }
 
-    // R-PLN-03: green when 0 or more, red when negative.
-    [Theory]
-    [InlineData(1_000_000, 400_000, 600_000)]
-    [InlineData(400_000, 400_000, 0)]
-    [InlineData(0, 150_000, -150_000)]
-    public void Unplanned_is_income_minus_planned(long income, long planned, long expected)
+    private static PlanAmounts Plan(params (string Key, long Amount)[] amounts) =>
+        new("trip", "travel", amounts.ToDictionary(item => item.Key, item => item.Amount));
+
+    // R-PLN-03 (changed 20 Oct 2026), the owner's example: income 17,000 a month; planned 15,000, 16,000,
+    // 19,000 (a trip) and 15,000. Month by month the trip month was -2,000 (red); carried, it is 1,000:
+    // January's and February's surplus pays for it.
+    [Fact]
+    public void Unassigned_carries_from_month_to_month()
     {
-        Assert.Equal(expected, PlanCalculator.Unplanned(income, planned));
+        var periods = Fy.Periods.Take(4).ToList();
+        var income = periods.ToDictionary(period => period.Key, _ => 1_700_000L);
+        var plan = Plan(("2026-01", 1_500_000), ("2026-02", 1_600_000), ("2026-03", 1_900_000), ("2026-04", 1_500_000));
+
+        var months = PlanCalculator.RunningUnassigned(periods, income, [plan]);
+
+        Assert.Equal(["2026-01", "2026-02", "2026-03", "2026-04"], months.Select(month => month.PeriodKey));
+        Assert.Equal([0L, 200_000, 300_000, 100_000], months.Select(month => month.CarriedIn));
+        Assert.Equal([200_000L, 300_000, 100_000, 300_000], months.Select(month => month.Unassigned));
+        Assert.Equal(300_000, PlanCalculator.PlannedSaved(months));
     }
 
-    // The hand check behind the M4 "Done when": Jan and Sep of the example above.
+    // R-PLN-03: more planned than received so far stays negative until later income covers it.
+    [Fact]
+    public void A_negative_unassigned_carries_too()
+    {
+        var periods = Fy.Periods.Take(3).ToList();
+        var income = periods.ToDictionary(period => period.Key, _ => 100_000L);
+        var plan = Plan(("2026-01", 250_000));
+
+        var months = PlanCalculator.RunningUnassigned(periods, income, [plan]);
+
+        Assert.Equal([-150_000L, -50_000, 50_000], months.Select(month => month.Unassigned));
+    }
+
+    // The hand check behind the M4 "Done when": Jan and Sep of the example above, now carried.
     [Fact]
     public void Worked_example_totals_row()
     {
-        var plans = new[] { Groceries, Fuel };
         var income = IncomeCalculator.TotalsForPeriods(Incomes, Fy.Periods);
 
-        // Jan: planned 1,500; income 15,000 + 2,000 = 17,000; unplanned 15,500.
-        Assert.Equal(150_000, PlanCalculator.MonthPlanned(plans, "2026-01"));
-        Assert.Equal(1_700_000, income["2026-01"]);
-        Assert.Equal(1_550_000, PlanCalculator.Unplanned(income["2026-01"], PlanCalculator.MonthPlanned(plans, "2026-01")));
+        var months = PlanCalculator.RunningUnassigned(Fy.Periods, income, [Groceries, Fuel]);
 
-        // Sep: planned 1,500 + 400 = 1,900; income 17,000 + 500.25 = 17,500.25; unplanned 15,600.25.
-        Assert.Equal(190_000, PlanCalculator.MonthPlanned(plans, "2026-09"));
-        Assert.Equal(1_750_025, income["2026-09"]);
-        Assert.Equal(1_560_025, PlanCalculator.Unplanned(income["2026-09"], PlanCalculator.MonthPlanned(plans, "2026-09")));
+        // Jan: planned 1,500; income 15,000 + 2,000 = 17,000; unassigned 15,500.
+        Assert.Equal(new UnassignedMonth("2026-01", 0, 1_700_000, 150_000), months[0]);
+        Assert.Equal(1_550_000, months[0].Unassigned);
+        // Sep: 8 months of 15,500 carried (124,000); income 17,000 + 500.25; planned 1,500 + 400;
+        // unassigned 124,000 + 17,500.25 - 1,900 = 139,600.25.
+        Assert.Equal(new UnassignedMonth("2026-09", 12_400_000, 1_750_025, 190_000), months[8]);
+        Assert.Equal(13_960_025, months[8].Unassigned);
+        // R-PLN-04: FY income 204,500.25 - FY planned 19,600.
+        Assert.Equal(18_490_025, PlanCalculator.PlannedSaved(months));
+    }
+
+    [Fact]
+    public void Planned_saved_of_no_months_is_zero()
+    {
+        Assert.Equal(0, PlanCalculator.PlannedSaved([]));
+    }
+
+    // R-PLN-06: the first month that carries contains the day NAMA was set up; never before the FY.
+    [Theory]
+    [InlineData(null, 0)]
+    [InlineData("2025-12-01", 0)]
+    [InlineData("2026-01-27", 0)]
+    [InlineData("2026-02-26", 0)]
+    [InlineData("2026-02-27", 1)]
+    [InlineData("2026-10-17", 8)]
+    [InlineData("2027-01-26", 11)]
+    [InlineData("2027-02-01", 12)]
+    public void Carry_starts_in_the_month_NAMA_was_set_up(string? startedOn, int expected)
+    {
+        DateOnly? day = startedOn is null ? null : DateOnly.ParseExact(startedOn, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+
+        Assert.Equal(expected, PlanCalculator.CarryStart(Fy.Periods, day));
+    }
+
+    // R-PLN-06, the owner's check on 20 Oct 2026: Rent 1,000 every month from Aug, set up in Oct. Aug and
+    // Sep were never tracked, so their 1,000 each does not carry: Oct has 1,000, not 3,000.
+    [Fact]
+    public void Months_before_the_start_stand_alone()
+    {
+        var months = PlanCalculator.Carry([(100_000, 0), (100_000, 0), (100_000, 0), (100_000, 40_000)], carryStart: 2);
+
+        Assert.Equal([0L, 0, 0, 100_000], months.Select(month => month.CarriedIn));
+        Assert.Equal([100_000L, 100_000, 100_000, 160_000], months.Select(month => month.Remaining));
+
+        var periods = Fy.Periods.Take(4).ToList();
+        var unassigned = PlanCalculator.RunningUnassigned(periods, periods.ToDictionary(period => period.Key, _ => 1_000_000L),
+            [Plan(("2026-01", 100_000), ("2026-02", 100_000), ("2026-03", 100_000), ("2026-04", 100_000))], carryStart: 2);
+        Assert.Equal([0L, 0, 0, 900_000], unassigned.Select(month => month.CarriedIn));
+        Assert.Equal(1_800_000, PlanCalculator.PlannedSaved(unassigned));
+    }
+
+    // R-PLN-05, the owner's example: Groceries 1,500 a month; spent 1,200, 1,700 and 1,500. Month by
+    // month Feb was -200 (red); carried, January's 300 covers it.
+    [Fact]
+    public void Remaining_carries_from_month_to_month()
+    {
+        var months = PlanCalculator.Carry([(150_000, 120_000), (150_000, 170_000), (150_000, 150_000)]);
+
+        Assert.Equal([0L, 30_000, 10_000], months.Select(month => month.CarriedIn));
+        Assert.Equal([150_000L, 180_000, 160_000], months.Select(month => month.Available));
+        Assert.Equal([30_000L, 10_000, 10_000], months.Select(month => month.Remaining));
+    }
+
+    // R-PLN-05: an overspend carries as it is and lowers the next months until a plan covers it.
+    [Fact]
+    public void An_overspend_carries_as_it_is()
+    {
+        var months = PlanCalculator.Carry([(0, 20_000), (0, 0), (50_000, 10_000)]);
+
+        Assert.Equal([-20_000L, -20_000, 20_000], months.Select(month => month.Remaining));
+        Assert.Equal(-20_000, months[1].Available);
     }
 
     // Owner's choice (M4): 0 clears a month.
@@ -109,15 +196,15 @@ public class PlanCalculatorTests
         Assert.Null(PlanCalculator.NormalizeAmounts(new Dictionary<string, long> { [key] = 100 }, Fy.Periods));
     }
 
-    // ENT-01: remaining can go below 0 when over plan.
+    // ENT-01: remaining (available - spent) can go below 0 when over plan.
     [Theory]
     [InlineData(150_000, 119_999, 30_001)]
     [InlineData(150_000, 150_000, 0)]
     [InlineData(150_000, 160_000, -10_000)]
     [InlineData(0, 10_000, -10_000)]
-    public void Remaining_is_planned_minus_spent(long planned, long spent, long remaining)
+    public void Remaining_is_available_minus_spent(long available, long spent, long remaining)
     {
-        Assert.Equal(remaining, PlanCalculator.Remaining(planned, spent));
+        Assert.Equal(remaining, PlanCalculator.Remaining(available, spent));
     }
 
     // DSH-02: saved is income minus spent, and goes below 0 when more is spent than earned.
@@ -139,16 +226,17 @@ public class PlanCalculatorTests
     [InlineData(150_000, 150_000, 100)]
     [InlineData(150_000, 150_001, 100)]
     [InlineData(150_000, 300_000, 200)]
-    public void Percent_is_rounded_down(long planned, long spent, int percent)
+    public void Percent_is_rounded_down(long available, long spent, int percent)
     {
-        Assert.Equal(percent, PlanCalculator.Percent(planned, spent));
+        Assert.Equal(percent, PlanCalculator.Percent(available, spent));
     }
 
-    // "No plan for this month".
+    // "No plan for this month", and a month that carried in more overspending than it planned.
     [Fact]
-    public void Percent_is_null_without_a_plan()
+    public void Percent_is_null_when_nothing_is_available()
     {
         Assert.Null(PlanCalculator.Percent(0, 10_000));
+        Assert.Null(PlanCalculator.Percent(-5_000, 0));
     }
 
     // FY-02 (owner's choice, M8): the same month a year earlier, from whichever FY holds it.

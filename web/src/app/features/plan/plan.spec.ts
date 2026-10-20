@@ -27,10 +27,16 @@ const transition = {
   periods: [{ key: '2027-01', label: 'Jan 2027', startDate: '2027-01-27', endDate: '2027-02-26' }],
 };
 
-// Groceries (Food) with the given amounts; income 17,000 every month.
+// Groceries (Food) with the given amounts; income 17,000 every month. Unassigned carries (R-PLN-03).
 function plansResponse(amounts: Record<string, number> = {}, fiscalYear = fy2026, fiscalYears = [fy2026]): PlansResponse {
   const planned = (key: string) => amounts[key] ?? 0;
   const total = Object.values(amounts).reduce((sum, amount) => sum + amount, 0);
+  let carried = 0;
+  const totals = fiscalYear.periods.map((p) => {
+    const carriedIn = carried;
+    carried = carriedIn + 17000 - planned(p.key);
+    return { periodKey: p.key, carriedIn, income: 17000, planned: planned(p.key), thisMonth: 17000 - planned(p.key), unassigned: carried };
+  });
   return {
     fiscalYears,
     fiscalYear,
@@ -39,12 +45,9 @@ function plansResponse(amounts: Record<string, number> = {}, fiscalYear = fy2026
     categoryMonthTotals: Object.keys(amounts).length
       ? { food: Object.fromEntries(fiscalYear.periods.map((p) => [p.key, planned(p.key)])) }
       : {},
-    totals: fiscalYear.periods.map((p) => ({
-      periodKey: p.key,
-      planned: planned(p.key),
-      income: 17000,
-      unplanned: 17000 - planned(p.key),
-    })),
+    totals,
+    fiscalYearTotals: { income: 17000 * fiscalYear.periods.length, planned: total, plannedSaved: carried },
+    carryFromPeriodKey: fiscalYear.periods[0].key,
   };
 }
 
@@ -145,15 +148,42 @@ describe('Plan (PRD 5.3)', () => {
 
     expect(text(root)).toContain('Add your first sub-category');
     const table = root.querySelector('table.totals')!;
-    expect(Array.from(table.querySelectorAll('tbody th')).map((th) => text(th))).toEqual(['Planned', 'Income', 'Unassigned']);
+    // R-PLN-03 ("Unallocated" on screen): each computed row has its formula under its name.
+    expect(Array.from(table.querySelectorAll('tbody th')).map((th) => text(th))).toEqual([
+      'Income',
+      'Planned',
+      'Unallocated this month Income − Planned',
+      "From last month Last month's accumulated",
+      'Unallocated accumulated This month + From last month',
+    ]);
+    const rows = Array.from(table.querySelectorAll('tbody tr')).map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => text(td)));
+    expect(rows.map((row) => row.slice(0, 2))).toEqual([
+      ['17,000', '17,000'],
+      ['0', '0'],
+      ['17,000', '17,000'],
+      ['0', '17,000'],
+      ['17,000', '34,000'],
+    ]);
+    // R-PLN-04: the FY column, whose Unassigned is Planned saved, also shown in the card head.
+    expect(rows.map((row) => row.at(-1))).toEqual(['204,000', '0', '204,000', '–', '204,000']);
+    expect(text(root.querySelector('.saved-kpi'))).toBe('Planned saved in FY 2026 SAR 204,000');
     const months = Array.from(table.querySelectorAll<HTMLButtonElement>('thead button.month'));
     expect(months.length).toBe(12);
     expect(text(months[0])).toBe('Jan 2026');
     expect(months[0].title).toBe('Jan 2026 · 27 Jan to 26 Feb');
-    expect(text(table.querySelectorAll('tbody tr')[1].querySelectorAll('td')[0])).toBe('17,000');
+    expect(text(table.querySelectorAll('tbody tr')[0].querySelectorAll('td')[0])).toBe('17,000');
     // The current month (Sep 2026) is selected.
     expect(months[8].getAttribute('aria-pressed')).toBe('true');
     expect(text(root.querySelector('#list-title'))).toBe('Planned in Sep 2026 27 Sep to 26 Oct');
+  });
+
+  // R-PLN-06: set up in Oct 2026, so the FY column covers Oct on and the caption says why.
+  it('says which month the carry starts in', async () => {
+    const root = await open([food], { ...plansResponse(), carryFromPeriodKey: '2026-10' });
+
+    const table = root.querySelector('table.totals')!;
+    expect(text(table.querySelector('thead .fy-col'))).toBe('From Oct 2026');
+    expect(text(root.querySelector('.totals-note'))).toContain('It carries from Oct 2026, the month you started NAMA; earlier months stand alone.');
   });
 
   // Categories start closed; the selected month drives the amounts.
@@ -176,8 +206,8 @@ describe('Plan (PRD 5.3)', () => {
     expect(text(root.querySelector('.row.sub'))).toBe('Groceries FY total SAR 17,400 SAR 900 edit');
   });
 
-  // PLN-01, PLN-02, PLN-04 in the editor dialog, with "Unassigned after" while typing (M8).
-  it('edits the months in a dialog, previews Unassigned, and saves', async () => {
+  // PLN-01, PLN-02, PLN-04 in the editor dialog, with "Unallocated after" while typing (M8).
+  it('edits the months in a dialog, previews Unallocated, and saves', async () => {
     const root = await open([withGroceries], plansResponse({ '2026-01': 99 }));
     root.querySelector<HTMLButtonElement>('button.expand')!.click();
     await settle();
@@ -192,16 +222,20 @@ describe('Plan (PRD 5.3)', () => {
     expect(periods.map((p) => inputLabeled(dialog(), p.label).value)).toEqual(Array(12).fill('1500.5'));
 
     // Copy from previous month.
-    type(inputLabeled(dialog(), 'Feb 2026'), '20000');
+    type(inputLabeled(dialog(), 'Feb 2026'), '40000');
     button(dialog(), 'Copy from Feb 2026').click();
     await settle();
-    expect(inputLabeled(dialog(), 'Mar 2026').value).toBe('20000');
+    expect(inputLabeled(dialog(), 'Mar 2026').value).toBe('40000');
 
-    // Unassigned after: Jan 16,901 - (1,500.50 - 99) = 15,499.50; Feb 17,000 - 20,000 = -3,000 (red).
+    // Unassigned after, carried (R-PLN-03): a change moves its month and every later one.
+    // Jan 16,901 - 1,401.50 = 15,499.50; Feb 33,901 - (1,401.50 + 40,000) = -7,500.50 (red);
+    // Mar 50,901 - 81,401.50 = -30,500.50.
     const after = Array.from(dialog().querySelectorAll('.after'));
-    expect(text(after[0])).toBe('Unassigned after SAR 15,499.50');
-    expect(text(after[1])).toBe('Unassigned after SAR -3,000');
+    expect(text(after[0])).toBe('Unallocated after SAR 15,499.50');
+    expect(after[0].querySelector('.money')!.classList).toContain('ok');
+    expect(text(after[1])).toBe('Unallocated after SAR -7,500.50');
     expect(after[1].querySelector('.money')!.classList).toContain('danger');
+    expect(text(after[2])).toBe('Unallocated after SAR -30,500.50');
 
     // Empty and 0 both clear a month (owner's choice, M4).
     type(inputLabeled(dialog(), 'Dec 2026'), '');
@@ -211,7 +245,7 @@ describe('Plan (PRD 5.3)', () => {
     const put = await vi.waitFor(() => http.expectOne('/api/fiscal-years/2026-01/plans/groceries'));
     expect(put.request.method).toBe('PUT');
     expect(put.request.body.amounts).toEqual({
-      '2026-01': 1500.5, '2026-02': 20000, '2026-03': 20000, '2026-04': 1500.5, '2026-05': 1500.5,
+      '2026-01': 1500.5, '2026-02': 40000, '2026-03': 40000, '2026-04': 1500.5, '2026-05': 1500.5,
       '2026-06': 1500.5, '2026-07': 1500.5, '2026-08': 1500.5, '2026-09': 1500.5, '2026-10': 1500.5,
       '2026-11': 0,
     });

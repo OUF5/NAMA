@@ -30,18 +30,22 @@ public static class ApiCalls
     public static string NewSub() => "user-" + Guid.NewGuid().ToString("N");
 
     // FY 2026 of the section 3 example (payday 27, Jan to Dec 2026), bank accounts SNB and
-    // Al Rajhi, categories Food and Transport, and the given income items.
+    // Al Rajhi (no opening balances), categories Food and Transport, the given income items, and
+    // all income to SNB from the FY's first month (R-BAL-02).
     public static async Task<string> SetUpUser(ApiFactory factory, IReadOnlyList<IncomeItem>? incomes = null, FiscalYear? fiscalYear = null,
-        string? sub = null)
+        string? sub = null, IReadOnlyList<BankAccount>? accounts = null, DateOnly? startedOn = null, int paydayDay = 27)
     {
         sub ??= NewSub();
-        var profile = new UserProfile("Owner", ApiFactory.AllowedEmail, "Home budget", "SAR", "Asia/Riyadh", 1, 27, true, null);
+        var profile = new UserProfile("Owner", ApiFactory.AllowedEmail, "Home budget", "SAR", "Asia/Riyadh", 1, paydayDay, true, null, startedOn);
+        fiscalYear ??= FiscalCalendar.FirstFiscalYear(new DateOnly(2026, 10, 17), 1, 27);
+        accounts ??= [new BankAccount("bank", "SNB"), new BankAccount("rajhi", "Al Rajhi")];
         await factory.Store.CreateSetupAsync(sub, new SetupData(
             profile,
-            fiscalYear ?? FiscalCalendar.FirstFiscalYear(new DateOnly(2026, 10, 17), 1, 27),
+            fiscalYear,
             incomes ?? [],
-            [new BankAccount("bank", "SNB"), new BankAccount("rajhi", "Al Rajhi")],
-            [new Category("food", "Food", 0), new Category("transport", "Transport", 1)]));
+            accounts,
+            [new Category("food", "Food", 0), new Category("transport", "Transport", 1)],
+            new IncomeSplit(fiscalYear.Id, new Dictionary<string, int> { [accounts[0].Id] = BalanceCalculator.WholeShare })));
         return sub;
     }
 

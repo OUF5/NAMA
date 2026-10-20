@@ -21,7 +21,7 @@ import { RolloverBanner } from '../../shared/rollover-banner';
 import { EntriesResponse, Entry, EntryApi } from '../add-entry/entry-api';
 import { openEntryDialog } from '../entries/entry-dialog';
 import { PlanApi } from '../plan/plan-api';
-import { STATUS_LABELS, SpendLine, nameMaps, spendLine } from './month-lines';
+import { STATUS_LABELS, SpendLine, availableMinor, nameMaps, spendLine } from './month-lines';
 import { Cell, CategoryRow, MonthOverview, OverviewApi, OverviewResponse } from './overview-api';
 import { MonthsView, loadView, saveView } from './view-choice';
 import { YearGrid } from './year-grid';
@@ -90,6 +90,15 @@ export class Months {
   });
 
   private readonly names = computed(() => nameMaps(this.data()?.categories ?? []));
+
+  // R-PLN-06: "Oct 2026" when the carry starts after the FY's first month; null otherwise.
+  protected readonly carryFrom = computed(() => {
+    const data = this.data();
+    const key = data?.carryFromPeriodKey;
+    return data && key && key !== data.months[0]?.period.key
+      ? (data.months.find((month) => month.period.key === key)?.period.label ?? null)
+      : null;
+  });
 
   // Tracker's filter (owner's choice, 20 Oct 2026), in the URL like Entries. The API narrows the
   // rows and sums to the category or sub-category; "Over plan only" hides the lines that are not
@@ -381,11 +390,13 @@ export class Months {
     });
   }
 
+  // A plan, spending, or money (or an overspend) carried in from last month.
   private hasMoney(cell: Cell): boolean {
-    return cell.planned > 0 || cell.spent > 0;
+    return cell.planned > 0 || cell.spent > 0 || cell.carriedIn !== 0;
   }
 
-  // The "Over by" status of docs/DESIGN.md (spent above planned; spending without a plan counts).
+  // The "Over by" status of docs/DESIGN.md: spent above what was available (R-PLN-05); spending
+  // without a plan counts.
   private isOver(cell: Cell): boolean {
     return this.line(cell).status === 'danger';
   }
@@ -396,9 +407,9 @@ export class Months {
       .filter((row) => row.subCategories.length > 0);
   }
 
-  // docs/DESIGN.md category rows: name and chip, progress bar, "SAR 1,240 of 2,000".
+  // docs/DESIGN.md category rows: name and chip, progress bar, "SAR 1,240 of 2,000" (available).
   private line(cell: Cell): SpendLine {
-    return spendLine(toMinor(cell.planned), toMinor(cell.spent), this.currency());
+    return spendLine(availableMinor(cell), toMinor(cell.spent), this.currency());
   }
 
   private money(minor: number): string {

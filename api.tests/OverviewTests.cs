@@ -83,7 +83,10 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
     private static (decimal, decimal, decimal, decimal) Numbers(JsonNode month) =>
         (Dec(month["income"]), Dec(month["planned"]), Dec(month["spent"]), Dec(month["remaining"]));
 
-    // The hand check: income (R-INC-01), planned (R-PLN-02), spent, and remaining = planned - spent (M7).
+    // The hand check: income (R-INC-01), planned (R-PLN-02), spent, and remaining = carried in +
+    // planned - spent (R-PLN-05). Jan to Jul leave 1,500 each (10,500 into Aug); Aug leaves
+    // 10,500 + 1,500 - 50 = 11,950; Sep leaves 11,950 + 1,900 - 1,299.99 = 12,550.01. The FY totals
+    // are not carried: FY planned - FY spent.
     [Fact]
     public async Task Months_and_totals_match_the_hand_check()
     {
@@ -94,10 +97,15 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var sep = Month(overview, "2026-09");
         Assert.Equal(("Sep 2026", "2026-09-27", "2026-10-26"), (
             sep["period"]!["label"]!.GetValue<string>(), sep["period"]!["startDate"]!.GetValue<string>(), sep["period"]!["endDate"]!.GetValue<string>()));
-        Assert.Equal((17_500.25m, 1_900m, 1_299.99m, 600.01m), Numbers(sep));
-        Assert.Equal((17_000m, 1_500m, 50m, 1_450m), Numbers(Month(overview, "2026-08")));
+        Assert.Equal((17_500.25m, 1_900m, 1_299.99m, 12_550.01m), Numbers(sep));
+        Assert.Equal(11_950m, Dec(sep["carriedIn"]));
+        Assert.Equal((17_000m, 1_500m, 50m, 11_950m), Numbers(Month(overview, "2026-08")));
+        Assert.Equal(10_500m, Dec(Month(overview, "2026-08")["carriedIn"]));
         Assert.Equal((17_000m, 1_500m, 0m, 1_500m), Numbers(Month(overview, "2026-01")));
+        Assert.Equal(0m, Dec(Month(overview, "2026-01")["carriedIn"]));
         Assert.Equal((204_500.25m, 19_600m, 1_349.99m, 18_250.01m), Numbers(overview["totals"]!));
+        // R-PLN-04: FY income - FY planned.
+        Assert.Equal(184_900.25m, Dec(overview["totals"]!["plannedSaved"]));
     }
 
     private static (decimal, decimal, decimal) ToDate(JsonNode overview) =>
@@ -112,6 +120,8 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var overview = await GetOk(await SetUp());
 
         Assert.Equal((153_500.25m, 1_349.99m, 152_150.26m), ToDate(overview));
+        // R-PLN-03: Sep's Unassigned, 8 × 15,500 + 17,500.25 - 1,900.
+        Assert.Equal(139_600.25m, Dec(overview["toDate"]!["plannedSaved"]));
     }
 
     // Every entry of a started month counts, also one dated after today (25 Oct is in Sep 2026).
@@ -169,6 +179,8 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(["food", "transport"], overview["rows"]!.AsArray().Select(row => row!["categoryId"]!.GetValue<string>()));
         var groceries = SubRow(overview, "food", "groceries");
         Assert.Equal((1_500m, 1_199.99m), (Dec(Cell(groceries, "2026-09")["planned"]), Dec(Cell(groceries, "2026-09")["spent"])));
+        // R-PLN-05: Aug left 11,950 for Groceries, so Sep has 13,450 and 12,250.01 remains.
+        Assert.Equal((11_950m, 12_250.01m), (Dec(Cell(groceries, "2026-09")["carriedIn"]), Dec(Cell(groceries, "2026-09")["remaining"])));
         Assert.Equal((1_500m, 50m), (Dec(Cell(groceries, "2026-08")["planned"]), Dec(Cell(groceries, "2026-08")["spent"])));
         Assert.Equal((18_000m, 1_249.99m), (Dec(groceries["planned"]), Dec(groceries["spent"])));
         var fuel = SubRow(overview, "transport", "fuel");
@@ -178,6 +190,8 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var transport = Row(overview, "transport");
         Assert.Equal(12, transport["months"]!.AsArray().Count);
         Assert.Equal((400m, 100m), (Dec(Cell(transport, "2026-09")["planned"]), Dec(Cell(transport, "2026-09")["spent"])));
+        // A category carries the sum of its sub-categories: Fuel left 300 in Sep.
+        Assert.Equal((300m, 700m), (Dec(Cell(transport, "2026-10")["carriedIn"]), Dec(Cell(transport, "2026-10")["remaining"])));
         Assert.Equal((1_600m, 100m), (Dec(transport["planned"]), Dec(transport["spent"])));
     }
 
@@ -330,11 +344,12 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var overview = await GetOk(await SetUp(), query: "?categoryId=food");
 
         Assert.Equal(["food"], overview["rows"]!.AsArray().Select(row => row!["categoryId"]!.GetValue<string>()));
-        Assert.Equal((1_500m, 1_199.99m, 300.01m), Scoped(Month(overview, "2026-09")));
-        Assert.Equal((1_500m, 50m, 1_450m), Scoped(Month(overview, "2026-08")));
+        Assert.Equal((1_500m, 1_199.99m, 12_250.01m), Scoped(Month(overview, "2026-09")));
+        Assert.Equal((1_500m, 50m, 11_950m), Scoped(Month(overview, "2026-08")));
         Assert.Null(Month(overview, "2026-09")["income"]);
         Assert.Equal((18_000m, 1_249.99m, 16_750.01m), Scoped(overview["totals"]!));
         Assert.Null(overview["totals"]!["income"]);
+        Assert.Null(overview["totals"]!["plannedSaved"]);
         Assert.Equal((153_500.25m, 1_349.99m, 152_150.26m), ToDate(overview));
         // The selectors still get every category.
         Assert.Equal(2, overview["categories"]!.AsArray().Count);

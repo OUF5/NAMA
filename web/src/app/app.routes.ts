@@ -42,9 +42,10 @@ export const routes: Routes = [
   },
   // Old bookmarks and Home Screen links. The query (fyId, view) is kept.
   { path: 'months', redirectTo: 'tracker' },
+  // PRD 5.4: an expense, or a transfer with ?type=transfer (TRF-01).
   {
     path: 'add',
-    title: 'NAMA · Add expense',
+    title: 'NAMA · Add',
     canActivate: [authGuard, setupGuard],
     loadComponent: () => import('./features/add-entry/add-entry').then((m) => m.AddEntry),
   },
@@ -60,6 +61,15 @@ export const routes: Routes = [
     canActivate: [authGuard, setupGuard],
     loadComponent: () => import('./features/plan/plan').then((m) => m.Plan),
   },
+  // PRD 5.11 Banks (BNK-01 to BNK-05).
+  {
+    path: 'banks',
+    title: 'NAMA · Banks',
+    canActivate: [authGuard, setupGuard],
+    loadComponent: () => import('./features/banks/banks').then((m) => m.Banks),
+  },
+  // Bank accounts moved from Settings to Banks (20 Oct 2026); old links still work.
+  { path: 'settings/bank-accounts', redirectTo: 'banks' },
   {
     matcher: settingsMatcher,
     title: 'NAMA · Settings',

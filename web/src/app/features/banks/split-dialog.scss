@@ -1,0 +1,71 @@
+// BNK-03 split dialog: one compact row per account. Tokens only.
+.income {
+  margin: 12px 0 4px;
+}
+
+.shares {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 120px 128px auto;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    border-bottom: 1px solid var(--divider);
+  }
+}
+
+.name {
+  overflow: hidden;
+  font-weight: 500;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.percent {
+  width: 120px;
+}
+
+.amount {
+  text-align: right;
+}
+
+.total {
+  margin: 12px 0 0;
+  font-weight: 600;
+
+  &.danger {
+    color: var(--danger);
+  }
+}
+
+// Phones: name and "All here" on top, the share and its amount under them.
+@media (max-width: 767.98px) {
+  .shares li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name all'
+      'percent amount';
+    gap: 4px 12px;
+    padding: 8px 0;
+  }
+
+  .name {
+    grid-area: name;
+  }
+
+  .all {
+    grid-area: all;
+  }
+
+  .percent {
+    grid-area: percent;
+  }
+
+  .amount {
+    grid-area: amount;
+  }
+}

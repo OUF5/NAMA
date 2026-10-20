@@ -29,11 +29,20 @@
   }
   <p class="status" aria-live="polite">{{ status() }}</p>
 
-  <!-- PLN-03, R-PLN-03: every month's planned, income and unassigned at once (owner's choice, M8:
-       the table turned sideways). Sticky on desktop; it can be folded on phones. -->
+  <!-- PLN-03, R-PLN-03, R-PLN-04: every month at once (owner's choice, M8: the table turned sideways),
+       read top to bottom, each computed row with its formula under its name: Unallocated this month =
+       Income - Planned; Unallocated accumulated = this month + from last month, and it carries into the
+       next month. The FY column's accumulated row is Planned saved. "Unallocated" is R-PLN-03's
+       Unassigned on screen (owner's choice, 20 Oct 2026). Sticky on desktop; it folds on phones. -->
   <section class="card totals-card" aria-labelledby="totals-title">
     <div class="card-head">
       <h2 id="totals-title">Totals per month <span class="caption">({{ currency() }})</span></h2>
+      @if (fiscalYearColumn(); as fy) {
+        <p class="saved-kpi">
+          <span class="caption">Planned saved in {{ d.fiscalYear.label }}</span>
+          <span class="money" [class.ok]="!fy.over" [class.danger]="fy.over">{{ fy.plannedSavedMoney }}</span>
+        </p>
+      }
       <button mat-button type="button" class="fold" [attr.aria-expanded]="totalsOpen()" (click)="totalsOpen.set(!totalsOpen())">
         {{ totalsOpen() ? 'Hide' : 'Show' }}
       </button>
@@ -41,8 +50,7 @@
     @if (totalsOpen()) {
       <div class="scroll">
         <!-- Equal month columns; the table scrolls sideways when they do not fit. -->
-        <table class="totals" [style.min-width.px]="labelWidth + columns().length * columnWidth">
-          <caption class="caption">Select a month to see its amounts below.</caption>
+        <table class="totals" [style.min-width.px]="labelWidth + (columns().length + 1) * columnWidth">
           <thead>
             <tr>
               <td></td>
@@ -60,24 +68,66 @@
                   </button>
                 </th>
               }
+              <!-- R-PLN-06: the column covers the months that carry. -->
+              <th scope="col" class="fy-col">
+                @if (carryFrom(); as from) {
+                  From<span class="caption">{{ from }}</span>
+                } @else {
+                  FY<span class="caption">total</span>
+                }
+              </th>
             </tr>
           </thead>
+          @let fy = fiscalYearColumn();
           <tbody>
-            <tr>
-              <th scope="row">Planned</th>
-              @for (column of columns(); track column.period.key) {
-                <td class="money" [class.selected]="column.period.key === selected()?.key">{{ column.planned }}</td>
-              }
-            </tr>
             <tr>
               <th scope="row">Income</th>
               @for (column of columns(); track column.period.key) {
                 <td class="money" [class.selected]="column.period.key === selected()?.key">{{ column.income }}</td>
               }
+              <td class="money fy-col">{{ fy?.income }}</td>
             </tr>
             <tr>
-              <!-- R-PLN-03 "unplanned income", shown as "Unassigned" (owner's choice, M6). -->
-              <th scope="row">Unassigned</th>
+              <th scope="row">Planned</th>
+              @for (column of columns(); track column.period.key) {
+                <td class="money" [class.selected]="column.period.key === selected()?.key">{{ column.planned }}</td>
+              }
+              <td class="money fy-col">{{ fy?.planned }}</td>
+            </tr>
+            <!-- The month on its own, not carried: its income minus its plan. -->
+            <tr class="subtotal">
+              <th scope="row">
+                Unallocated this month
+                <span class="formula">Income − Planned</span>
+              </th>
+              @for (column of columns(); track column.period.key) {
+                <td
+                  class="money"
+                  [class.selected]="column.period.key === selected()?.key"
+                  [class.ok]="!column.thisMonthOver"
+                  [class.danger]="column.thisMonthOver"
+                >
+                  {{ column.thisMonth }}
+                </td>
+              }
+              <td class="money fy-col" [class.ok]="!fy?.over" [class.danger]="fy?.over">{{ fy?.plannedSaved }}</td>
+            </tr>
+            <tr>
+              <th scope="row">
+                From last month
+                <span class="formula">Last month's accumulated</span>
+              </th>
+              @for (column of columns(); track column.period.key) {
+                <td class="money carried" [class.selected]="column.period.key === selected()?.key">{{ column.carriedIn }}</td>
+              }
+              <td class="fy-col" aria-label="Nothing carries into the FY">–</td>
+            </tr>
+            <tr class="result">
+              <!-- R-PLN-03, carried from month to month. -->
+              <th scope="row">
+                Unallocated accumulated
+                <span class="formula">This month + From last month</span>
+              </th>
               @for (column of columns(); track column.period.key) {
                 <td
                   class="money"
@@ -85,17 +135,30 @@
                   [class.ok]="!column.over"
                   [class.danger]="column.over"
                 >
-                  {{ column.unplanned }}
+                  {{ column.unassigned }}
                 </td>
               }
+              <!-- R-PLN-04 -->
+              <td class="money fy-col" [class.ok]="!fy?.over" [class.danger]="fy?.over" [attr.aria-label]="'Planned saved ' + fy?.plannedSaved">
+                {{ fy?.plannedSaved }}
+              </td>
             </tr>
           </tbody>
         </table>
       </div>
+      <!-- Under the table, not its caption, so it wraps instead of scrolling with the months. -->
+      <p class="caption totals-note">
+        Unallocated is income that no plan uses yet. What a month leaves unallocated carries into the next
+        month.
+        @if (carryFrom(); as from) {
+          It carries from {{ from }}, the month you started NAMA; earlier months stand alone.
+        }
+        Select a month to see its amounts below.
+      </p>
     } @else if (selectedColumn(); as column) {
       <p class="folded">
-        {{ column.period.label }} · Unassigned
-        <span class="money" [class.ok]="!column.over" [class.danger]="column.over">{{ column.unplanned }}</span>
+        {{ column.period.label }} · Unallocated accumulated
+        <span class="money" [class.ok]="!column.over" [class.danger]="column.over">{{ column.unassigned }}</span>
       </p>
     }
   </section>

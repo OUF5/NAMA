@@ -9,6 +9,8 @@
   </div>
   <span class="spacer"></span>
   @if (showNav()) {
+    <!-- UX-08, desktop: this month's money left and the bank balance, on every page. -->
+    <ng-container *ngTemplateOutlet="stats; context: { $implicit: 'bar' }" />
     <a mat-icon-button routerLink="/settings" routerLinkActive="active" aria-label="Settings">
       <mat-icon>settings</mat-icon>
     </a>
@@ -19,6 +21,34 @@
   }
 </mat-toolbar>
 
+<!-- UX-08, phones: the same numbers in a strip under the top bar (the top bar has no room). -->
+@if (showNav()) {
+  <ng-container *ngTemplateOutlet="stats; context: { $implicit: 'strip' }" />
+}
+
+<!-- Each number is a link: Left opens Tracker, Balance opens Banks. -->
+<ng-template #stats let-place>
+  <!-- The strip keeps its height while it loads, so the page does not jump. -->
+  <div class="stats" [class]="place" role="group" aria-label="This month and your balance">
+    @if (header(); as h) {
+      @if (h.left; as left) {
+        <a class="stat" routerLink="/tracker" [attr.aria-label]="left.label">
+          <span class="caption">{{ left.caption }}</span>
+          <span class="money value" [class]="left.status">{{ left.amount }}</span>
+        </a>
+      }
+      <a class="stat" routerLink="/banks" [attr.aria-label]="h.balance.label" [title]="h.balance.title">
+        <span class="caption">Balance</span>
+        @if (h.balance.amount; as amount) {
+          <span class="money value" [class.danger]="h.balance.negative">{{ amount }}</span>
+        } @else {
+          <span class="value setup">Set up</span>
+        }
+      </a>
+    }
+  </div>
+</ng-template>
+
 <div class="layout">
   @if (showNav()) {
     <nav class="nav" aria-label="Main">
@@ -26,6 +56,7 @@
         <a
           class="nav-item"
           [class.nav-add]="item.prominent"
+          [class.desktop-only]="item.desktopOnly"
           [routerLink]="item.path"
           routerLinkActive="active"
           [routerLinkActiveOptions]="{ exact: item.path === '/' }"

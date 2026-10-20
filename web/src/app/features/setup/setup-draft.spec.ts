@@ -9,7 +9,7 @@ describe('setup draft (SET-03)', () => {
     paydayDay: 27,
     salary: '15000',
     additional: [{ label: 'Rent', amount: '2000', type: 'monthly', from: '2026-01', to: '' }],
-    bankAccounts: ['SNB'],
+    bankAccounts: [{ name: 'SNB', balance: '5000', share: '100' }],
     categories: ['Food'],
   };
 

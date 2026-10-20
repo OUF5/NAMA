@@ -37,12 +37,24 @@ export interface PlanItem {
   total: number;
 }
 
-// PLN-03: one row per month, worked out in the API (R-PLN-02, R-PLN-03).
+// PLN-03: one row per month, worked out in the API (R-PLN-02, R-PLN-03). thisMonth is the month on its
+// own (income - planned, not carried); unassigned carries: thisMonth + carriedIn (last month's
+// Unassigned), from 0 in the first month that carries (R-PLN-06).
 export interface MonthTotals {
   periodKey: string;
-  planned: number;
+  carriedIn: number;
   income: number;
-  unplanned: number;
+  planned: number;
+  thisMonth: number;
+  unassigned: number;
+}
+
+// The FY column of PLN-03, from carryFromPeriodKey to the FY's end, so Income - Planned = plannedSaved,
+// the last month's Unassigned (R-PLN-04).
+export interface FiscalYearTotals {
+  income: number;
+  planned: number;
+  plannedSaved: number;
 }
 
 // fiscalYears (oldest first) feed Plan's FY selector (owner's choice, M8).
@@ -54,6 +66,10 @@ export interface PlansResponse {
   // Category id → month key → planned (R-PLN-02), for the month column (M8).
   categoryMonthTotals: Record<string, Record<string, number>>;
   totals: MonthTotals[];
+  fiscalYearTotals: FiscalYearTotals;
+  // R-PLN-06: the first month that carries (the month NAMA was set up, or the FY's first month);
+  // earlier months stand alone. Null when none does.
+  carryFromPeriodKey: string | null;
 }
 
 @Injectable({ providedIn: 'root' })

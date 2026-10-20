@@ -25,7 +25,17 @@ import { AuthService } from '../../core/auth';
 import { Me, MeService } from '../../core/me';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
 import { incomeMonths, untilNotBeforeFrom } from '../../shared/income-months';
-import { CURRENCIES, amountValidator, formatMoney, parseAmount } from '../../shared/money';
+import {
+  CURRENCIES,
+  amountValidator,
+  balanceValidator,
+  formatMoney,
+  formatPercent,
+  parseAmount,
+  parseBalance,
+  parsePercent,
+  percentValidator,
+} from '../../shared/money';
 import { MONTH_NAMES, PeriodInfo, formatDate, formatDay, periodWithDates } from '../../shared/month-label';
 import { NAME_MAX_LENGTH, isValidName, nameValidator, notInListValidator, sameName } from '../../shared/names';
 import { SetupDraft, clearDraft, loadDraft, saveDraft } from './setup-draft';
@@ -39,6 +49,7 @@ interface Preview {
 
 type IncomeType = 'once' | 'monthly';
 type IncomeItemValue = SetupDraft['additional'][number];
+type AccountValue = SetupDraft['bankAccounts'][number];
 
 // PRD 5.2 step 5: optional suggestions you can tap.
 const SUGGESTED_CATEGORIES = [
@@ -48,6 +59,15 @@ const SUGGESTED_CATEGORIES = [
 
 function atLeastOne(control: AbstractControl): ValidationErrors | null {
   return (control.value as unknown[]).length > 0 ? null : { required: true };
+}
+
+// R-BAL-02: the accounts' shares of income add up to exactly 100%.
+function sharesAddUp(control: AbstractControl): ValidationErrors | null {
+  const shares = (control.value as AccountValue[]).map((account) => parsePercent(account.share));
+  if (shares.length === 0 || shares.some((share) => share === null)) {
+    return null;
+  }
+  return (shares as number[]).reduce((sum, share) => sum + share, 0) === 10_000 ? null : { shares: true };
 }
 
 // PRD 5.2: the 6-step setup wizard. Nothing is saved until Finish (SET-02).
@@ -115,10 +135,11 @@ export class Setup {
     additional: this.fb.array<FormGroup>([]),
   });
 
-  // Steps 4 and 5: at least one bank account and one category.
-  protected readonly bankAccounts = this.fb.array<FormControl<string>>([], atLeastOne);
+  // Steps 4 and 5: at least one bank account and one category. Each account has its balance today
+  // (R-BAL-01) and its share of income (R-BAL-02); the shares add up to 100%.
+  protected readonly bankAccounts = this.fb.array<FormGroup>([], [atLeastOne, sharesAddUp]);
   protected readonly categories = this.fb.array<FormControl<string>>([], atLeastOne);
-  protected readonly newAccount = this.fb.control('', notInListValidator(() => this.bankAccounts.getRawValue()));
+  protected readonly newAccount = this.fb.control('', notInListValidator(() => this.accountNames()));
   protected readonly newCategory = this.fb.control('', notInListValidator(() => this.categories.getRawValue()));
   protected readonly accountsTried = signal(false);
   protected readonly categoriesTried = signal(false);
@@ -131,6 +152,27 @@ export class Setup {
   private readonly incomeValue = toSignal(this.income.valueChanges, { initialValue: this.income.getRawValue() });
   private readonly projectValue = toSignal(this.project.valueChanges, { initialValue: this.project.getRawValue() });
   private readonly categoriesValue = toSignal(this.categories.valueChanges, { initialValue: [] as string[] });
+  private readonly accountsValue = toSignal(this.bankAccounts.valueChanges, { initialValue: [] as AccountValue[] });
+
+  // Step 4's total share, for example "80%", or null while a share is not a valid percent.
+  protected readonly shareTotal = computed(() => {
+    const shares = (this.accountsValue() as AccountValue[]).map((account) => parsePercent(account.share));
+    return shares.some((share) => share === null) ? null : (shares as number[]).reduce((sum, share) => sum + share, 0);
+  });
+  protected readonly shareTotalText = computed(() => (this.shareTotal() === null ? '–' : formatPercent(this.shareTotal()!)));
+
+  // Step 6: "SNB · SAR 5,000 today · 80% of income".
+  protected readonly accountLines = computed(() =>
+    (this.accountsValue() as AccountValue[]).map((account) => {
+      const balance = parseBalance(account.balance);
+      const share = parsePercent(account.share);
+      return [
+        account.name,
+        balance === null ? '' : `${this.money(balance)} today`,
+        share === null ? '' : `${formatPercent(share)} of income`,
+      ].filter(Boolean).join(' · ');
+    }),
+  );
 
   protected readonly currency = computed(() => this.projectValue().currency ?? 'SAR');
 
@@ -239,10 +281,27 @@ export class Setup {
     this.additional.removeAt(index);
   }
 
+  // The first account gets all income at first, so the shares already add up to 100%.
   protected addAccount(): void {
-    if (this.addName(this.newAccount, this.bankAccounts)) {
-      this.accountsTried.set(false);
+    const name = this.newAccount.value.trim();
+    if (!isValidName(name)) {
+      this.newAccount.setErrors({ name: true });
     }
+    if (this.newAccount.invalid) {
+      this.newAccount.markAsTouched();
+      return;
+    }
+    this.bankAccounts.push(this.accountGroup(name, '', this.bankAccounts.length === 0 ? '100' : '0'));
+    this.newAccount.reset('');
+    this.accountsTried.set(false);
+  }
+
+  protected removeAccount(index: number): void {
+    this.bankAccounts.removeAt(index);
+  }
+
+  protected accountName(index: number): string {
+    return (this.bankAccounts.at(index).value as AccountValue).name;
   }
 
   protected addCategory(): void {
@@ -313,9 +372,26 @@ export class Setup {
         fromPeriodKey: item.from,
         toPeriodKey: item.type === 'monthly' && item.to ? item.to : null,
       })),
-      bankAccounts: this.bankAccounts.getRawValue(),
+      bankAccounts: (this.bankAccounts.getRawValue() as AccountValue[]).map((account) => ({
+        name: account.name,
+        openingBalance: parseBalance(account.balance)! / 100,
+        share: parsePercent(account.share)! / 100,
+      })),
       categories: this.categories.getRawValue(),
     };
+  }
+
+  private accountNames(): string[] {
+    return (this.bankAccounts.getRawValue() as AccountValue[]).map((account) => account.name);
+  }
+
+  // R-BAL-01, R-BAL-02: an account of step 4.
+  private accountGroup(name: string, balance: string, share: string): FormGroup {
+    return this.fb.group({
+      name: [name],
+      balance: [balance, balanceValidator()],
+      share: [share, percentValidator()],
+    });
   }
 
   // Adds the trimmed name when it is valid and new (PRD 4.7). Returns whether it was added.
@@ -382,7 +458,7 @@ export class Setup {
       paydayDay: calendar.paydayDay,
       salary: income.salary,
       additional: income.additional as SetupDraft['additional'],
-      bankAccounts: this.bankAccounts.getRawValue(),
+      bankAccounts: this.bankAccounts.getRawValue() as AccountValue[],
       categories: this.categories.getRawValue(),
     };
   }
@@ -403,9 +479,11 @@ export class Setup {
         this.incomeItem(item.label ?? '', item.amount ?? '', item.type === 'once' ? 'once' : 'monthly', item.from ?? '', item.to ?? ''),
       );
     }
-    for (const name of draft.bankAccounts ?? []) {
-      this.bankAccounts.push(this.fb.control(name));
-    }
+    // An older draft holds names only: the first gets all income, as when it is added.
+    (draft.bankAccounts ?? []).forEach((account: AccountValue | string, i) => {
+      const value = typeof account === 'string' ? { name: account, balance: '', share: i === 0 ? '100' : '0' } : account;
+      this.bankAccounts.push(this.accountGroup(value.name ?? '', value.balance ?? '', value.share ?? '0'));
+    });
     for (const name of draft.categories ?? []) {
       this.categories.push(this.fb.control(name));
     }

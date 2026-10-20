@@ -6,7 +6,8 @@ import { Rollover } from '../../shared/rollover-banner';
 import { Category, FiscalYear } from '../plan/plan-api';
 
 // GET /api/fiscal-years/{fyId}/overview (PRD 7.5), for Months and Dashboard. Amounts are decimals in JSON (R-MON-01); every
-// sum is made by the API, the page only formats. Remaining is planned minus spent (M7).
+// sum is made by the API, the page only formats. R-PLN-05: what is left carries into the next month,
+// so remaining = carriedIn + planned - spent, from 0 at the FY start; carriedIn + planned is "available".
 
 // R-STA-01, worked out by the API with today in the profile time zone.
 export type MonthStatus = 'closed' | 'inProgress' | 'yetToCome';
@@ -16,6 +17,7 @@ export interface MonthOverview {
   period: PeriodInfo;
   status: MonthStatus;
   income: number | null;
+  carriedIn: number;
   planned: number;
   spent: number;
   remaining: number;
@@ -23,8 +25,10 @@ export interface MonthOverview {
 
 export interface Cell {
   periodKey: string;
+  carriedIn: number;
   planned: number;
   spent: number;
+  remaining: number;
 }
 
 export interface SubCategoryRow {
@@ -43,19 +47,24 @@ export interface CategoryRow {
   subCategories: SubCategoryRow[];
 }
 
+// The FY: remaining is FY planned - FY spent. plannedSaved (R-PLN-04) is the last month's Unassigned,
+// null with a filter.
 export interface Totals {
   income: number | null;
   planned: number;
   spent: number;
   remaining: number;
+  plannedSaved: number | null;
 }
 
 // DSH-02 (owner's choice, M9): the months that started on or before today, each with its full income
-// and every entry in it. saved is income minus spent and can be negative.
+// and every entry in it. saved is income minus spent and can be negative. plannedSaved is the
+// Unassigned of the latest started month (R-PLN-03): what the plan meant to keep by now.
 export interface ToDate {
   income: number;
   spent: number;
   saved: number;
+  plannedSaved: number;
 }
 
 // fiscalYears (oldest first) feed the MON-03 selector; categories is GET /api/categories (names and
@@ -70,6 +79,8 @@ export interface OverviewResponse {
   totals: Totals;
   toDate: ToDate;
   rollover: Rollover | null;
+  // R-PLN-06: the first month that carries; earlier months stand alone, and to date starts there.
+  carryFromPeriodKey: string | null;
 }
 
 // Tracker's filter (owner's choice, 20 Oct 2026): rows, months and totals cover only this category

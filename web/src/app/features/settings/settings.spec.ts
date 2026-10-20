@@ -72,10 +72,6 @@ function settings(currentPeriodKey: string | null = '2026-09', peopleList: Peopl
       currentPeriodKey,
       currentTotal: currentPeriodKey ? 11500.25 : null,
     },
-    bankAccounts: [
-      { id: 'rajhi', name: 'Al Rajhi', archived: false },
-      { id: 'cash', name: 'Cash', archived: true },
-    ],
     categories: [
       {
         id: 'food',
@@ -199,7 +195,6 @@ describe('Settings (PRD 5.7)', () => {
       'person Profile Home budget · SAR chevron_right',
       'event Fiscal year Starts in July · Payday 27 chevron_right',
       'payments Income SAR 11,500.25 this month chevron_right',
-      'account_balance Bank accounts 1 active, 1 archived chevron_right',
       'category Categories 1 active chevron_right',
     ]);
     expect(text(root.querySelector('.version'))).toBe('Version 3e8c699');
@@ -231,31 +226,6 @@ describe('Settings (PRD 5.7)', () => {
     expect(text(root)).toContain('No fiscal year contains today.');
   });
 
-  // STG-04: archived accounts fold away; archive is one call without a confirmation, and the API
-  // keeps one active account.
-  it('archives and restores accounts, and shows the last-account rule', async () => {
-    const root = await open('/settings/bank-accounts');
-    expect(text(root)).not.toContain('Cash');
-
-    fold(root, 'Archived (1)').click();
-    harness.detectChanges();
-    root.querySelector<HTMLButtonElement>('[aria-label="Restore Cash"]')!.click();
-    const restore = http.expectOne('/api/bank-accounts/cash');
-    expect(restore.request.method).toBe('PUT');
-    expect(restore.request.body).toEqual({ name: 'Cash', archived: false });
-    restore.flush({ id: 'cash', name: 'Cash', archived: false });
-    await settle();
-    expect(text(root.querySelector('.status'))).toBe('Cash restored.');
-    expect(root.querySelector('[aria-label="Archive Cash"]')).not.toBeNull();
-
-    root.querySelector<HTMLButtonElement>('[aria-label="Archive Al Rajhi"]')!.click();
-    http
-      .expectOne('/api/bank-accounts/rajhi')
-      .flush({ errors: { Archived: ['Keep at least one active bank account.'] } }, { status: 400, statusText: 'Bad Request' });
-    await settle();
-    expect(text(root.querySelector('.status'))).toBe('Keep at least one active bank account. Entries need one.');
-  });
-
   // STG-05: one row per category; it opens its sub-categories.
   it('opens a category to show its sub-categories', async () => {
     const root = await open('/settings/categories');
@@ -284,8 +254,8 @@ describe('Settings (PRD 5.7)', () => {
     const root = await open('/settings', settings('2026-09', people));
 
     const rows = Array.from(root.querySelectorAll<HTMLAnchorElement>('a.menu-row'));
-    expect(text(rows[5])).toBe('group People 1 person · 1 unused link chevron_right');
-    expect(rows[5].getAttribute('href')).toBe('/settings/people');
+    expect(text(rows[4])).toBe('group People 1 person · 1 unused link chevron_right');
+    expect(rows[4].getAttribute('href')).toBe('/settings/people');
   });
 
   // AUTH-07: the admins, who joined and when, and the unused links with their expiry.

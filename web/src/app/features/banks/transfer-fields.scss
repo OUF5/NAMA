@@ -1,0 +1,86 @@
+// The transfer fields (TRF-01): docs/DESIGN.md "Add form", tokens only. The shared layout is in
+// add-entry/entry-fields.scss.
+
+// From, swap, To.
+.accounts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.swap {
+  color: var(--text-2);
+}
+
+.balances {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.balance-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  .name {
+    overflow: hidden;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+.amounts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+
+  mat-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    color: var(--text-muted);
+  }
+}
+
+// The balance before, once an amount is typed.
+.struck {
+  color: var(--text-muted);
+}
+
+.after {
+  font-weight: 600;
+
+  &.danger {
+    color: var(--danger);
+  }
+}
+
+// Phones: the accounts stack, with the swap button between them.
+@media (max-width: 767.98px) {
+  .accounts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .swap {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+}

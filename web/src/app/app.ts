@@ -1,5 +1,5 @@
-import { DOCUMENT } from '@angular/common';
-import { Component, Injector, computed, inject } from '@angular/core';
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
+import { Component, Injector, computed, effect, inject, untracked } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, firstValueFrom, map } from 'rxjs';
@@ -8,25 +8,31 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { AuthService } from './core/auth';
 import { MeService } from './core/me';
+import { SummaryService } from './core/summary';
 import { visibleSections } from './features/settings/settings-sections';
 import { dialogSize } from './shared/dialog';
+import { formatMoney, toMinor } from './shared/money';
 import { periodWithDates } from './shared/month-label';
+import { spendStatus } from './shared/plan-status';
 
 interface NavItem {
   path: string;
   label: string;
   icon: string;
   prominent?: boolean;
+  // Phones reach it from the top bar's Balance instead (the bottom bar holds 5 items).
+  desktopOnly?: boolean;
 }
 
 @Component({
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatToolbarModule, MatButtonModule, MatIconModule],
+  imports: [NgTemplateOutlet, RouterOutlet, RouterLink, RouterLinkActive, MatToolbarModule, MatButtonModule, MatIconModule],
   selector: 'app-root',
   styleUrl: './app.scss',
   templateUrl: './app.html',
 })
 export class App {
   private readonly me = inject(MeService);
+  private readonly summaryService = inject(SummaryService);
   private readonly auth = inject(AuthService);
   private readonly injector = inject(Injector);
   private readonly document = inject(DOCUMENT);
@@ -51,6 +57,54 @@ export class App {
     return period ? periodWithDates(period) : null;
   });
 
+  // UX-08: "Left in Sep 2026 · 6 days left" (the month's remaining, carried, R-PLN-05, in its plan
+  // status color) and "Balance" (the active accounts' total, R-BAL-03), or "Set up" until every
+  // account has its opening balance. The API makes the sums; this only formats.
+  protected readonly header = computed(() => {
+    const summary = this.summaryService.summary();
+    if (!summary) {
+      return null;
+    }
+    const currency = this.me.me()?.profile?.currency ?? 'SAR';
+    const money = (amount: number) => formatMoney(toMinor(amount), currency);
+    const month = summary.month;
+    const days = month ? (month.daysLeft === 1 ? 'last day' : `${month.daysLeft} days left`) : '';
+    const accounts = summary.accounts
+      .filter((account) => account.balance !== null)
+      .map((account) => `${account.name} ${money(account.balance!)}`)
+      .join(' · ');
+    return {
+      left: month
+        ? {
+            caption: `Left in ${month.period.label} · ${days}`,
+            amount: money(month.remaining),
+            status: spendStatus(toMinor(month.carriedIn) + toMinor(month.planned), toMinor(month.spent)) ?? '',
+            label: `Left to spend in ${month.period.label}: ${money(month.remaining)}, ${days}. Open Tracker`,
+          }
+        : null,
+      balance: {
+        amount: summary.balance === null ? null : money(summary.balance),
+        negative: (summary.balance ?? 0) < 0,
+        title: accounts,
+        label:
+          summary.balance === null
+            ? 'Balance: set up your bank balances. Open Banks'
+            : `Balance ${money(summary.balance)}${accounts ? `: ${accounts}` : ''}. Open Banks`,
+      },
+    };
+  });
+
+  constructor() {
+    // The top bar's numbers load once the navigation shows (setup done), and go on sign-out.
+    effect(() => {
+      if (this.showNav()) {
+        untracked(() => void this.summaryService.load());
+      } else {
+        untracked(() => this.summaryService.clear());
+      }
+    });
+  }
+
   // Desktop side bar (owner's choice, M8): Settings opens its sections under it while you are in
   // Settings. The gear in the top bar stays (UX-01); phones get the Settings list instead. People
   // is listed for admins only (STG-07).
@@ -73,12 +127,15 @@ export class App {
   }
 
   // UX-01: five always-visible items, Add is prominent and in the middle. Settings lives in the
-  // top bar. Plan and Tracker (plan vs actual) sit side by side (owner's choice, 20 Oct 2026).
+  // top bar. Plan and Tracker (plan vs actual) sit side by side (owner's choice, 20 Oct 2026). Add
+  // adds an expense or a transfer (TRF-01), so it is "Add". Banks (BNK-01) is in the side bar; on
+  // phones the top bar's Balance opens it, so it is never hidden.
   protected readonly navItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: 'dashboard' },
     { path: '/entries', label: 'Entries', icon: 'receipt_long' },
-    { path: '/add', label: 'Add expense', icon: 'add', prominent: true },
+    { path: '/add', label: 'Add', icon: 'add', prominent: true },
     { path: '/plan', label: 'Plan', icon: 'event_note' },
     { path: '/tracker', label: 'Tracker', icon: 'query_stats' },
+    { path: '/banks', label: 'Banks', icon: 'account_balance', desktopOnly: true },
   ];
 }

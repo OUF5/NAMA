@@ -13,8 +13,14 @@ public static class PlansEndpoint
 {
     public record PlanDto(string SubCategoryId, string CategoryId, IReadOnlyDictionary<string, decimal> Amounts, decimal Total);
 
-    // PLN-03, R-PLN-03: one row per month.
-    public record MonthTotalsDto(string PeriodKey, decimal Planned, decimal Income, decimal Unplanned);
+    // PLN-03, R-PLN-03: one row per month. ThisMonth is the month on its own (Income - Planned, not
+    // carried); CarriedIn is the previous month's Unassigned, so Unassigned = ThisMonth + CarriedIn.
+    public record MonthTotalsDto(
+        string PeriodKey, decimal CarriedIn, decimal Income, decimal Planned, decimal ThisMonth, decimal Unassigned);
+
+    // The FY column of PLN-03, from the first month that carries (R-PLN-06) to the FY's end, so it adds
+    // up: Income - Planned = PlannedSaved, the last month's Unassigned (R-PLN-04).
+    public record FiscalYearTotalsDto(decimal Income, decimal Planned, decimal PlannedSaved);
 
     // CategoryMonthTotals: category id → month key → planned (R-PLN-02), for Plan's month
     // column (owner's choice, M8), so the browser does no sums.
@@ -24,7 +30,9 @@ public static class PlansEndpoint
         IReadOnlyList<PlanDto> Plans,
         IReadOnlyDictionary<string, decimal> CategoryTotals,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, decimal>> CategoryMonthTotals,
-        IReadOnlyList<MonthTotalsDto> Totals);
+        IReadOnlyList<MonthTotalsDto> Totals,
+        FiscalYearTotalsDto FiscalYearTotals,
+        string? CarryFromPeriodKey);
 
     public static IEndpointRouteBuilder MapPlans(this IEndpointRouteBuilder api)
     {
@@ -71,7 +79,7 @@ public static class PlansEndpoint
     private static async Task<IReadOnlyList<FiscalYear>> FiscalYearsAsync(string uid, IUserStore store) =>
         (await store.GetFiscalYearsAsync(uid)).OrderBy(fiscalYear => fiscalYear.StartDate).ToList();
 
-    // R-PLN-02, R-PLN-03 and R-INC-01, over the FY's stored months (R-CAL-09).
+    // R-PLN-02 to R-PLN-04 and R-INC-01, over the FY's stored months (R-CAL-09).
     private static async Task<PlansResponse> LoadAsync(string uid, IReadOnlyList<FiscalYear> fiscalYears, FiscalYear fiscalYear, IUserStore store)
     {
         var plans = await store.GetPlansAsync(uid, fiscalYear.Id);
@@ -87,12 +95,17 @@ public static class PlansEndpoint
                 period => period.Key,
                 period => Money.FromMinor(PlanCalculator.CategoryPlanned(plans, categoryId, period.Key))));
 
-        var totals = fiscalYear.Periods.Select(period =>
-        {
-            var planned = PlanCalculator.MonthPlanned(plans, period.Key);
-            return new MonthTotalsDto(period.Key, Money.FromMinor(planned), Money.FromMinor(income[period.Key]),
-                Money.FromMinor(PlanCalculator.Unplanned(income[period.Key], planned)));
-        }).ToList();
+        // R-PLN-06: the carry starts in the month NAMA was set up, or the FY's first month.
+        var carryStart = PlanCalculator.CarryStart(fiscalYear.Periods, (await store.GetProfileAsync(uid))?.StartedOn);
+        var months = PlanCalculator.RunningUnassigned(fiscalYear.Periods, income, plans, carryStart);
+        var counted = months.Skip(carryStart).ToList();
+        var totals = months.Select(month => new MonthTotalsDto(
+            month.PeriodKey,
+            Money.FromMinor(month.CarriedIn),
+            Money.FromMinor(month.Income),
+            Money.FromMinor(month.Planned),
+            Money.FromMinor(month.ThisMonth),
+            Money.FromMinor(month.Unassigned))).ToList();
 
         return new PlansResponse(
             fiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
@@ -104,7 +117,12 @@ public static class PlansEndpoint
                 Money.FromMinor(PlanCalculator.Total(plan, fiscalYear.Periods)))).ToList(),
             categoryTotals,
             categoryMonthTotals,
-            totals);
+            totals,
+            new FiscalYearTotalsDto(
+                Money.FromMinor(counted.Sum(month => month.Income)),
+                Money.FromMinor(counted.Sum(month => month.Planned)),
+                Money.FromMinor(PlanCalculator.PlannedSaved(months))),
+            carryStart < fiscalYear.Periods.Count ? fiscalYear.Periods[carryStart].Key : null);
     }
 }
 

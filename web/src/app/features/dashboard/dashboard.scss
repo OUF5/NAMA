@@ -84,12 +84,54 @@ h1 {
   background: var(--primary-soft);
 }
 
-// DSH-02: Income, Spent and Saved in 3 columns on every size.
+// DSH-02: Income, Spent, Saved and Planned saved in 4 columns (2 by 2 on phones).
 .kpis {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px 16px;
   padding-top: 16px;
+}
+
+.fy-saved {
+  margin: 12px 0 0;
+}
+
+// R-BAL-03: the total, then one row per account.
+.bank-total {
+  padding-top: 16px;
+}
+
+.setup {
+  padding-top: 12px;
+}
+
+.accounts {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    min-height: 40px;
+    border-bottom: 1px solid var(--divider);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  .name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .money {
+    white-space: nowrap;
+  }
 }
 
 .kpi {
@@ -118,8 +160,17 @@ h1 {
     padding: 16px;
   }
 
+  .kpis {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .kpi .value {
     font-size: 15px;
     font-weight: 500;
+  }
+
+  .bank-total .value {
+    font-size: 24px;
+    font-weight: 600;
   }
 }

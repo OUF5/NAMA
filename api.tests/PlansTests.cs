@@ -133,15 +133,22 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((await Get(sub)).ToJsonString(), body.ToJsonString());
 
         var totals = body["totals"]!.AsArray()
-            .Select(t => (t!["periodKey"]!.GetValue<string>(), t["planned"]!.GetValue<decimal>(),
-                t["income"]!.GetValue<decimal>(), t["unplanned"]!.GetValue<decimal>()))
+            .Select(t => (t!["periodKey"]!.GetValue<string>(), t["carriedIn"]!.GetValue<decimal>(), t["income"]!.GetValue<decimal>(),
+                t["planned"]!.GetValue<decimal>(), t["unassigned"]!.GetValue<decimal>()))
             .ToList();
         Assert.Equal(12, totals.Count);
-        // Jan: 1,500 planned; 15,000 + 2,000 = 17,000 income; 17,000 - 1,500 = 15,500.
-        Assert.Equal(("2026-01", 1500m, 17000m, 15500m), totals[0]);
-        // Sep: 1,500 + 400 = 1,900 planned; 17,000 + 500.25 = 17,500.25 income; 15,600.25 unplanned.
-        Assert.Equal(("2026-09", 1900m, 17500.25m, 15600.25m), totals[8]);
-        Assert.Equal(("2026-12", 1900m, 17000m, 15100m), totals[11]);
+        // Each month on its own (not carried): Jan 17,000 - 1,500; Sep 17,500.25 - 1,900.
+        Assert.Equal((15500m, 15600.25m), (body["totals"]![0]!["thisMonth"]!.GetValue<decimal>(), body["totals"]![8]!["thisMonth"]!.GetValue<decimal>()));
+        // R-PLN-03 carried: Jan: 0 + 17,000 (15,000 + 2,000) - 1,500 = 15,500.
+        Assert.Equal(("2026-01", 0m, 17000m, 1500m, 15500m), totals[0]);
+        Assert.Equal(("2026-02", 15500m, 17000m, 1500m, 31000m), totals[1]);
+        // Sep: 8 × 15,500 = 124,000 carried; 17,000 + 500.25 income; 1,500 + 400 planned.
+        Assert.Equal(("2026-09", 124000m, 17500.25m, 1900m, 139600.25m), totals[8]);
+        Assert.Equal(("2026-12", 169800.25m, 17000m, 1900m, 184900.25m), totals[11]);
+        // R-PLN-04: Planned saved is December's Unassigned = 204,500.25 - 19,600.
+        var fy = body["fiscalYearTotals"]!;
+        Assert.Equal((204500.25m, 19600m, 184900.25m),
+            (fy["income"]!.GetValue<decimal>(), fy["planned"]!.GetValue<decimal>(), fy["plannedSaved"]!.GetValue<decimal>()));
 
         // R-PLN-02: FY totals per category: 12 × 1,500 and 4 × 400.
         Assert.Equal(18000m, body["categoryTotals"]!["food"]!.GetValue<decimal>());
@@ -155,9 +162,9 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((0m, 400m), (transport["2026-08"]!.GetValue<decimal>(), transport["2026-09"]!.GetValue<decimal>()));
     }
 
-    // R-PLN-03: unplanned income is negative when more is planned than earned.
+    // R-PLN-03: Unassigned is negative when more is planned than received so far, and it carries.
     [Fact]
-    public async Task Unplanned_is_negative_when_planned_exceeds_income()
+    public async Task Unassigned_is_negative_when_planned_exceeds_income_and_carries()
     {
         var sub = await SetUp();
 
@@ -165,7 +172,10 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var february = body["totals"]![1]!;
         Assert.Equal((250.75m, 0m, -250.75m),
-            (february["planned"]!.GetValue<decimal>(), february["income"]!.GetValue<decimal>(), february["unplanned"]!.GetValue<decimal>()));
+            (february["planned"]!.GetValue<decimal>(), february["income"]!.GetValue<decimal>(), february["unassigned"]!.GetValue<decimal>()));
+        var march = body["totals"]![2]!;
+        Assert.Equal((-250.75m, -250.75m), (march["carriedIn"]!.GetValue<decimal>(), march["unassigned"]!.GetValue<decimal>()));
+        Assert.Equal(-250.75m, body["fiscalYearTotals"]!["plannedSaved"]!.GetValue<decimal>());
     }
 
     // R-CAL-09: the months are the stored ones, never recomputed. This FY's first month was

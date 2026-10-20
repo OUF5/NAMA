@@ -60,6 +60,7 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
         {
             batch.Create(user.Collection("categories").Document(category.Id), FirestoreDocuments.ToDocument(category));
         }
+        batch.Create(user.Collection("incomeSplits").Document(setup.IncomeSplit.FromPeriodKey), FirestoreDocuments.ToDocument(setup.IncomeSplit));
         try
         {
             await batch.CommitAsync();
@@ -155,11 +156,23 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
     }
 
     // Equality filters only, so single-field indexes serve it (no composite index).
-    public async Task<IReadOnlyList<Entry>> GetEntriesAsync(string uid, string subCategoryId, string periodKey)
+    public async Task<IReadOnlyList<Entry>> GetSubCategoryEntriesAsync(string uid, string subCategoryId, string fyId)
     {
         var snapshot = await User(uid).Collection("entries")
             .WhereEqualTo("subCategoryId", subCategoryId)
-            .WhereEqualTo("periodKey", periodKey)
+            .WhereEqualTo("fyId", fyId)
+            .GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => FirestoreDocuments.ToEntry(document.Id, document.ConvertTo<EntryDocument>()))
+            .ToList();
+    }
+
+    // A range on one field only, so the automatic single-field index on date serves it. Dates are
+    // YYYY-MM-DD strings, so string order is date order.
+    public async Task<IReadOnlyList<Entry>> GetEntriesFromAsync(string uid, DateOnly from)
+    {
+        var snapshot = await User(uid).Collection("entries")
+            .WhereGreaterThanOrEqualTo("date", FirestoreDocuments.ToDateString(from))
             .GetSnapshotAsync();
         return snapshot.Documents
             .Select(document => FirestoreDocuments.ToEntry(document.Id, document.ConvertTo<EntryDocument>()))
@@ -298,8 +311,76 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
     public Task AddBankAccountAsync(string uid, BankAccount account) =>
         User(uid).Collection("bankAccounts").Document(account.Id).CreateAsync(FirestoreDocuments.ToDocument(account));
 
-    public Task<bool> UpdateBankAccountAsync(string uid, BankAccount account) =>
-        UpdateAsync(User(uid).Collection("bankAccounts").Document(account.Id), NameFields(account.Name, account.Archived));
+    public Task<bool> UpdateBankAccountAsync(string uid, BankAccount account)
+    {
+        var fields = NameFields(account.Name, account.Archived);
+        var document = FirestoreDocuments.ToDocument(account);
+        // null is stored as null: no opening balance yet (R-BAL-01).
+        fields["openingBalanceMinor"] = document.OpeningBalanceMinor!;
+        fields["openingDate"] = document.OpeningDate!;
+        return UpdateAsync(User(uid).Collection("bankAccounts").Document(account.Id), fields);
+    }
+
+    public async Task<IReadOnlyList<IncomeSplit>> GetIncomeSplitsAsync(string uid)
+    {
+        var snapshot = await User(uid).Collection("incomeSplits").GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => FirestoreDocuments.ToIncomeSplit(document.ConvertTo<IncomeSplitDocument>()))
+            .ToList();
+    }
+
+    // R-BAL-02: incomeSplits/{fromPeriodKey}. The replaced splits are deleted and the new one is set
+    // in one batch; a split that already starts in that month is overwritten.
+    public Task SetIncomeSplitAsync(string uid, IncomeSplit split, IReadOnlyList<string> replacedFromKeys)
+    {
+        var splits = User(uid).Collection("incomeSplits");
+        var batch = db.StartBatch();
+        foreach (var key in replacedFromKeys.Where(key => key != split.FromPeriodKey))
+        {
+            batch.Delete(splits.Document(key));
+        }
+        batch.Set(splits.Document(split.FromPeriodKey), FirestoreDocuments.ToDocument(split));
+        return batch.CommitAsync();
+    }
+
+    // Transfers are few (a handful a month), so all of them are read at once, newest first. The
+    // order on one field is served by the automatic single-field index.
+    public async Task<IReadOnlyList<Transfer>> GetTransfersAsync(string uid)
+    {
+        var snapshot = await User(uid).Collection("transfers").OrderByDescending("date").GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => (document.Id, Document: document.ConvertTo<TransferDocument>()))
+            .OrderByDescending(item => item.Document.Date, StringComparer.Ordinal)
+            .ThenByDescending(item => item.Document.CreatedAt)
+            .Select(item => FirestoreDocuments.ToTransfer(item.Id, item.Document))
+            .ToList();
+    }
+
+    public async Task<Transfer?> GetTransferAsync(string uid, string id)
+    {
+        var snapshot = await User(uid).Collection("transfers").Document(id).GetSnapshotAsync();
+        return snapshot.Exists ? FirestoreDocuments.ToTransfer(snapshot.Id, snapshot.ConvertTo<TransferDocument>()) : null;
+    }
+
+    public Task AddTransferAsync(string uid, Transfer transfer) =>
+        User(uid).Collection("transfers").Document(transfer.Id).CreateAsync(FirestoreDocuments.ToDocument(transfer));
+
+    public Task<bool> UpdateTransferAsync(string uid, Transfer transfer)
+    {
+        var document = FirestoreDocuments.ToDocument(transfer);
+        return UpdateAsync(User(uid).Collection("transfers").Document(transfer.Id), new Dictionary<string, object>
+        {
+            ["date"] = document.Date,
+            ["periodKey"] = document.PeriodKey,
+            ["fyId"] = document.FyId,
+            ["fromBankAccountId"] = document.FromBankAccountId,
+            ["toBankAccountId"] = document.ToBankAccountId,
+            ["amountMinor"] = document.AmountMinor,
+            ["note"] = document.Note,
+        });
+    }
+
+    public Task<bool> DeleteTransferAsync(string uid, string id) => DeleteAsync(User(uid).Collection("transfers").Document(id));
 
     public Task<bool> UpdateCategoryAsync(string uid, Category category) =>
         UpdateAsync(User(uid).Collection("categories").Document(category.Id), NameFields(category.Name, category.Archived));
@@ -403,6 +484,9 @@ public sealed class BankAccountDocument
     [FirestoreProperty("name")] public string Name { get; set; } = "";
     [FirestoreProperty("nameLower")] public string NameLower { get; set; } = "";
     [FirestoreProperty("archived")] public bool Archived { get; set; }
+    // R-BAL-01: both null until the opening balance is set; missing on accounts made before it existed.
+    [FirestoreProperty("openingBalanceMinor")] public long? OpeningBalanceMinor { get; set; }
+    [FirestoreProperty("openingDate")] public string? OpeningDate { get; set; }
     [FirestoreProperty("createdAt"), ServerTimestamp] public Timestamp CreatedAt { get; set; }
     [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
 }
@@ -457,6 +541,30 @@ public sealed class EntryDocument
     [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
 }
 
+// R-BAL-02: incomeSplits/{fromPeriodKey}. Account id → basis points (1% = 100).
+[FirestoreData]
+public sealed class IncomeSplitDocument
+{
+    [FirestoreProperty("fromPeriodKey")] public string FromPeriodKey { get; set; } = "";
+    [FirestoreProperty("shares")] public Dictionary<string, long> Shares { get; set; } = [];
+    [FirestoreProperty("createdAt"), ServerTimestamp] public Timestamp CreatedAt { get; set; }
+    [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
+}
+
+[FirestoreData]
+public sealed class TransferDocument
+{
+    [FirestoreProperty("date")] public string Date { get; set; } = "";
+    [FirestoreProperty("periodKey")] public string PeriodKey { get; set; } = "";
+    [FirestoreProperty("fyId")] public string FyId { get; set; } = "";
+    [FirestoreProperty("fromBankAccountId")] public string FromBankAccountId { get; set; } = "";
+    [FirestoreProperty("toBankAccountId")] public string ToBankAccountId { get; set; } = "";
+    [FirestoreProperty("amountMinor")] public long AmountMinor { get; set; }
+    [FirestoreProperty("note")] public string Note { get; set; } = "";
+    [FirestoreProperty("createdAt"), ServerTimestamp] public Timestamp CreatedAt { get; set; }
+    [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
+}
+
 // Domain ↔ document. Dates become YYYY-MM-DD strings only here (PRD 7.4).
 public static class FirestoreDocuments
 {
@@ -479,9 +587,14 @@ public static class FirestoreDocuments
         LastBankAccountId = profile.LastBankAccountId,
     };
 
+    // R-PLN-06: the day setup was finished is the profile's createdAt in the profile time zone (a
+    // document that was never stored has no createdAt).
     public static UserProfile ToProfile(ProfileDocument document) => new(
         document.DisplayName, document.Email, document.ProjectName, document.Currency, document.Timezone,
-        document.FiscalStartMonth, document.PaydayDay, document.SetupCompleted, document.LastBankAccountId);
+        document.FiscalStartMonth, document.PaydayDay, document.SetupCompleted, document.LastBankAccountId,
+        document.CreatedAt.Equals(default(Timestamp)) || string.IsNullOrEmpty(document.Timezone)
+            ? null
+            : FiscalCalendar.DateIn(document.CreatedAt.ToDateTimeOffset(), document.Timezone));
 
     public static FiscalYearDocument ToDocument(FiscalYear fiscalYear) => new()
     {
@@ -523,10 +636,37 @@ public static class FirestoreDocuments
         Name = account.Name,
         NameLower = Names.Lower(account.Name),
         Archived = account.Archived,
+        OpeningBalanceMinor = account.Opening?.AmountMinor,
+        OpeningDate = account.Opening is { } opening ? ToDateString(opening.Date) : null,
     };
 
     public static BankAccount ToBankAccount(string id, BankAccountDocument document) =>
-        new(id, document.Name, document.Archived);
+        new(id, document.Name, document.Archived,
+            document.OpeningDate is { } date ? new OpeningBalance(document.OpeningBalanceMinor ?? 0, ToDate(date)) : null);
+
+    public static IncomeSplitDocument ToDocument(IncomeSplit split) => new()
+    {
+        FromPeriodKey = split.FromPeriodKey,
+        Shares = split.Shares.ToDictionary(share => share.Key, share => (long)share.Value),
+    };
+
+    public static IncomeSplit ToIncomeSplit(IncomeSplitDocument document) =>
+        new(document.FromPeriodKey, document.Shares.ToDictionary(share => share.Key, share => (int)share.Value));
+
+    public static TransferDocument ToDocument(Transfer transfer) => new()
+    {
+        Date = ToDateString(transfer.Date),
+        PeriodKey = transfer.PeriodKey,
+        FyId = transfer.FyId,
+        FromBankAccountId = transfer.FromBankAccountId,
+        ToBankAccountId = transfer.ToBankAccountId,
+        AmountMinor = transfer.AmountMinor,
+        Note = transfer.Note,
+    };
+
+    public static Transfer ToTransfer(string id, TransferDocument document) => new(
+        id, ToDate(document.Date), document.PeriodKey, document.FyId, document.FromBankAccountId,
+        document.ToBankAccountId, document.AmountMinor, document.Note);
 
     public static EntryDocument ToDocument(Entry entry) => new()
     {

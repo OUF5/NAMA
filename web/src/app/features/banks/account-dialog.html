@@ -1,0 +1,47 @@
+<h2 mat-dialog-title>{{ data.account ? 'Edit ' + data.account.name : 'Add bank account' }}</h2>
+<form [formGroup]="form" (ngSubmit)="save()" novalidate>
+  <mat-dialog-content>
+    <mat-form-field>
+      <mat-label>Account name</mat-label>
+      <input matInput formControlName="name" [maxlength]="nameMax" autocomplete="off" />
+      @if (form.controls.name.hasError('duplicate')) {
+        <mat-error>A bank account with this name already exists.</mat-error>
+      } @else {
+        <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
+      }
+    </mat-form-field>
+    <!-- R-BAL-01: what the bank showed at the start of that day. -->
+    <div class="row">
+      <mat-form-field>
+        <mat-label>Balance ({{ data.currency }})</mat-label>
+        <input matInput formControlName="balance" inputmode="decimal" autocomplete="off" />
+        <mat-hint>Below 0 for an overdraft or a card.</mat-hint>
+        <mat-error>Up to 10,000,000 either way, with at most 2 decimals.</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>On</mat-label>
+        <input matInput formControlName="date" [matDatepicker]="picker" [min]="minDate" [max]="maxDate" />
+        <mat-datepicker-toggle matIconSuffix [for]="picker" />
+        <mat-datepicker #picker />
+        @if (form.controls.date.hasError('outside') || form.controls.date.hasError('matDatepickerMin') || form.controls.date.hasError('matDatepickerMax')) {
+          <mat-error>Pick a date from {{ range }}.</mat-error>
+        } @else {
+          <mat-error>Pick a date.</mat-error>
+        }
+      </mat-form-field>
+    </div>
+    <p class="caption">
+      Enter what your bank showed at the start of that day. NAMA keeps it up to date from then on: your
+      share of income on payday, expenses paid from this account, and transfers. To correct it later,
+      enter today's balance with today's date.
+    </p>
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+  </mat-dialog-content>
+  <!-- Save is the one filled button. -->
+  <mat-dialog-actions>
+    <button mat-stroked-button type="button" mat-dialog-close>Cancel</button>
+    <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+  </mat-dialog-actions>
+</form>

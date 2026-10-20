@@ -1,0 +1,245 @@
+<div class="page-head">
+  <h1>Banks</h1>
+  @if (data()) {
+    <div class="head-actions">
+      <!-- TRF-01 lives on Add, next to expenses. -->
+      <a mat-stroked-button routerLink="/add" [queryParams]="{ type: 'transfer' }">
+        <mat-icon>swap_horiz</mat-icon>
+        Add transfer
+      </a>
+      <button mat-stroked-button type="button" (click)="addAccount()">
+        <mat-icon>add</mat-icon>
+        Add account
+      </button>
+    </div>
+  }
+</div>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+} @else if (data(); as d) {
+  <p class="status" aria-live="polite">{{ status() }}</p>
+
+  <!-- BNK-05: what is missing before the balances are complete, with the action that fixes it. -->
+  @if (!d.complete) {
+    <section class="card setup" aria-labelledby="setup-title">
+      <div class="setup-head">
+        <mat-icon aria-hidden="true">info</mat-icon>
+        <h2 id="setup-title">Finish setting up your balances</h2>
+      </div>
+      @if (missingOpening().length) {
+        <p>
+          Enter what each account held on a day. NAMA keeps the balance up to date from then on, with your
+          share of income, the expenses paid from it, and transfers.
+        </p>
+        <ul class="setup-list">
+          @for (account of missingOpening(); track account.id) {
+            <li>
+              <span>{{ account.name }}</span>
+              <button mat-stroked-button type="button" (click)="editAccount(account)">Set balance</button>
+            </li>
+          }
+        </ul>
+      }
+      @if (!d.split) {
+        <div class="setup-list">
+          <p>Choose which accounts your income goes into, so balances include it.</p>
+          <button mat-stroked-button type="button" (click)="changeSplit()">Choose income split</button>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- R-BAL-03: the total of the active accounts, and what a balance is made of. -->
+  <section class="card total" aria-label="Total balance">
+    <span class="caption">Total balance</span>
+    @if (d.total !== null) {
+      <span class="money kpi" [class.danger]="d.total < 0">{{ money(d.total) }}</span>
+    } @else {
+      <span class="kpi muted">–</span>
+    }
+    <span class="caption">
+      Today, {{ formatDate(d.today) }} · {{ active().length }} {{ active().length === 1 ? 'account' : 'accounts' }}@if (!d.complete && d.total !== null) { · not complete yet}
+    </span>
+    <p class="caption how">
+      A balance is its opening balance, plus its share of income on each payday, plus transfers in, minus
+      transfers out, minus the expenses paid from it.
+    </p>
+  </section>
+
+  <!-- BNK-02: one card per active account, the balance first and how it adds up under it. -->
+  <div class="accounts">
+    @for (card of cards(); track card.account.id) {
+      <section class="card account" [attr.aria-labelledby]="'account-' + card.account.id">
+        <div class="account-head">
+          <h2 [id]="'account-' + card.account.id">{{ card.account.name }}</h2>
+          <span class="icons">
+            <button
+              mat-icon-button
+              type="button"
+              (click)="editAccount(card.account)"
+              [attr.aria-label]="'Edit ' + card.account.name"
+              [title]="'Edit ' + card.account.name"
+            >
+              <mat-icon>edit</mat-icon>
+            </button>
+            <button
+              mat-icon-button
+              type="button"
+              [disabled]="busy()"
+              (click)="toggleArchive(card.account)"
+              [attr.aria-label]="'Archive ' + card.account.name"
+              [title]="'Archive ' + card.account.name"
+            >
+              <mat-icon>archive</mat-icon>
+            </button>
+          </span>
+        </div>
+        @if (card.balance) {
+          <span class="money kpi" [class.danger]="card.negative">{{ card.balance }}</span>
+          <span class="caption">{{ card.shareText }}</span>
+          <dl class="breakdown">
+            @for (line of card.lines; track line.label) {
+              <div>
+                <dt><span class="op" aria-hidden="true">{{ line.op }}</span>{{ line.label }}</dt>
+                <dd class="money">{{ line.amount }}</dd>
+              </div>
+            }
+            <div class="result">
+              <dt><span class="op" aria-hidden="true">=</span>Balance today</dt>
+              <dd class="money" [class.danger]="card.negative">{{ card.balance }}</dd>
+            </div>
+          </dl>
+        } @else {
+          <p class="note">No opening balance yet, so NAMA can't show this account's balance.</p>
+          <span class="caption">{{ card.shareText }}</span>
+          <button mat-stroked-button type="button" class="set" (click)="editAccount(card.account)">Set balance</button>
+        }
+        <a class="expenses" routerLink="/entries" [queryParams]="{ bankAccountId: card.account.id }">See its expenses</a>
+      </section>
+    }
+  </div>
+
+  @if (archived().length) {
+    <button mat-button type="button" class="fold" [attr.aria-expanded]="archivedOpen()" (click)="archivedOpen.set(!archivedOpen())">
+      <mat-icon class="chevron" [class.open]="archivedOpen()" aria-hidden="true">chevron_right</mat-icon>
+      Archived ({{ archived().length }})
+    </button>
+    @if (archivedOpen()) {
+      <section class="card" aria-label="Archived accounts">
+        <ul class="list">
+          @for (account of archived(); track account.id) {
+            <li class="item">
+              <span class="name">
+                {{ account.name }}
+                <span class="caption line">
+                  @if (account.balance) {
+                    {{ money(account.balance.balance) }} · not in the total
+                  } @else {
+                    No balance
+                  }
+                </span>
+              </span>
+              <button
+                mat-icon-button
+                type="button"
+                [disabled]="busy()"
+                (click)="toggleArchive(account)"
+                [attr.aria-label]="'Restore ' + account.name"
+                [title]="'Restore ' + account.name"
+              >
+                <mat-icon>unarchive</mat-icon>
+              </button>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+  }
+
+  <!-- BNK-03, R-BAL-02 -->
+  <section class="card" aria-labelledby="split-title">
+    <div class="card-head">
+      <h2 id="split-title">
+        Income split
+        @if (d.split) {
+          <span class="caption">from {{ monthLabelOf(d.split.fromPeriodKey) }}</span>
+        }
+      </h2>
+      <button mat-stroked-button type="button" (click)="changeSplit()">{{ d.split ? 'Change split' : 'Choose split' }}</button>
+    </div>
+    @if (d.split) {
+      <ul class="split">
+        @for (row of splitRows(); track row.id) {
+          <li>
+            <span class="name">{{ row.name }}</span>
+            <span class="bar" aria-hidden="true"><span [style.width.%]="row.width"></span></span>
+            <span class="percent">{{ row.percent }}</span>
+            <span class="money amount">{{ row.amount }}</span>
+          </li>
+        }
+      </ul>
+      <p class="caption">
+        @if (monthIncome(); as income) {
+          Income in {{ monthLabel() }}: <span class="money">{{ income }}</span>, split on payday.
+        }
+        Record a transfer only for money you move outside this split.
+      </p>
+      @if (history().length > 1) {
+        <button mat-button type="button" class="fold" [attr.aria-expanded]="historyOpen()" (click)="historyOpen.set(!historyOpen())">
+          <mat-icon class="chevron" [class.open]="historyOpen()" aria-hidden="true">chevron_right</mat-icon>
+          History ({{ history().length }})
+        </button>
+        @if (historyOpen()) {
+          <ul class="history">
+            @for (line of history(); track $index) {
+              <li class="caption">{{ line }}</li>
+            }
+          </ul>
+        }
+      }
+    } @else {
+      <p class="note">No split yet, so income goes into no account. Choose a split so balances include your income.</p>
+    }
+  </section>
+
+  <!-- BNK-04, R-TRF-01 -->
+  <section class="card" aria-labelledby="transfers-title">
+    <div class="card-head">
+      <h2 id="transfers-title">Transfers</h2>
+      <a mat-stroked-button routerLink="/add" [queryParams]="{ type: 'transfer' }">Add transfer</a>
+    </div>
+    @if (transfers().length === 0) {
+      <p class="note">
+        No transfers yet. When you move money between your own accounts, add it as a transfer, so both
+        balances stay right. A transfer is never spending.
+      </p>
+    } @else {
+      <ul class="list">
+        @for (row of shownTransfers(); track row.transfer.id) {
+          <li class="item transfer">
+            <span class="caption day">{{ row.day }}<span class="year">{{ row.year }}</span></span>
+            <span class="name">
+              {{ row.from }} <mat-icon class="arrow" aria-label="to">arrow_forward</mat-icon> {{ row.to }}
+              @if (row.transfer.note) {
+                <span class="caption line">{{ row.transfer.note }}</span>
+              }
+            </span>
+            <span class="money">{{ row.amount }}</span>
+            <button mat-icon-button type="button" (click)="editTransfer(row.transfer)" [attr.aria-label]="row.editLabel">
+              <mat-icon>edit</mat-icon>
+            </button>
+          </li>
+        }
+      </ul>
+      @if (hiddenTransfers() > 0) {
+        <button mat-button type="button" class="fold" [attr.aria-expanded]="allTransfers()" (click)="allTransfers.set(!allTransfers())">
+          <mat-icon class="chevron" [class.open]="allTransfers()" aria-hidden="true">chevron_right</mat-icon>
+          {{ allTransfers() ? 'Show fewer' : 'Show all (' + transfers().length + ')' }}
+        </button>
+      }
+    }
+  </section>
+} @else {
+  <p class="caption">Loading…</p>
+}

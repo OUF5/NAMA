@@ -22,9 +22,13 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
         ["additionalIncome"] = new JsonArray(
             new JsonObject { ["label"] = "Rent", ["amount"] = 2000, ["type"] = "monthly", ["fromPeriodKey"] = "2026-01" },
             new JsonObject { ["label"] = "Bonus", ["amount"] = 500.25m, ["type"] = "once", ["fromPeriodKey"] = "2026-09" }),
-        ["bankAccounts"] = new JsonArray("Al Rajhi", " SNB "),
+        ["bankAccounts"] = new JsonArray(Account("Al Rajhi", 5000, 80), Account(" SNB ", -1200.5m, 20)),
         ["categories"] = new JsonArray("Food", "Housing", "Transport"),
     };
+
+    // R-BAL-01, R-BAL-02: the balance today and the share of income.
+    private static JsonObject Account(string name, decimal openingBalance = 0, decimal share = 0) =>
+        new() { ["name"] = name, ["openingBalance"] = openingBalance, ["share"] = share };
 
     private async Task<HttpResponseMessage> Send(HttpMethod method, string url, string sub, JsonObject? body = null)
     {
@@ -79,7 +83,14 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
             ],
             saved.Incomes.Select(i => (i.Kind, i.Label, i.AmountMinor, i.FromPeriodKey, i.ToPeriodKey)));
 
-        Assert.Equal(["Al Rajhi", "SNB"], saved.BankAccounts.Select(a => a.Name));
+        // R-BAL-01: each account opens with the balance of today, 17 Oct 2026 (a card can be negative).
+        Assert.Equal(
+            [("Al Rajhi", 500_000L, new DateOnly(2026, 10, 17)), ("SNB", -120_050L, new DateOnly(2026, 10, 17))],
+            saved.BankAccounts.Select(a => (a.Name, a.Opening!.AmountMinor, a.Opening.Date)));
+        // R-BAL-02: the split applies from the FY's first month.
+        Assert.Equal("2026-01", saved.IncomeSplit.FromPeriodKey);
+        Assert.Equal(new Dictionary<string, int> { [saved.BankAccounts[0].Id] = 8_000, [saved.BankAccounts[1].Id] = 2_000 },
+            saved.IncomeSplit.Shares);
         Assert.Equal([("Food", 0), ("Housing", 1), ("Transport", 2)], saved.Categories.Select(c => (c.Name, c.SortOrder)));
 
         var me = await response.Content.ReadFromJsonAsync<JsonObject>();
@@ -188,8 +199,14 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
         { "additional until before from", b => { b["additionalIncome"]![0]!["fromPeriodKey"] = "2026-05"; b["additionalIncome"]![0]!["toPeriodKey"] = "2026-04"; }, "AdditionalIncome[0].ToPeriodKey" },
         { "additional until after the FY", b => b["additionalIncome"]![0]!["toPeriodKey"] = "2027-01", "AdditionalIncome[0].ToPeriodKey" },
         { "no bank account", b => b["bankAccounts"] = new JsonArray(), "BankAccounts" },
-        { "bank account names repeat ignoring case", b => b["bankAccounts"] = new JsonArray("SNB", " snb"), "BankAccounts" },
-        { "bank account name over 40", b => b["bankAccounts"] = new JsonArray(new string('a', 41)), "BankAccounts[0]" },
+        { "bank account names repeat ignoring case", b => b["bankAccounts"] = new JsonArray(Account("SNB", share: 50), Account(" snb", share: 50)), "BankAccounts" },
+        { "bank account name over 40", b => b["bankAccounts"] = new JsonArray(Account(new string('a', 41), share: 100)), "BankAccounts[0]" },
+        { "bank balance missing", b => b["bankAccounts"]![0]!.AsObject().Remove("openingBalance"), "BankAccounts[0].OpeningBalance" },
+        { "bank balance with 3 decimals", b => b["bankAccounts"]![1]!["openingBalance"] = 1.005m, "BankAccounts[1].OpeningBalance" },
+        { "bank balance below -10,000,000", b => b["bankAccounts"]![1]!["openingBalance"] = -10_000_000.01m, "BankAccounts[1].OpeningBalance" },
+        { "share missing", b => b["bankAccounts"]![0]!.AsObject().Remove("share"), "BankAccounts[0].Share" },
+        { "share over 100", b => b["bankAccounts"]![0]!["share"] = 100.01m, "BankAccounts[0].Share" },
+        { "shares not adding up to 100", b => b["bankAccounts"]![1]!["share"] = 19.99m, "BankAccounts" },
         { "no category", b => b.Remove("categories"), "Categories" },
         { "category names repeat ignoring case", b => b["categories"] = new JsonArray("Food", "FOOD"), "Categories" },
         { "empty category name", b => b["categories"] = new JsonArray("Food", ""), "Categories[1]" },

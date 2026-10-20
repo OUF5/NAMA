@@ -4,6 +4,23 @@ namespace Api.Domain;
 // Only amounts above 0 are stored.
 public sealed record PlanAmounts(string SubCategoryId, string CategoryId, IReadOnlyDictionary<string, long> Amounts);
 
+// R-PLN-03: one month of Plan's totals. CarriedIn is the previous month's Unassigned.
+public sealed record UnassignedMonth(string PeriodKey, long CarriedIn, long Income, long Planned)
+{
+    // The month on its own, not carried: its income minus its planned amounts.
+    public long ThisMonth => Income - Planned;
+
+    public long Unassigned => CarriedIn + ThisMonth;
+}
+
+// R-PLN-05: one month of a plan line (a sub-category, a category or the whole month).
+public sealed record CarriedMonth(long CarriedIn, long Planned, long Spent)
+{
+    public long Available => CarriedIn + Planned;
+
+    public long Remaining => Available - Spent;
+}
+
 // PRD 4.4. Amounts are long minor units (R-MON-01).
 public static class PlanCalculator
 {
@@ -22,18 +39,76 @@ public static class PlanCalculator
     public static long Total(PlanAmounts plan, IEnumerable<Period> periods) =>
         periods.Sum(period => AmountFor(plan, period.Key));
 
-    // R-PLN-03: total income minus total planned; negative means over-planned.
-    public static long Unplanned(long income, long planned) => income - planned;
+    // R-PLN-06 (20 Oct 2026): NAMA counts from the month you started it. The first month that carries
+    // is the one that contains the day setup was finished, or the FY's first month when that is later
+    // (each FY closes on its own). Months before it were never tracked, so nothing is carried out of
+    // them: they stand alone. Without a start day (tests, older data) the FY's first month carries.
+    public static int CarryStart(IReadOnlyList<Period> periods, DateOnly? startedOn)
+    {
+        if (startedOn is not { } day)
+        {
+            return 0;
+        }
+        var index = periods.Count(period => period.EndDate < day);
+        return Math.Min(index, periods.Count);
+    }
 
-    // ENT-01: planned minus spent; negative means over plan.
-    public static long Remaining(long planned, long spent) => planned - spent;
+    // R-PLN-03 (changed 20 Oct 2026): Unassigned carries from month to month. A month's Unassigned is
+    // the previous month's Unassigned plus its income minus its planned amounts, from 0 in the first
+    // month that carries (R-PLN-06); earlier months stand alone. Negative means more is planned than
+    // received so far.
+    public static IReadOnlyList<UnassignedMonth> RunningUnassigned(
+        IEnumerable<Period> periods, IReadOnlyDictionary<string, long> income, IEnumerable<PlanAmounts> plans, int carryStart = 0)
+    {
+        var planList = plans.ToList();
+        var months = new List<UnassignedMonth>();
+        var carried = 0L;
+        foreach (var (period, i) in periods.Select((period, i) => (period, i)))
+        {
+            if (i <= carryStart)
+            {
+                carried = 0;
+            }
+            var month = new UnassignedMonth(period.Key, carried, income.GetValueOrDefault(period.Key), MonthPlanned(planList, period.Key));
+            months.Add(month);
+            carried = month.Unassigned;
+        }
+        return months;
+    }
+
+    // R-PLN-04: what the plan leaves unassigned at the end of the FY: the last month's Unassigned, that
+    // is income minus planned from the first month that carries to the FY's end.
+    public static long PlannedSaved(IReadOnlyList<UnassignedMonth> months) => months.Count == 0 ? 0 : months[^1].Unassigned;
+
+    // R-PLN-05: what is left of a plan carries into the next month, positive or negative. Each month's
+    // available amount is what carried in plus its plan. Nothing carries into the first month that
+    // carries (R-PLN-06), and months before it stand alone.
+    public static IReadOnlyList<CarriedMonth> Carry(IEnumerable<(long Planned, long Spent)> months, int carryStart = 0)
+    {
+        var result = new List<CarriedMonth>();
+        var carried = 0L;
+        foreach (var ((planned, spent), i) in months.Select((month, i) => (month, i)))
+        {
+            if (i <= carryStart)
+            {
+                carried = 0;
+            }
+            var month = new CarriedMonth(carried, planned, spent);
+            result.Add(month);
+            carried = month.Remaining;
+        }
+        return result;
+    }
+
+    // ENT-01: available minus spent; negative means over plan.
+    public static long Remaining(long available, long spent) => available - spent;
 
     // DSH-02: income minus spent; negative means more was spent than earned.
     public static long Saved(long income, long spent) => income - spent;
 
-    // ENT-01: share of the plan spent, rounded down (79.99% is 79). Null when nothing is planned.
-    public static int? Percent(long planned, long spent) =>
-        planned <= 0 ? null : (int)Math.Min(spent * 100 / planned, int.MaxValue);
+    // ENT-01: share of the available amount spent, rounded down (79.99% is 79). Null when nothing is available.
+    public static int? Percent(long available, long spent) =>
+        available <= 0 ? null : (int)Math.Min(spent * 100 / available, int.MaxValue);
 
     // FY-02 (owner's choice, M8): each new month gets the amount of the same month a year earlier,
     // from whichever FY holds it. Only active sub-categories are copied (an archived one would be

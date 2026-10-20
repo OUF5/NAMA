@@ -160,6 +160,12 @@ Stop. That is not in the approved plan or the PRD. Undo it and continue with the
 - **Entry:** one spend: date, sub-category, amount, bank account, optional note.
 - **Income:** salary (one value per month, with history) plus additional income items. **Total income = salary + additional income.**
 - **Status:** Closed, In progress, or Yet to come.
+- **Unallocated** (R-PLN-03's Unassigned, as shown on screen): income no plan uses yet. "Unallocated this month" is a month on its own (income − planned); "Unallocated accumulated" carries from month to month inside an FY (R-PLN-03). ✅ DECIDED (20 Oct 2026)
+- **Planned saved:** what the plan leaves unassigned at the end of the FY (R-PLN-04). ✅ DECIDED (20 Oct 2026)
+- **Available:** a plan line's amount for a month plus what was left (or overspent) the month before (R-PLN-05). ✅ DECIDED (20 Oct 2026)
+- **Opening balance:** what a bank account held at the start of a day; NAMA keeps it up to date from then on (R-BAL-01). ✅ DECIDED (20 Oct 2026)
+- **Income split:** which share of each month's income goes into which account (R-BAL-02). ✅ DECIDED (20 Oct 2026)
+- **Transfer:** money moved between two of your own accounts. Never spending, never income (R-TRF-01). ✅ DECIDED (20 Oct 2026)
 
 <aside>
 🧮
@@ -208,7 +214,13 @@ These are the rules Claude must get exactly right. Put them in pure functions in
 
 - **R-PLN-01** A plan amount belongs to one sub-category and one month of an FY. A missing amount counts as 0.
 - **R-PLN-02** Category planned = sum of its sub-categories. Month planned = sum of all sub-categories.
-- **R-PLN-03** Unplanned income for a month = total income minus total planned. Green when 0 or more, red when negative. 🆕 ADDED · Nice (benchmark: YNAB "Ready to Assign")
+- **R-PLN-03** Unassigned for a month = the previous month's Unassigned + the month's total income − its total planned. The first month that carries (R-PLN-06) starts from 0, so each FY closes on its own. Green when 0 or more, red when negative (more planned than received so far). Shown as "Unallocated accumulated" (owner's choice, 20 Oct 2026; "Unassigned" before). 🆕 ADDED · Nice (benchmark: YNAB "Ready to Assign"). ✅ DECIDED (20 Oct 2026: it carries; before, each month stood alone)
+    - Example: income 17,000 a month, planned 15,000, 16,000, 19,000 (a trip) and 15,000. Unassigned is 2,000, 3,000, 1,000 and 3,000: the trip month is covered by the earlier surplus.
+- **R-PLN-04** Planned saved = the Unassigned of the FY's last month (income − planned from the first month that carries to the FY's end). ✅ DECIDED (20 Oct 2026)
+- **R-PLN-05** What is left of a plan carries into the next month, positive or negative. For each sub-category: remaining = the previous month's remaining + planned − spent, from 0 in the first month that carries (R-PLN-06); available = the previous month's remaining + planned. Categories and months are the sums of their sub-categories. The status colors (ENT-01) compare spent with available; with nothing available, any spending or a carried overspend is over plan. FY totals stay FY planned − FY spent. ✅ DECIDED (20 Oct 2026)
+    - Example: Groceries 1,500 a month; spent 1,200, 1,700 and 1,500. Remaining is 300, 100 and 100: January's 300 covers February's overspend.
+- **R-PLN-06** NAMA counts from the month you started it. The first month that carries (R-PLN-03, R-PLN-05) is the month that contains the day the wizard was finished, or the FY's first month when that is later. Months before it were never tracked (no entries is not money left), so they stand alone: nothing carries out of them. Dashboard's FY to date (DSH-02) and Plan's FY column start there too. Plan and Tracker say so when it is not the FY's first month. ✅ DECIDED (20 Oct 2026, after the owner's check)
+    - Example: the FY starts in Aug, Rent is planned at 1,000 every month, and NAMA is set up on 20 Oct. Oct has 1,000 left, not 3,000.
 
 ### 4.5 Status and editing
 
@@ -219,7 +231,7 @@ These are the rules Claude must get exactly right. Put them in pure functions in
 ### 4.6 Deleting
 
 - Categories, sub-categories and bank accounts cannot be deleted (your rule). The API has no DELETE endpoint for them.
-- Entries can be deleted after a confirmation, to remove duplicates or mistakes. 🆕 ADDED · Must
+- Entries and transfers can be deleted after a confirmation, to remove duplicates or mistakes. 🆕 ADDED · Must
 - **Archive** (hidden from pickers, history and totals kept) for categories, sub-categories and bank accounts. 🆕 ADDED · Nice (benchmark: Actual Budget hides categories instead of deleting them)
 
 ### 4.7 Validation
@@ -227,6 +239,17 @@ These are the rules Claude must get exactly right. Put them in pure functions in
 - Names are trimmed, 1 to 40 characters, and unique ignoring case: category names per user, sub-category names per category, bank account names per user. 🆕 ADDED · Must
 - Notes are optional, at most 200 characters. 🆕 ADDED · Must
 - Payday is 1 to 31. FY start month is 1 to 12.
+
+### 4.8 Bank balances ✅ DECIDED (20 Oct 2026)
+
+- **R-BAL-01** Each bank account has an opening balance: what it held at the start of a day (before anything recorded for that day), a date inside a stored FY. It can be 0 or negative (an overdraft or a card), at most 10,000,000 either way, with at most 2 decimals. Accounts made before 20 Oct 2026 have none until it is set; such an account has no balance. To correct drift from the real bank, enter today's balance with today's date.
+- **R-BAL-02** Income split: each month's total income (R-INC-01) goes into the active accounts by percent shares (0 to 100, at most 2 decimals, together exactly 100), from a month on. A new split replaces every split from its month on; earlier months keep theirs (as R-INC-02). The first split also covers the months before it. Each share is rounded down and the minor units left go to the largest share (the first account id on a tie), so the shares add up to the income exactly. An account with a share in the latest split cannot be archived. The wizard gives all income to the first account until changed.
+- **R-BAL-03** Balance today = opening balance + the account's share of the income of every month that started from the opening date to today (income arrives on payday, a month's first day) − its entries + transfers in − transfers out, all dated from the opening date to today. The total covers the active accounts; it is shown once every active account has an opening balance and income has a split.
+    - Example: Main 5,000 and Savings 20,000 at the start of the FY, income 17,000 split 80 / 20, 14,000 spent from Main and 500 moved to Savings. At the end of the first month Main has 4,100 and Savings 23,900; the total, 28,000, is the opening balances + Unassigned (2,000) + Remaining (1,000).
+
+### 4.9 Transfers ✅ DECIDED (20 Oct 2026)
+
+- **R-TRF-01** A transfer moves an amount (R-MON-02) from one of your accounts to another (different, not archived), on a date inside a stored FY (R-STA-03), with an optional note (4.7). It changes only the two balances: it is never spending, income or part of a plan. It can be edited and deleted (after a confirmation). Record a transfer only for money moved outside the income split.
 
 ---
 
@@ -249,11 +272,11 @@ A 6-step wizard (Angular Material stepper) with Back and Next, visible progress 
 1. **Project:** project name, your name (prefilled from Google), currency (default SAR). 🆕 ADDED · Must (currency)
 2. **Fiscal year:** FY start month and payday (1 to 31, hint "1 = calendar months"). ✅ DECIDED. A live preview shows the current FY and current month with dates, for example "FY 2026: 27 Jan 2026 to 26 Jan 2027. You are in Sep 2026 (27 Sep to 26 Oct)". 🆕 ADDED · Must (prevents a wrong setup)
 3. **Income:** monthly salary, then optional additional income items (label, amount, Once or Monthly) with their months, picked from the first FY's months with their dates: **Once** in one month (default: the current month), **Monthly** from a month (default: the FY's first month), optionally until a month (R-INC-03). Shows the **total income of the current month** (salary + the items received in it). ✅ DECIDED (20 Oct 2026; replaces "Total monthly income" and the fixed months)
-4. **Bank accounts:** at least one account name. 🆕 ADDED · Must (entries require an account)
+4. **Bank accounts:** at least one account, each with its balance today (R-BAL-01) and its share of income (R-BAL-02, the first account 100% at first; together 100%). 🆕 ADDED · Must (entries require an account). ✅ DECIDED (20 Oct 2026: balance and share)
 5. **General categories:** add category names. Optional suggestion chips you can tap: Housing, Food, Transport, Bills & Utilities, Health, Family, Education, Entertainment, Savings, Other. 🆕 ADDED · Nice
 6. **Review and finish:** a summary of everything, then Finish.
 - **SET-01** Finish is blocked until project name, your name, FY start month, payday, salary (0 is allowed), at least one bank account and at least one category are filled in.
-- **SET-02** Finish saves everything in one atomic batch: profile, first FY with its months, salary, additional income, bank accounts, categories. It then opens the sub-category and plan setup (5.3).
+- **SET-02** Finish saves everything in one atomic batch: profile, first FY with its months, salary, additional income, bank accounts with their opening balances, the income split (from the FY's first month), categories. It then opens the sub-category and plan setup (5.3).
 - **SET-03** Typed values survive a page refresh during the wizard (browser storage). 🆕 ADDED · Nice
 - **SET-04** The time zone is detected from the browser and saved with the profile. 🆕 ADDED · Must
 
@@ -263,23 +286,24 @@ Page **Plan** (`/plan`). It opens right after the wizard and is always in the na
 
 - **PLN-01** Select a general category, add a sub-category (name), then enter the planned amount for each month of the FY. The 12 inputs are labeled with month labels and dates.
 - **PLN-02** Helpers: "Same amount for all months" and "Copy from previous month". 🆕 ADDED · Nice (benchmark: Actual Budget "copy last month's budget")
-- **PLN-03** A totals row per month: total planned, total income, unplanned income (R-PLN-03). 🆕 ADDED · Nice
+- **PLN-03** A totals row per month: Income, Planned, Unallocated this month (Income − Planned, the month on its own), From last month (last month's accumulated) and Unallocated accumulated (this month + from last month, R-PLN-03); each computed row shows its formula under its name, and an FY column whose Unassigned is Planned saved (R-PLN-04), also shown in the card head. The editor's "Unassigned after" preview carries too. 🆕 ADDED · Nice. ✅ DECIDED (20 Oct 2026)
 - **PLN-04** Planned amounts can be edited at any time, for any month, including closed months.
 - **PLN-05** Categories and sub-categories can be added after setup, here or in Settings (your note).
 - **PLN-06** After the wizard, an empty state guides you: "Add your first sub-category". 🆕 ADDED · Nice
 
 ### 5.4 Daily input: Add entry (ENT)
 
-Page **Add** (`/add`). Always one tap away: center button on phones, the filled "Add expense" item in the side bar on desktop (✅ DECIDED 20 Oct 2026; the desktop top-bar button was removed as a repeat). 🆕 ADDED · Nice
+Page **Add** (`/add`). Always one tap away: center button on phones, the filled "Add" item in the side bar on desktop (✅ DECIDED 20 Oct 2026; the desktop top-bar button was removed as a repeat). An Expense | Transfer toggle sits at the top; Expense is the default, and `/add?type=transfer` opens Transfer (TRF-01). 🆕 ADDED · Nice
 
 Fields in this order: **Category → Sub-category** (filtered by the category) **→ Amount → Bank account** (defaults to the last used one, ✅ DECIDED) **→ Date** (defaults to today, 🆕 ADDED · Must) **→ Note** (optional).
 
-- **ENT-01** Planned indicator. As soon as a sub-category is chosen, show for the month of the selected date: planned, spent so far, remaining, and a progress bar. If nothing is planned, show "No plan for this month".
+- **ENT-01** Planned indicator. As soon as a sub-category is chosen, show for the month of the selected date: planned, spent so far, remaining, and a progress bar. What carried in from last month is counted and said (R-PLN-05). If nothing is planned and nothing carried in, show "No plan for this month".
     - Live "after this entry" preview while the amount is typed. 🆕 ADDED · Nice
     - Colors: green below 80%, amber from 80% to 100%, red above 100%. 🆕 ADDED · Nice
 - **ENT-02** Saving shows a short "Saved" message. The form clears amount and note but keeps category, sub-category and account for quick repeats. 🆕 ADDED · Nice (benchmark: Monefy quick add)
 - **ENT-03** On phones the amount field opens the numeric keypad (`inputmode="decimal"`) and touch targets are large. 🆕 ADDED · Must
 - **ENT-04** Every entry can be edited later (amount, date, sub-category, account, note). Changing the date moves it to the right month automatically.
+- **TRF-01** Add transfer (R-TRF-01): From account, a swap button, To account, Amount, Date, Note. Defaults: from the last used account, to the next active one, today. A panel shows both balances today and after the transfer while the amount is typed. Saving shows "Moved SAR 500 from Main to Savings" and keeps the accounts and the date. With fewer than two active accounts, an empty state links to Banks. ✅ DECIDED (20 Oct 2026)
 
 ### 5.5 Entries table (TBL)
 
@@ -296,13 +320,13 @@ Page **Entries** (`/entries`).
 
 Page **Tracker** (`/tracker`), titled "Plan vs actual", with an "Edit plan" link to Plan for the same FY. ✅ DECIDED (20 Oct 2026; was **Months** at `/months`, which now redirects to `/tracker` with its query). The requirement IDs (MON-xx), the Months/Year view toggle and the API keep their names.
 
-- **MON-01** Shows every month of the selected FY with a status chip: Closed (gray), In progress (blue), Yet to come (outlined).
+- **MON-01** Shows every month of the selected FY with a status chip: Closed (gray), In progress (blue), Yet to come (outlined). Remaining carries from month to month (R-PLN-05): each month card shows Remaining, From last month, Planned, Spent and Income, and every line and Year cell shows spent "of" what was available.
 - **MON-02** Two views with a toggle at the top; the last choice is remembered:
     - **Months (default, segregated):** one card per month with income, planned, spent, remaining and a progress bar. Expanding a card shows categories → sub-categories (planned vs spent) and that month's entries, which can be edited. The in-progress month opens expanded and scrolls into view. 🆕 ADDED · Nice (auto-expand)
     - **Year (compact):** one grid. Rows are categories (expand to sub-categories), columns are the months plus an FY total, and each cell shows spent and planned with a color. The header shows each month's status. On phones the grid scrolls sideways with the first column fixed. 🆕 ADDED · Must (12 columns do not fit on a phone)
 - **MON-03** An FY selector appears when more than one FY exists.
 - **MON-04** Tapping a cell in the Year view opens Entries filtered by that sub-category and month. 🆕 ADDED · Nice
-- **MON-05** Filters for the whole page, kept in the URL: **Category**, then **Sub-category** (both views and every month card show planned, spent and remaining for that scope only; income is hidden, because it belongs to the whole budget), and **Over plan only** (only the lines that went over plan: in a month card, what went over that month; in the Year view, the sub-categories over plan in at least one month). Bank account, note search and month are not filters here: plans are not per account, notes are about single entries (Entries), and the page is already laid out by month. ✅ DECIDED (20 Oct 2026)
+- **MON-05** Filters for the whole page, kept in the URL: **Category**, then **Sub-category** (both views and every month card show planned, spent and remaining for that scope only; income is hidden, because it belongs to the whole budget), and **Over plan only** (only the lines that went over what was available, R-PLN-05: in a month card, what went over that month; in the Year view, the sub-categories over plan in at least one month). Bank account, note search and month are not filters here: plans are not per account, notes are about single entries (Entries), and the page is already laid out by month. ✅ DECIDED (20 Oct 2026)
 
 ### 5.7 Settings (STG)
 
@@ -311,7 +335,7 @@ Page **Settings** (`/settings`). One page with clear sections and no hidden menu
 - **STG-01 Profile:** edit your name and project name. Edit time zone (🆕 ADDED · Must). Currency is shown and can be changed (formatting only).
 - **STG-02 Fiscal year:** change the FY start month; the page shows when it takes effect, for example "Takes effect from the FY starting 27 Jan 2027" (your rule). Change the payday with the same rule (✅ DECIDED, R-CAL-07).
 - **STG-03 Income:** change the salary at any time with an "effective from" month (R-INC-02) and see the salary history. Add, edit and delete additional income items. The section shows **Total income** for the current month (salary + additional).
-- **STG-04 Bank accounts:** add and rename. No delete (your rule). Archive (🆕 ADDED · Nice).
+- **STG-04 Bank accounts:** moved to Banks (BNK-02) on 20 Oct 2026; `/settings/bank-accounts` opens Banks.
 - **STG-05 Categories and sub-categories:** add and rename. No delete (your rule). Archive (🆕 ADDED · Nice). A link opens Plan for amounts.
 - **STG-06 Session:** sign out. The app version (git commit) is shown at the bottom to confirm deploys. 🆕 ADDED · Nice
 - **STG-07 People** (admins only): see AUTH-07.
@@ -329,24 +353,36 @@ Without this, the app stops working when the first FY ends.
 Page **Dashboard** (`/`), the landing page. Labeled "Preview: the full dashboard comes in Phase 2".
 
 - **DSH-01** Current month card: label and dates, income, planned, spent, remaining, progress bar.
-- **DSH-02** FY to date: total income, total spent, saved (income minus spent).
-- **DSH-03** Planned vs spent per month as simple CSS bars. No chart library in Phase 1. 🆕 ADDED · Tech
+- **DSH-02** FY to date (from the first month that carries, R-PLN-06): total income, total spent, saved (income minus spent), and planned saved: the Unassigned of the latest started month (R-PLN-03), with how saved compares in words. Under it, Planned saved by the end of the FY (R-PLN-04). ✅ DECIDED (20 Oct 2026)
+- **DSH-03** Planned vs spent per month as simple CSS bars. No chart library in Phase 1. The status color counts what carried in (R-PLN-05). 🆕 ADDED · Tech
+- **DSH-04** Bank balances: the total and each active account's balance (R-BAL-03), with a link to Banks. ✅ DECIDED (20 Oct 2026)
 
 ### 5.10 Navigation and UX rules (UX)
 
-- **UX-01** Always-visible navigation with 5 items: Dashboard, Entries, **Add expense** (prominent, in the middle; "Add" until 20 Oct 2026), Plan, Tracker (the Months page, 5.6). Plan and Tracker sit side by side because Tracker compares the plan with actual spending. ✅ DECIDED (20 Oct 2026; was Dashboard, Months, Add, Entries, Plan). Settings is a gear icon that is always visible in the top bar. Bottom bar on phones (under 768 px wide), side bar on desktop. No "More" menu. 🆕 ADDED · Must (your "no hidden things")
+- **UX-01** Always-visible navigation with 5 items: Dashboard, Entries, **Add** (prominent, in the middle; it adds an expense or a transfer, TRF-01), Plan, Tracker (the Months page, 5.6). Plan and Tracker sit side by side because Tracker compares the plan with actual spending. The desktop side bar adds Banks (BNK-01). ✅ DECIDED (20 Oct 2026; was Dashboard, Months, Add, Entries, Plan; "Add expense" for part of 20 Oct 2026). Settings is a gear icon that is always visible in the top bar. Bottom bar on phones (under 768 px wide), side bar on desktop. No "More" menu. 🆕 ADDED · Must (your "no hidden things")
 - **UX-02** The top bar shows the NAMA name, your project name and the current month label.
+- **UX-08** The top bar also shows, on every page: "Left in Sep 2026 · 10 days left" with the month's remaining for the whole budget (R-PLN-05, in its plan status color), a link to Tracker; and "Balance" with the total of the active accounts (R-BAL-03), a link to Banks, or "Set up" until it is complete (BNK-05). Desktop: in the top bar, before the gear; phones: a strip under it. It loads once setup is complete and again after every change. ✅ DECIDED (20 Oct 2026)
 - **UX-03** Every page has a helpful empty state that says what to do next. 🆕 ADDED · Nice
 - **UX-04** Confirmations only for destructive actions (delete entry). Dialogs are never stacked. 🆕 ADDED · Nice
 - **UX-05** Light theme, with dark mode that follows the device setting. 🆕 ADDED · Nice
 - **UX-06** Installable on the phone home screen as a PWA (manifest and icons). Do this last. 🆕 ADDED · Nice
 - **UX-07** Basic accessibility: a label on every input, keyboard navigation, readable contrast (Angular Material covers most of it).
 
+### 5.11 Banks (BNK) ✅ DECIDED (20 Oct 2026)
+
+Page **Banks** (`/banks`). Nothing about the accounts is hidden: each account is a card.
+
+- **BNK-01** In the side bar on desktop, after Tracker. On phones, the top bar's Balance (UX-08) opens it, so the bottom bar keeps 5 items.
+- **BNK-02** The total balance today, then one card per active account: the balance, its share of income ("Gets 80% of income · SAR 13,600 in Sep 2026"), and how the balance adds up, read top to bottom: Opening on its date, + Income since, + Transfers in, − Transfers out, − Expenses paid, = Balance today. Each card has Edit (name, opening balance and its date; one dialog), Archive (no confirmation, reversible; the API refuses the last active account and one with a share of income, R-BAL-02, and the page says why) and "See its expenses" (Entries filtered by the account). Add account opens the same dialog. Archived accounts fold away at the end ("Archived (n)"), with their balance marked "not in the total". No delete (PRD 4.6).
+- **BNK-03** Income split (R-BAL-02): one row per account with a bar, its percent and its amount this month. "Change split" opens one dialog: the month it starts from, a percent per active account with its amount for that month while typing, the total (must be 100%), and "All here" per account. The earlier splits fold away under "History (n)".
+- **BNK-04** Transfers (R-TRF-01), newest first, the newest 10 with "Show all (n)": date, from → to, note, amount, and Edit, which opens one dialog with Delete (confirmed inside it, UX-04).
+- **BNK-05** Until every active account has an opening balance and income has a split, a card at the top says what is missing, with a "Set balance" button per account and "Choose income split".
+
 ---
 
 ## 6. Non-functional requirements (NFR)
 
-- **NFR-01 Speed.** Static files come from the Firebase Hosting CDN. Each screen needs one or two API calls at most; Dashboard and Months use a single overview call. Warm API calls target under 300 ms. 🆕 ADDED · Tech
+- **NFR-01 Speed.** Static files come from the Firebase Hosting CDN. Each screen needs one or two API calls at most; Dashboard and Months use a single overview call. The top bar's summary (UX-08) is the shell's: one call when the app opens and one after each change. Warm API calls target under 300 ms. 🆕 ADDED · Tech
 - **NFR-02 Cold start.** Cloud Run scales to zero when idle, so the first request after a pause is slower. Keep startup light and turn on startup CPU boost, which Google built to shorten cold starts ([Google Cloud blog](https://cloud.google.com/blog/products/serverless/announcing-startup-cpu-boost-for-cloud-run--cloud-functions)). Optional later: one minimum instance removes the cold start but is billed while idle ([pricing](https://cloud.google.com/run/pricing)). 🆕 ADDED · Tech
 - **NFR-03 Security.**
     - Firestore rules deny all browser access. Only the API touches data; server client libraries bypass security rules and use IAM instead ([Firestore rules](https://cloud.google.com/firestore/docs/security/get-started)). 🆕 ADDED · Must
@@ -408,7 +444,7 @@ nama/
 │   ├── Api.csproj
 │   ├── Dockerfile
 │   ├── Program.cs             # DI, auth, endpoint groups
-│   ├── Domain/                # FiscalCalendar, Money, IncomeCalculator (pure, unit-tested)
+│   ├── Domain/                # FiscalCalendar, Money, IncomeCalculator, PlanCalculator, BalanceCalculator (pure, unit-tested)
 │   ├── Features/              # Setup, Profile, Settings, FiscalYears, Categories, SubCategories,
 │   │                          # Plans, Income, BankAccounts, Entries, Overview, Indicator
 │   └── Infrastructure/        # Firestore repositories, auth, allowlist
@@ -428,17 +464,20 @@ All data lives under `users/{uid}`. Amounts are `long` minor units. Dates are `Y
 
 | Path | Fields | Notes |
 | --- | --- | --- |
-| `users/{uid}` | `displayName`, `email`, `projectName`, `currency`, `timezone`, `fiscalStartMonth`, `paydayDay`, `setupCompleted`, `lastBankAccountId` | Profile and settings. `fiscalStartMonth` and `paydayDay` are used for the next FY created (R-CAL-07) |
+| `users/{uid}` | `displayName`, `email`, `projectName`, `currency`, `timezone`, `fiscalStartMonth`, `paydayDay`, `setupCompleted`, `lastBankAccountId` | Profile and settings. `fiscalStartMonth` and `paydayDay` are used for the next FY created (R-CAL-07). Its `createdAt`, as a date in `timezone`, is the day NAMA was set up (R-PLN-06) |
 | `users/{uid}/fiscalYears/{fyId}` | `label`, `startDate`, `endDate`, `fiscalStartMonth`, `paydayDay`, `isTransition`, `periods` (list of `key`, `label`, `startDate`, `endDate`) | `fyId` is the key of its first month, for example `2026-01`. Months are stored, never recomputed |
 | `users/{uid}/categories/{id}` | `name`, `nameLower`, `sortOrder`, `archived` | `nameLower` enforces case-insensitive uniqueness |
 | `users/{uid}/subCategories/{id}` | `categoryId`, `name`, `nameLower`, `sortOrder`, `archived` | Cannot move to another category in Phase 1 |
 | `users/{uid}/plans/{fyId}_{subCategoryId}` | `fyId`, `subCategoryId`, `categoryId`, `amounts` (map of month key to amount) | One document per sub-category per FY |
-| `users/{uid}/bankAccounts/{id}` | `name`, `nameLower`, `archived` | Never store account numbers |
+| `users/{uid}/bankAccounts/{id}` | `name`, `nameLower`, `archived`, `openingBalanceMinor`, `openingDate` | Never store account numbers. The opening balance and its date are both null until set (R-BAL-01) |
+| `users/{uid}/incomeSplits/{fromPeriodKey}` | `fromPeriodKey`, `shares` (map of account id to basis points, 1% = 100) | R-BAL-02. Setting a split deletes the ones from its month on in the same batch |
+| `users/{uid}/transfers/{id}` | `date`, `periodKey`, `fyId`, `fromBankAccountId`, `toBankAccountId`, `amountMinor`, `note` | R-TRF-01. `periodKey` and `fyId` are set by the API from `date` |
 | `users/{uid}/incomes/{id}` | `kind` (salary or additional), `label`, `amountMinor`, `fromPeriodKey`, `toPeriodKey` | Empty `toPeriodKey` = open ended; equal to `fromPeriodKey` = once. Changing the salary ends the current salary item the month before the effective month and creates a new one |
 | `users/{uid}/entries/{id}` | `date`, `periodKey`, `fyId`, `categoryId`, `subCategoryId`, `bankAccountId`, `amountMinor`, `note` | `periodKey` and `fyId` are set by the API from `date`. `categoryId` is copied for filtering |
 | `invites/{id}` | `createdByUid`, `createdByEmail`, `expiresAt` | App-level, not under `users/{uid}` (AUTH-06). `id` is the SHA-256 (hex) of the link's random token; the token itself is never stored. The document exists only while the link is unused |
 | `members/{id}` | `uid`, `email`, `joinedAt`, `invitedByEmail` | App-level, not under `users/{uid}` (AUTH-02). `id` is random, so no URL carries a user id. Accept deletes the invite and creates the member in one transaction, so a link works once |
 - **Indexes:** single-field indexes are automatic. Add the composite index `entries (fyId asc, date desc)` in `firestore.indexes.json`. Add others only when a query fails with an index link.
+- **Balances (R-BAL-03):** one query, `entries where date >= the earliest opening date` (a range on one field, served by the automatic single-field index), plus all transfers (few) and the small collections. The top bar's summary uses the same query from the current FY's start when that is earlier. A new opening balance with today's date also shortens what this reads.
 - **Reads:** the overview endpoint loads the FY's entries in one query and adds them up in memory. At personal scale this stays inside the 50,000 free reads per day. If the Firestore usage page shows daily reads near that limit, add a 5-minute in-memory cache that is cleared on every write (safe because max instances = 1). Phase 2 can add a summary document if needed. 🆕 ADDED · Tech
 
 ### 7.5 API contract
@@ -454,14 +493,18 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 | `PUT /api/settings/calendar` | FY start month and payday | Applies from the next FY; returns the date it takes effect |
 | `GET /api/fiscal-years` | List FYs |  |
 | `POST /api/fiscal-years/next` | Start the next FY; body has `copyPlans` | 409 before the last month of the current FY |
-| `GET /api/fiscal-years/{fyId}/overview` | Everything Dashboard and Months need: months with status, income, planned and spent per sub-category per month, totals | One call. Optional `categoryId` and `subCategoryId` (MON-05) narrow rows, months and totals and make income null |
-| `GET /api/indicator?subCategoryId=&date=` | Planned, spent, remaining and percent for one sub-category in the month of that date | Used by Add entry |
+| `GET /api/fiscal-years/{fyId}/overview` | Everything Dashboard and Months need: months with status, income, carried in, planned, spent and remaining (R-PLN-05) per sub-category per month, totals with planned saved, and FY to date with planned saved | One call. Optional `categoryId` and `subCategoryId` (MON-05) narrow rows, months and totals and make income and planned saved null |
+| `GET /api/indicator?subCategoryId=&date=` | Carried in, planned, available, spent, remaining and percent for one sub-category in the month of that date (R-PLN-05) | Used by Add entry |
+| `GET /api/summary` | The top bar (UX-08): the month in progress (days left, income, carried in, planned, spent, remaining, unassigned) and the balances | Loaded once setup is complete and after every change |
+| `GET /api/banks` | Banks (BNK-01 to BNK-05): accounts with opening balance, share, this month's income share and balance breakdown, the total, the split and its history, the FYs, income per month, transfers | One call |
+| `PUT /api/income-split` | Set the split from a month (R-BAL-02): `effectiveFromPeriodKey`, `shares` (percent per account) | Answers like `GET /api/banks` |
+| `POST /api/transfers`, `PUT /api/transfers/{id}`, `DELETE /api/transfers/{id}` | Add, edit, delete a transfer (R-TRF-01) | 422 if the date is outside existing FYs |
 | `GET /api/categories` | Categories with their sub-categories | Archived ones included and flagged |
 | `POST /api/categories` and `PUT /api/categories/{id}` | Add, rename, archive | No DELETE |
 | `POST /api/sub-categories` and `PUT /api/sub-categories/{id}` | Add (with `categoryId`), rename, archive | No DELETE |
-| `GET /api/fiscal-years/{fyId}/plans` | All plan amounts of an FY |  |
+| `GET /api/fiscal-years/{fyId}/plans` | All plan amounts of an FY, the PLN-03 totals per month (carried in, income, planned, unassigned) and the FY column (income, planned, planned saved) |  |
 | `PUT /api/fiscal-years/{fyId}/plans/{subCategoryId}` | Set the month amounts of one sub-category |  |
-| `GET /api/bank-accounts`, `POST /api/bank-accounts`, `PUT /api/bank-accounts/{id}` | List, add, rename, archive | No DELETE |
+| `GET /api/bank-accounts`, `POST /api/bank-accounts`, `PUT /api/bank-accounts/{id}` | List, add (with the opening balance), rename, set the opening balance, archive | No DELETE. POST and PUT answer like `GET /api/banks` |
 | `GET /api/income?fyId=` | Salary history, additional items, total per month |  |
 | `POST /api/income/salary` | New salary amount with `effectiveFromPeriodKey` | Ends the previous salary item |
 | `POST /api/income/additional`, `PUT /api/income/additional/{id}`, `DELETE /api/income/additional/{id}` | Additional income items |  |
@@ -484,7 +527,7 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 
 ### 7.7 Frontend structure
 
-- **Routes:** `/sign-in` (public), `/invite/:token` (public, AUTH-06), `/setup`, `/` (Dashboard), `/add`, `/entries`, `/tracker` (and `/months`, a redirect to it), `/plan`, `/settings`, `/no-access`.
+- **Routes:** `/sign-in` (public), `/invite/:token` (public, AUTH-06), `/setup`, `/` (Dashboard), `/add` (`?type=transfer` for TRF-01), `/entries`, `/tracker` (and `/months`, a redirect to it), `/plan`, `/banks`, `/settings` (and `/settings/bank-accounts`, a redirect to `/banks`), `/no-access`.
 - **Guards:** `authGuard` waits for the Firebase auth state; `setupGuard` sends you to `/setup` until setup is complete.
 - **State:** small services using signals. No NgRx. 🆕 ADDED · Tech
 - **UI kit:** Angular Material: stepper (wizard), form field, select, datepicker, table (desktop), cards (phone), expansion panel (months), button toggle (Months or Year), progress bar (indicator), snackbar (messages), chips (status). 🆕 ADDED · Tech

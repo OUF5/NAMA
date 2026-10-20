@@ -14,7 +14,6 @@ import { dialogSize } from '../../shared/dialog';
 import { incomeMonths } from '../../shared/income-months';
 import { formatMoney, toMinor } from '../../shared/money';
 import { MONTH_NAMES, formatDate, monthKeyLabel, periodWithDates } from '../../shared/month-label';
-import { BankAccount } from '../add-entry/entry-api';
 import { Category, PlanApi, SubCategory } from '../plan/plan-api';
 import { CalendarDialog } from './calendar-dialog';
 import { IncomeItemDialog, IncomeItemDialogData } from './income-item-dialog';
@@ -31,11 +30,6 @@ const PHONE = '(max-width: 767.98px)';
 // Active items first; archived ones fold away at the end of their list.
 function split<T extends { archived: boolean }>(items: T[]): { active: T[]; archived: T[] } {
   return { active: items.filter((item) => !item.archived), archived: items.filter((item) => item.archived) };
-}
-
-// Bank accounts are listed by name ignoring case, as the API sorts them (M5).
-function byName(accounts: BankAccount[]): BankAccount[] {
-  return [...accounts].sort((a, b) => (a.name.toLowerCase() < b.name.toLowerCase() ? -1 : a.name.toLowerCase() > b.name.toLowerCase() ? 1 : 0));
 }
 
 // PRD 5.7 Settings (STG-01 to STG-06). Owner's choice (M8): each section is its own page,
@@ -89,7 +83,6 @@ export class Settings {
   // The folded parts that are open: "category-<id>", "archived-…" and "salary-history".
   private readonly opened = signal<ReadonlySet<string>>(new Set());
 
-  protected readonly accounts = computed(() => split(this.data()?.bankAccounts ?? []));
   protected readonly categories = computed(() => {
     const { active, archived } = split(this.data()?.categories ?? []);
     const withSubs = (list: Category[]) => list.map((category) => ({ ...category, subs: split(category.subCategories) }));
@@ -128,7 +121,6 @@ export class Settings {
       profile: `${d.profile.projectName} · ${d.profile.currency}`,
       'fiscal-year': `Starts in ${MONTH_NAMES[d.calendar.fiscalStartMonth - 1]} · Payday ${d.calendar.paydayDay}`,
       income: d.income.currentTotal !== null ? `${this.money(d.income.currentTotal)} this month` : 'No current month',
-      'bank-accounts': count(this.accounts().active.length, this.accounts().archived.length),
       categories: count(this.categories().active.length, this.categories().archived.length),
       people: d.people ? peopleSummary(d.people) : undefined,
     };
@@ -218,45 +210,6 @@ export class Settings {
       currency: this.currency(),
     };
     this.incomeSaved(await this.open<IncomeItemDialog, IncomeItemDialogData, Income>(IncomeItemDialog, data), 'Income saved.');
-  }
-
-  // STG-04
-  protected async addAccount(): Promise<void> {
-    const account = await this.nameDialog<BankAccount>({
-      title: 'Add bank account',
-      label: 'Account name',
-      name: '',
-      taken: this.data()!.bankAccounts.map((a) => a.name),
-      duplicateMessage: 'This bank account already exists.',
-      save: (name) => this.api.addBankAccount(name),
-    });
-    if (account) {
-      this.patch({ bankAccounts: byName([...this.data()!.bankAccounts, account]) });
-      this.status.set(`Added ${account.name}.`);
-    }
-  }
-
-  protected async renameAccount(account: BankAccount): Promise<void> {
-    const renamed = await this.nameDialog<BankAccount>({
-      title: 'Rename bank account',
-      label: 'Account name',
-      name: account.name,
-      taken: this.data()!.bankAccounts.filter((a) => a.id !== account.id).map((a) => a.name),
-      duplicateMessage: 'This bank account already exists.',
-      save: (name) => this.api.updateBankAccount(account.id, name, account.archived),
-    });
-    if (renamed) {
-      this.replaceAccount(renamed, `Renamed to ${renamed.name}.`);
-    }
-  }
-
-  // Archived accounts are hidden from the Add form; their entries keep them (PRD 4.6).
-  protected async toggleAccount(account: BankAccount): Promise<void> {
-    await this.change(
-      () => this.api.updateBankAccount(account.id, account.name, !account.archived),
-      (updated) => this.replaceAccount(updated, `${updated.name} ${updated.archived ? 'archived' : 'restored'}.`),
-      'Keep at least one active bank account. Entries need one.',
-    );
   }
 
   // STG-05 (PLN-05): the same call as Plan.
@@ -399,7 +352,7 @@ export class Settings {
     }
   }
 
-  // An archive or restore straight from the list. A 400 is the API's "keep one active account" rule.
+  // An archive or restore straight from the list.
   private async change<T>(call: () => Promise<T>, done: (result: T) => void, refused = 'It could not be saved.'): Promise<void> {
     this.busy.set(true);
     try {
@@ -411,11 +364,6 @@ export class Settings {
     } finally {
       this.busy.set(false);
     }
-  }
-
-  private replaceAccount(account: BankAccount, message: string): void {
-    this.patch({ bankAccounts: byName(this.data()!.bankAccounts.map((a) => (a.id === account.id ? account : a))) });
-    this.status.set(message);
   }
 
   private replaceCategory(category: Category, message: string): void {

@@ -1,0 +1,69 @@
+<h2 mat-dialog-title>Income split</h2>
+<form [formGroup]="form" (ngSubmit)="save()" novalidate>
+  <mat-dialog-content>
+    <p class="note">
+      Each month's income goes into your accounts by these shares on payday. Record a transfer only for
+      money you move outside this split.
+    </p>
+    <mat-form-field>
+      <mat-label>From</mat-label>
+      <mat-select [formControl]="from">
+        @for (group of data.groups; track group.label) {
+          <mat-optgroup [label]="group.label">
+            @for (month of group.months; track month.key) {
+              <mat-option [value]="month.key">{{ month.text }}</mat-option>
+            }
+          </mat-optgroup>
+        }
+      </mat-select>
+      <mat-hint>Earlier months keep their split.</mat-hint>
+    </mat-form-field>
+
+    <p class="caption income">Income in {{ monthLabel() }}: <span class="money">{{ monthIncome() }}</span></p>
+
+    <!-- One row per active account: its share, what it gets, and "All here". -->
+    <ul class="shares" [formGroup]="shares">
+      @for (account of data.accounts; track account.id) {
+        <li>
+          <label class="name" [for]="'share-' + account.id">{{ account.name }}</label>
+          <mat-form-field subscriptSizing="dynamic" class="percent">
+            <input
+              matInput
+              [id]="'share-' + account.id"
+              [formControlName]="account.id"
+              inputmode="decimal"
+              autocomplete="off"
+              [attr.aria-label]="'Share of ' + account.name + ' in percent'"
+            />
+            <span matTextSuffix>%</span>
+            <mat-error>0 to 100, 2 decimals.</mat-error>
+          </mat-form-field>
+          <span class="money amount" [attr.aria-label]="account.name + ' gets ' + (amounts()?.[account.id] ?? 'nothing yet')">
+            {{ amounts()?.[account.id] ?? '–' }}
+          </span>
+          <button mat-button type="button" class="all" (click)="allTo(account.id)" [attr.aria-label]="'All income to ' + account.name">
+            All here
+          </button>
+        </li>
+      }
+    </ul>
+
+    <p class="total" [class.danger]="!complete()" role="status">
+      Total <span class="money">{{ totalText() }}</span>
+      @if (!complete()) {
+        <span class="caption"> · The shares add up to 100%.</span>
+      }
+    </p>
+    @if (tried() && !complete()) {
+      <p class="error" role="alert">Make the shares add up to exactly 100%.</p>
+    }
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+  </mat-dialog-content>
+  <!-- Save is the one filled button. -->
+  <mat-dialog-actions>
+    <button mat-stroked-button type="button" mat-dialog-close>Cancel</button>
+    <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+  </mat-dialog-actions>
+</form>

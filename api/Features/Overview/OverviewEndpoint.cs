@@ -8,15 +8,16 @@ using Api.Infrastructure;
 namespace Api.Features.Overview;
 
 // PRD 7.5 GET /api/fiscal-years/{fyId}/overview: everything Tracker (PRD 5.6) and Dashboard
-// (PRD 5.9) need in one call (NFR-01). Sums are made in minor units (R-MON-01). Owner's choices (M7): remaining
-// is planned minus spent, and a sub-category appears when it has a plan or spending in the FY.
+// (PRD 5.9) need in one call (NFR-01). Sums are made in minor units (R-MON-01). A sub-category appears
+// when it has a plan or spending in the FY (owner's choice, M7). R-PLN-05 (20 Oct 2026): what is left
+// carries into the next month, so remaining = carried in + planned - spent, from 0 at the FY start.
 // Tracker's filter (owner's choice, 20 Oct 2026): with categoryId, and optionally subCategoryId, the
 // rows, months and totals cover only that category or sub-category, and income is null, because
 // income belongs to the whole budget. ToDate (Dashboard) always covers everything.
 public static class OverviewEndpoint
 {
-    // One month of one row (Year grid cell, MON-02).
-    public record CellDto(string PeriodKey, decimal Planned, decimal Spent);
+    // One month of one row (Year grid cell, MON-02). Available is CarriedIn + Planned (R-PLN-05).
+    public record CellDto(string PeriodKey, decimal CarriedIn, decimal Planned, decimal Spent, decimal Remaining);
 
     public record SubCategoryRowDto(string SubCategoryId, IReadOnlyList<CellDto> Months, decimal Planned, decimal Spent);
 
@@ -29,17 +30,23 @@ public static class OverviewEndpoint
 
     // Status is "closed", "inProgress" or "yetToCome" (R-STA-01), worked out with today in the
     // profile time zone (R-CAL-10).
-    public record MonthDto(MeEndpoint.PeriodDto Period, string Status, decimal? Income, decimal Planned, decimal Spent, decimal Remaining);
+    public record MonthDto(
+        MeEndpoint.PeriodDto Period, string Status, decimal? Income, decimal CarriedIn, decimal Planned, decimal Spent, decimal Remaining);
 
-    public record TotalsDto(decimal? Income, decimal Planned, decimal Spent, decimal Remaining);
+    // The FY: remaining is FY planned - FY spent (the last month's remaining). PlannedSaved is the
+    // last month's Unassigned (R-PLN-04), null with a filter like income.
+    public record TotalsDto(decimal? Income, decimal Planned, decimal Spent, decimal Remaining, decimal? PlannedSaved);
 
     // DSH-02 (owner's choice, M9): the months that started on or before today, each with its full
-    // income and every entry in it. Saved is income minus spent and can be negative.
-    public record ToDateDto(decimal Income, decimal Spent, decimal Saved);
+    // income and every entry in it, from the first month that carries (R-PLN-06: months before NAMA was
+    // set up were never tracked). Saved is income minus spent and can be negative. PlannedSaved is the
+    // Unassigned of the latest started month (R-PLN-03): what the plan meant to keep by now.
+    public record ToDateDto(decimal Income, decimal Spent, decimal Saved, decimal PlannedSaved);
 
     // FiscalYears (oldest first) feed the MON-03 selector; Categories is GET /api/categories, for
     // the names and the edit dialog's pickers. Rollover is the FY-01 banner (null when hidden).
-    // ToDate is Dashboard's "FY to date" (DSH-02).
+    // ToDate is Dashboard's "FY to date" (DSH-02). CarryFromPeriodKey is the first month that carries
+    // (R-PLN-06), null when none of this FY's months does.
     public record OverviewResponse(
         IReadOnlyList<FiscalYearsEndpoint.FiscalYearDto> FiscalYears,
         string FyId,
@@ -48,7 +55,8 @@ public static class OverviewEndpoint
         IReadOnlyList<CategoryRowDto> Rows,
         TotalsDto Totals,
         ToDateDto ToDate,
-        FiscalYearsEndpoint.RolloverDto? Rollover);
+        FiscalYearsEndpoint.RolloverDto? Rollover,
+        string? CarryFromPeriodKey);
 
     public static IEndpointRouteBuilder MapOverview(this IEndpointRouteBuilder api)
     {
@@ -82,6 +90,8 @@ public static class OverviewEndpoint
         Filter? filter, IUserStore store)
     {
         var periods = fiscalYear.Periods;
+        // R-PLN-06: the carry starts in the month NAMA was set up, or the FY's first month.
+        var carryStart = PlanCalculator.CarryStart(periods, profile.StartedOn);
         var allPlans = await store.GetPlansAsync(uid, fiscalYear.Id);
         var income = IncomeCalculator.TotalsForPeriods(await store.GetIncomesAsync(uid), periods);
         // PRD 7.4 "Reads": the FY's entries in one query (the Entries query), added up in memory.
@@ -113,11 +123,15 @@ public static class OverviewEndpoint
             .ToDictionary(group => group.Key, group => group.Sum(entry => entry.AmountMinor));
         var plansBySub = plans.ToDictionary(plan => plan.SubCategoryId);
 
-        IReadOnlyList<(string PeriodKey, long Planned, long Spent)> SubCells(SubCategory sub) => periods
+        // R-PLN-05: each sub-category carries on its own; categories and months are their sums.
+        IReadOnlyList<CarriedMonth> SubCells(SubCategory sub) => PlanCalculator.Carry(periods
             .Select(period => (
-                PeriodKey: period.Key,
-                Planned: plansBySub.TryGetValue(sub.Id, out var plan) ? PlanCalculator.AmountFor(plan, period.Key) : 0L,
-                Spent: spent.GetValueOrDefault((sub.Id, period.Key))))
+                plansBySub.TryGetValue(sub.Id, out var plan) ? PlanCalculator.AmountFor(plan, period.Key) : 0L,
+                spent.GetValueOrDefault((sub.Id, period.Key)))), carryStart);
+
+        List<CellDto> Cells(IReadOnlyList<CarriedMonth> cells) => cells
+            .Select((cell, i) => new CellDto(periods[i].Key, Money.FromMinor(cell.CarriedIn), Money.FromMinor(cell.Planned),
+                Money.FromMinor(cell.Spent), Money.FromMinor(cell.Remaining)))
             .ToList();
 
         var rows = new List<CategoryRowDto>();
@@ -134,12 +148,12 @@ public static class OverviewEndpoint
             {
                 continue;
             }
-            // R-PLN-02: category planned = sum of its sub-categories; spent likewise.
+            // R-PLN-02: category planned = sum of its sub-categories; spent and carried likewise.
             var categoryCells = periods
-                .Select((period, i) => (
-                    PeriodKey: period.Key,
-                    Planned: subRows.Sum(row => row.Cells[i].Planned),
-                    Spent: subRows.Sum(row => row.Cells[i].Spent)))
+                .Select((_, i) => new CarriedMonth(
+                    subRows.Sum(row => row.Cells[i].CarriedIn),
+                    subRows.Sum(row => row.Cells[i].Planned),
+                    subRows.Sum(row => row.Cells[i].Spent)))
                 .ToList();
             rows.Add(new CategoryRowDto(
                 category.Id,
@@ -154,45 +168,46 @@ public static class OverviewEndpoint
         }
 
         // Month and FY spent count every entry, so they equal the Entries totals (M7 "Done when").
-        var months = periods.Select(period =>
-        {
-            var planned = PlanCalculator.MonthPlanned(plans, period.Key);
-            var monthSpent = entries.Where(entry => entry.PeriodKey == period.Key).Sum(entry => entry.AmountMinor);
-            return (Period: period, Planned: planned, Spent: monthSpent);
-        }).ToList();
+        var months = PlanCalculator.Carry(periods.Select(period => (
+            PlanCalculator.MonthPlanned(plans, period.Key),
+            entries.Where(entry => entry.PeriodKey == period.Key).Sum(entry => entry.AmountMinor))), carryStart);
         var totalPlanned = months.Sum(month => month.Planned);
         var totalSpent = entries.Sum(entry => entry.AmountMinor);
-        // DSH-02 covers everything, whatever the filter.
-        var started = periods.Where(period => FiscalCalendar.HasStarted(period, today)).Select(period => period.Key).ToHashSet(StringComparer.Ordinal);
+        // R-PLN-03, R-PLN-04 over the whole budget (a filter has no income).
+        var unassigned = PlanCalculator.RunningUnassigned(periods, income, allPlans, carryStart);
+        // DSH-02 covers everything, whatever the filter, from the first month that carries.
+        var started = periods.Skip(carryStart).Where(period => FiscalCalendar.HasStarted(period, today)).Select(period => period.Key).ToHashSet(StringComparer.Ordinal);
         var incomeToDate = started.Sum(key => income[key]);
         var spentToDate = allEntries.Where(entry => started.Contains(entry.PeriodKey)).Sum(entry => entry.AmountMinor);
+        var plannedSavedToDate = unassigned.LastOrDefault(month => started.Contains(month.PeriodKey))?.Unassigned ?? 0;
 
         return new OverviewResponse(
             fiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
             fiscalYear.Id,
-            months.Select(month => new MonthDto(
-                MeEndpoint.PeriodDto.From(month.Period),
-                StatusName(FiscalCalendar.Status(month.Period, today)),
-                scope is null ? Money.FromMinor(income[month.Period.Key]) : null,
-                Money.FromMinor(month.Planned),
-                Money.FromMinor(month.Spent),
-                Money.FromMinor(PlanCalculator.Remaining(month.Planned, month.Spent)))).ToList(),
+            periods.Select((period, i) => new MonthDto(
+                MeEndpoint.PeriodDto.From(period),
+                StatusName(FiscalCalendar.Status(period, today)),
+                scope is null ? Money.FromMinor(income[period.Key]) : null,
+                Money.FromMinor(months[i].CarriedIn),
+                Money.FromMinor(months[i].Planned),
+                Money.FromMinor(months[i].Spent),
+                Money.FromMinor(months[i].Remaining))).ToList(),
             categories.Select(category => CategoriesEndpoint.ToDto(category, subCategories)).ToList(),
             rows,
             new TotalsDto(
                 scope is null ? Money.FromMinor(income.Values.Sum()) : null,
                 Money.FromMinor(totalPlanned),
                 Money.FromMinor(totalSpent),
-                Money.FromMinor(PlanCalculator.Remaining(totalPlanned, totalSpent))),
+                Money.FromMinor(PlanCalculator.Remaining(totalPlanned, totalSpent)),
+                scope is null ? Money.FromMinor(PlanCalculator.PlannedSaved(unassigned)) : null),
             new ToDateDto(
                 Money.FromMinor(incomeToDate),
                 Money.FromMinor(spentToDate),
-                Money.FromMinor(PlanCalculator.Saved(incomeToDate, spentToDate))),
-            FiscalYearsEndpoint.Rollover(fiscalYears, profile, today));
+                Money.FromMinor(PlanCalculator.Saved(incomeToDate, spentToDate)),
+                Money.FromMinor(plannedSavedToDate)),
+            FiscalYearsEndpoint.Rollover(fiscalYears, profile, today),
+            carryStart < periods.Count ? periods[carryStart].Key : null);
     }
-
-    private static List<CellDto> Cells(IEnumerable<(string PeriodKey, long Planned, long Spent)> cells) =>
-        cells.Select(cell => new CellDto(cell.PeriodKey, Money.FromMinor(cell.Planned), Money.FromMinor(cell.Spent))).ToList();
 
     private static string StatusName(PeriodStatus status) => status switch
     {

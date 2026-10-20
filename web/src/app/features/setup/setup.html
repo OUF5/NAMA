@@ -165,7 +165,10 @@
     <!-- 4. Bank accounts -->
     <mat-step [stepControl]="bankAccounts" label="Bank accounts">
       <div class="step">
-        <p class="note">Add at least one account. Entries are saved against an account.</p>
+        <p class="note">
+          Add at least one account. Entries are saved against an account. Enter each account's balance
+          today, and which share of your income goes into it on payday.
+        </p>
         <div class="add-row">
           <mat-form-field>
             <mat-label>Account name</mat-label>
@@ -184,18 +187,44 @@
           </mat-form-field>
           <button mat-stroked-button type="button" (click)="addAccount()">Add</button>
         </div>
-        <ul class="names">
-          @for (name of bankAccounts.value; track $index; let i = $index) {
-            <li>
-              <span>{{ name }}</span>
-              <button mat-icon-button type="button" (click)="removeAt(bankAccounts, i)" [attr.aria-label]="'Remove ' + name">
+        <!-- R-BAL-01, R-BAL-02: one row per account. -->
+        <ul class="accounts">
+          @for (account of bankAccounts.controls; track $index; let i = $index) {
+            <li [formGroup]="$any(account)">
+              <span class="account-name">{{ accountName(i) }}</span>
+              <mat-form-field subscriptSizing="dynamic">
+                <mat-label>Balance today ({{ currency() }})</mat-label>
+                <input matInput formControlName="balance" inputmode="decimal" autocomplete="off" />
+                <mat-error>Up to 10,000,000 either way, 2 decimals.</mat-error>
+              </mat-form-field>
+              <mat-form-field subscriptSizing="dynamic" class="share">
+                <mat-label>Share of income</mat-label>
+                <input matInput formControlName="share" inputmode="decimal" autocomplete="off" />
+                <span matTextSuffix>%</span>
+                <mat-error>0 to 100.</mat-error>
+              </mat-form-field>
+              <button mat-icon-button type="button" (click)="removeAccount(i)" [attr.aria-label]="'Remove ' + accountName(i)">
                 <mat-icon>close</mat-icon>
               </button>
             </li>
           }
         </ul>
+        @if (bankAccounts.length) {
+          <p class="caption" [class.error]="bankAccounts.hasError('shares')" role="status">
+            Shares of income: {{ shareTotalText() }} of 100%.
+            @if (bankAccounts.hasError('shares')) {
+              They add up to exactly 100%.
+            }
+          </p>
+        }
         @if (accountsTried() && bankAccounts.invalid) {
-          <p class="error" role="alert">Add at least one bank account.</p>
+          <p class="error" role="alert">
+            @if (bankAccounts.length === 0) {
+              Add at least one bank account.
+            } @else {
+              Enter each balance today (0 is fine) and shares that add up to 100%.
+            }
+          </p>
         }
         <div class="actions">
           <button mat-stroked-button type="button" matStepperPrevious>Back</button>
@@ -288,7 +317,14 @@
             </dd>
           }
           <dt>Bank accounts</dt>
-          <dd>{{ bankAccounts.value.join(', ') }}</dd>
+          <dd>
+            @for (line of accountLines(); track $index) {
+              @if (!$first) {
+                <br />
+              }
+              {{ line }}
+            }
+          </dd>
           <dt>Categories</dt>
           <dd>{{ categories.value.join(', ') }}</dd>
         </dl>

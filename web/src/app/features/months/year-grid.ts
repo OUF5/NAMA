@@ -3,12 +3,13 @@ import { Component, computed, input, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { Params, RouterLink } from '@angular/router';
 import { formatMoney, toMinor } from '../../shared/money';
-import { STATUS_LABELS, nameMaps, spendLine } from './month-lines';
+import { STATUS_LABELS, availableMinor, nameMaps, spendLine } from './month-lines';
 import { Cell, OverviewResponse } from './overview-api';
 
 // MON-02 Year view: category rows (they expand to sub-categories), the months plus an FY total, and
 // a Total row. The header shows each month's status (MON-01). Each cell opens Entries filtered by
-// its sub-category or category and month (MON-04).
+// its sub-category or category and month (MON-04). R-PLN-05: a month cell shows spent of available
+// (its plan plus what carried in); the FY total is FY spent of FY planned, as the carry starts at 0.
 @Component({
   selector: 'app-year-grid',
   imports: [NgTemplateOutlet, RouterLink, MatIconModule],
@@ -40,13 +41,13 @@ export class YearGrid {
       query: Params,
     ) => [
       ...cellMonths.map((cell, i) =>
-        this.cell(name, months[i].period.label, cell.planned, cell.spent, {
+        this.cell(name, months[i].period.label, cell, {
           fyId,
           periodKey: cell.periodKey,
           ...query,
         }),
       ),
-      this.cell(name, this.fiscalYearLabel(), planned, spent, { fyId, ...query }),
+      this.cell(name, this.fiscalYearLabel(), { carriedIn: 0, planned, spent }, { fyId, ...query }),
     ];
     return {
       months,
@@ -72,8 +73,10 @@ export class YearGrid {
         'Total',
         months.map((month) => ({
           periodKey: month.period.key,
+          carriedIn: month.carriedIn,
           planned: month.planned,
           spent: month.spent,
+          remaining: month.remaining,
         })),
         data.totals.planned,
         data.totals.spent,
@@ -92,20 +95,16 @@ export class YearGrid {
     });
   }
 
-  // A cell with nothing planned and nothing spent shows "–" without color (M7).
-  private cell(
-    name: string,
-    column: string,
-    plannedAmount: number,
-    spentAmount: number,
-    query: Params,
-  ) {
-    const planned = toMinor(plannedAmount);
-    const spent = toMinor(spentAmount);
-    const line = spendLine(planned, spent, this.currency());
+  // A cell with nothing available and nothing spent shows "–" without color (M7).
+  private cell(name: string, column: string, amounts: { carriedIn: number; planned: number; spent: number }, query: Params) {
+    const available = availableMinor(amounts);
+    const carried = toMinor(amounts.carriedIn);
+    const spent = toMinor(amounts.spent);
+    const line = spendLine(available, spent, this.currency());
     const money = (minor: number) => formatMoney(minor, this.currency());
+    const from = carried === 0 ? '' : ` (${money(toMinor(amounts.planned))} planned, ${money(carried)} from last month)`;
     const label = line.status
-      ? `${name}, ${column}: ${money(spent)} of ${money(planned)}, ${line.chip}. Open entries`
+      ? `${name}, ${column}: ${money(spent)} of ${money(available)} available${from}, ${line.chip}. Open entries`
       : `${name}, ${column}: nothing planned or spent. Open entries`;
     return { ...line, label, query };
   }

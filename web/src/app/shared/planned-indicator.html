@@ -23,9 +23,16 @@
     </div>
     <div>
       <dt class="caption">Remaining</dt>
-      <dd class="money">{{ money(planned() - spent()) }}</dd>
+      <dd class="money">{{ money(available() - spent()) }}</dd>
     </div>
   </dl>
+  <!-- R-PLN-05: what was left (or overspent) last month carries in. -->
+  @if (carriedIn() !== 0) {
+    <p class="caption money carried">
+      {{ carriedIn() > 0 ? 'Includes' : 'Less' }} {{ money(carriedIn() > 0 ? carriedIn() : -carriedIn()) }}
+      {{ carriedIn() > 0 ? 'left' : 'overspent' }} last month · {{ money(available()) }} available
+    </p>
+  }
   @if (pending() > 0) {
     <p class="after money" [class]="status()">{{ after() }}</p>
   }

@@ -32,6 +32,20 @@ public class FirestoreMappingTests
         Assert.Equal(profile, FirestoreDocuments.ToProfile(FirestoreDocuments.ToDocument(profile)));
     }
 
+    // R-PLN-06: the day setup was finished is createdAt in the profile's time zone (21:30 UTC on 20 Oct
+    // is already 21 Oct in Riyadh). A document never stored has none.
+    [Fact]
+    public void The_start_day_comes_from_created_at_in_the_profile_time_zone()
+    {
+        var profile = new UserProfile("Owner", "owner@example.com", "Home budget", "SAR", "Asia/Riyadh", 1, 1, true, null);
+        var document = FirestoreDocuments.ToDocument(profile);
+        Assert.Null(FirestoreDocuments.ToProfile(document).StartedOn);
+
+        document.CreatedAt = Google.Cloud.Firestore.Timestamp.FromDateTimeOffset(new DateTimeOffset(2026, 10, 20, 21, 30, 0, TimeSpan.Zero));
+
+        Assert.Equal(new DateOnly(2026, 10, 21), FirestoreDocuments.ToProfile(document).StartedOn);
+    }
+
     [Fact]
     public void Income_keeps_minor_units_and_open_end()
     {
@@ -52,6 +66,47 @@ public class FirestoreMappingTests
         Assert.Equal(("Al Rajhi", "al rajhi", false), (account.Name, account.NameLower, account.Archived));
         Assert.Equal(("Bills & Utilities", "bills & utilities", 3, false),
             (category.Name, category.NameLower, category.SortOrder, category.Archived));
+    }
+
+    // R-BAL-01: the opening balance is long minor units and a YYYY-MM-DD date; both null when unset.
+    [Fact]
+    public void Bank_account_keeps_its_opening_balance()
+    {
+        var account = new BankAccount("a", "Card", Opening: new OpeningBalance(-120_050, new DateOnly(2026, 10, 20)));
+
+        var document = FirestoreDocuments.ToDocument(account);
+
+        Assert.Equal((-120_050L, "2026-10-20"), (document.OpeningBalanceMinor, document.OpeningDate));
+        Assert.Equal(account, FirestoreDocuments.ToBankAccount("a", document));
+        var unset = FirestoreDocuments.ToDocument(new BankAccount("b", "Old"));
+        Assert.Equal(((long?)null, (string?)null), (unset.OpeningBalanceMinor, unset.OpeningDate));
+        Assert.Null(FirestoreDocuments.ToBankAccount("b", unset).Opening);
+    }
+
+    // R-BAL-02: incomeSplits/{fromPeriodKey}, shares in basis points.
+    [Fact]
+    public void Income_split_comes_back_unchanged()
+    {
+        var split = new IncomeSplit("2026-03", new Dictionary<string, int> { ["a"] = 8_050, ["b"] = 1_950 });
+
+        var document = FirestoreDocuments.ToDocument(split);
+
+        Assert.Equal(("2026-03", 8_050L), (document.FromPeriodKey, document.Shares["a"]));
+        var back = FirestoreDocuments.ToIncomeSplit(document);
+        Assert.Equal(split.FromPeriodKey, back.FromPeriodKey);
+        Assert.Equal(split.Shares, back.Shares);
+    }
+
+    // R-TRF-01: as an entry, with the two accounts.
+    [Fact]
+    public void Transfer_comes_back_unchanged()
+    {
+        var transfer = new Transfer("t", new DateOnly(2026, 10, 18), "2026-09", "2026-01", "a", "b", 50_025, "Savings");
+
+        var document = FirestoreDocuments.ToDocument(transfer);
+
+        Assert.Equal(("2026-10-18", "a", "b", 50_025L), (document.Date, document.FromBankAccountId, document.ToBankAccountId, document.AmountMinor));
+        Assert.Equal(transfer, FirestoreDocuments.ToTransfer("t", document));
     }
 
     [Fact]

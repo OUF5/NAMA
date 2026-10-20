@@ -1,5 +1,19 @@
 import { FormControl } from '@angular/forms';
-import { amountValidator, formatAmount, formatMoney, minorToInput, parseAmount, toMinor } from './money';
+import {
+  amountValidator,
+  balanceValidator,
+  distribute,
+  formatAmount,
+  formatMoney,
+  formatPercent,
+  minorToInput,
+  parseAmount,
+  parseBalance,
+  parsePercent,
+  percentValidator,
+  toBasisPoints,
+  toMinor,
+} from './money';
 
 describe('money (R-MON-01, R-MON-02)', () => {
   it('parses typed amounts into minor units', () => {
@@ -47,5 +61,44 @@ describe('money (R-MON-01, R-MON-02)', () => {
     expect(minorToInput(150_000)).toBe('1500');
     expect(minorToInput(5)).toBe('0.05');
     expect(parseAmount(minorToInput(123_456_789))).toBe(123_456_789);
+  });
+
+  // R-BAL-01: an opening balance can be 0 or below 0 (an overdraft or a card).
+  it('parses a balance, below 0 too', () => {
+    expect(parseBalance('5000')).toBe(500_000);
+    expect(parseBalance('0')).toBe(0);
+    expect(parseBalance(' -1200.5 ')).toBe(-120_050);
+    expect(parseBalance('-10000000')).toBe(-1_000_000_000);
+    for (const text of ['', '-', '--1', '1.005', '-10000000.01', '1,000']) {
+      expect(parseBalance(text)).toBeNull();
+    }
+    expect(new FormControl('-1', balanceValidator()).errors).toBeNull();
+    expect(new FormControl('x', balanceValidator()).errors).toEqual({ balance: true });
+  });
+
+  // R-BAL-02: a share is 0 to 100 with at most 2 decimals, in basis points.
+  it('parses a share of income in basis points', () => {
+    expect(parsePercent('80')).toBe(8_000);
+    expect(parsePercent('33.33')).toBe(3_333);
+    expect(parsePercent('0')).toBe(0);
+    expect(parsePercent('100')).toBe(10_000);
+    for (const text of ['100.01', '-1', '1.005', '', 'x']) {
+      expect(parsePercent(text)).toBeNull();
+    }
+    expect(new FormControl('101', percentValidator()).errors).toEqual({ percent: true });
+    expect(toBasisPoints(66.67)).toBe(6_667);
+    expect(formatPercent(8_000)).toBe('80%');
+    expect(formatPercent(3_333)).toBe('33.33%');
+  });
+
+  // The API's rule (BalanceCalculator.Distribute): rounded down, the rest to the largest share, the
+  // first id on a tie. The same examples as BalanceCalculatorTests.
+  it('splits income exactly as the API does', () => {
+    expect(distribute(1_700_000, { main: 8_000, savings: 2_000 })).toEqual({ main: 1_360_000, savings: 340_000 });
+    expect(distribute(1_700_001, { main: 8_000, savings: 2_000 })).toEqual({ main: 1_360_001, savings: 340_000 });
+    expect(distribute(100, { a: 3_333, b: 3_333, c: 3_334 })).toEqual({ a: 33, b: 33, c: 34 });
+    expect(distribute(1, { b: 5_000, a: 5_000 })).toEqual({ a: 1, b: 0 });
+    expect(distribute(500, { main: 10_000, savings: 0 })).toEqual({ main: 500 });
+    expect(distribute(500, {})).toEqual({});
   });
 });

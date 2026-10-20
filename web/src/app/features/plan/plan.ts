@@ -21,8 +21,9 @@ import { PlanDialog, PlanDialogData } from './plan-dialog';
 const PHONE = '(max-width: 767.98px)';
 
 // PRD 5.3 Plan (PLN-01 to PLN-06). Owner's choice (M8), so the page stays short as it grows:
-// - PLN-03 totals are one table turned sideways: Planned, Income and Unassigned for every month.
-//   It is sticky on desktop and can be folded on phones. A month column can be selected.
+// - PLN-03 totals are one table turned sideways that reads top to bottom: Income - Planned = Unassigned
+//   this month (the month on its own), + From last month = Unassigned (R-PLN-03 carries), for every
+//   month and the FY, whose Unassigned is Planned saved (R-PLN-04). It is sticky on desktop and can be folded on phones. A month can be selected.
 // - Categories are compact rows (closed at first) with their amount in the selected month and their
 //   FY total; a category opens its sub-categories.
 // - The 12 month amounts are edited in a dialog (PlanDialog).
@@ -68,19 +69,46 @@ export class Plan {
         period,
         month: period.label.slice(0, 3),
         year: period.label.slice(4),
+        carriedIn: formatAmount(toMinor(row?.carriedIn ?? 0)),
         planned: formatAmount(toMinor(row?.planned ?? 0)),
         income: formatAmount(toMinor(row?.income ?? 0)),
-        unplanned: formatAmount(toMinor(row?.unplanned ?? 0)),
-        over: (row?.unplanned ?? 0) < 0,
+        thisMonth: formatAmount(toMinor(row?.thisMonth ?? 0)),
+        thisMonthOver: (row?.thisMonth ?? 0) < 0,
+        unassigned: formatAmount(toMinor(row?.unassigned ?? 0)),
+        over: (row?.unassigned ?? 0) < 0,
       };
     });
+  });
+
+  // R-PLN-06: "Oct 2026" when the carry starts after the FY's first month (NAMA was set up then), so
+  // the page can say why earlier months stand alone; null otherwise.
+  protected readonly carryFrom = computed(() => {
+    const data = this.data();
+    const key = data?.carryFromPeriodKey;
+    return data && key && key !== data.fiscalYear.periods[0]?.key
+      ? (data.fiscalYear.periods.find((period) => period.key === key)?.label ?? null)
+      : null;
+  });
+
+  // R-PLN-04: what the plan leaves at the end of the FY, in the FY column and the card head.
+  protected readonly fiscalYearColumn = computed(() => {
+    const fy = this.data()?.fiscalYearTotals;
+    return fy
+      ? {
+          income: formatAmount(toMinor(fy.income)),
+          planned: formatAmount(toMinor(fy.planned)),
+          plannedSaved: formatAmount(toMinor(fy.plannedSaved)),
+          plannedSavedMoney: formatMoney(toMinor(fy.plannedSaved), this.currency()),
+          over: fy.plannedSaved < 0,
+        }
+      : null;
   });
   protected readonly selectedColumn = computed(
     () => this.columns().find((column) => column.period.key === this.selected()?.key) ?? null,
   );
 
   // The totals table: the row labels, then equal month columns (scrolls sideways below that width).
-  protected readonly labelWidth = 112;
+  protected readonly labelWidth = 168;
   protected readonly columnWidth = 72;
 
   // Phones can fold the totals to one line.

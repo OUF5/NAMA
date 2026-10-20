@@ -9,7 +9,9 @@ export interface SetupDraft {
   salary: string;
   // from and to are month keys of the first FY; to is '' for Once and for no end (R-INC-03).
   additional: { label: string; amount: string; type: 'once' | 'monthly'; from: string; to: string }[];
-  bankAccounts: string[];
+  // R-BAL-01, R-BAL-02: the balance today and the share of income, as typed. Drafts saved before
+  // 20 Oct 2026 hold names only.
+  bankAccounts: { name: string; balance: string; share: string }[];
   categories: string[];
 }
 

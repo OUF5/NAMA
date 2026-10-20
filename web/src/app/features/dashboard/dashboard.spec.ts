@@ -66,19 +66,24 @@ const me: Me = {
   lastDate: '2027-01-26',
 };
 
+// The API hand check, carried (R-PLN-05): Jan to Jul leave 1,500 each, Aug leaves 11,950 and Sep 12,550.01.
 function months(statuses = 'CCCCCCCCIYYY'): MonthOverview[] {
   const status = { C: 'closed', I: 'inProgress', Y: 'yetToCome' } as const;
+  let carried = 0;
   return periods.map((period, i) => {
     const income = i === 8 ? 17500.25 : 17000;
     const planned = i >= 8 ? 1900 : 1500;
     const spent = i === 7 ? 50 : i === 8 ? 1299.99 : 0;
+    const carriedIn = carried / 100;
+    carried += Math.round(planned * 100) - Math.round(spent * 100);
     return {
       period,
       status: status[statuses[i] as keyof typeof status],
       income,
+      carriedIn,
       planned,
       spent,
-      remaining: Math.round((planned - spent) * 100) / 100,
+      remaining: carried / 100,
     };
   });
 }
@@ -98,9 +103,10 @@ function overview(statuses?: string): OverviewResponse {
         subCategories: [],
       },
     ],
-    totals: { income: 204500.25, planned: 19600, spent: 1349.99, remaining: 18250.01 },
-    toDate: { income: 153500.25, spent: 1349.99, saved: 152150.26 },
+    totals: { income: 204500.25, planned: 19600, spent: 1349.99, remaining: 18250.01, plannedSaved: 184900.25 },
+    toDate: { income: 153500.25, spent: 1349.99, saved: 152150.26, plannedSaved: 139600.25 },
     rollover: null,
+    carryFromPeriodKey: '2026-01',
   };
 }
 
@@ -195,21 +201,23 @@ describe('Dashboard (PRD 5.9)', () => {
     expect(root().querySelector('app-rollover-banner')).toBeNull();
   });
 
-  // DSH-01: label and dates, income, planned, spent, remaining, progress bar.
+  // DSH-01: label and dates, remaining (carried, R-PLN-05), what carried in, planned, spent, income,
+  // and the bar of spent against what was available (11,950 + 1,900).
   it('shows the current month with its numbers and bar', async () => {
     await open();
 
     const card = root().querySelector('.current')!;
     expect(text(card.querySelector('.card-head'))).toBe('Sep 2026 27 Sep to 26 Oct In progress');
     expect(Array.from(card.querySelectorAll('.kpi')).map((kpi) => text(kpi))).toEqual([
-      'Remaining SAR 600.01',
-      'Income SAR 17,500.25',
+      'Remaining SAR 12,550.01',
+      'From last month SAR 11,950',
       'Planned SAR 1,900',
       'Spent SAR 1,299.99',
+      'Income SAR 17,500.25',
     ]);
     expect(card.querySelector('mat-progress-bar')!.getAttribute('aria-valuenow')).toBe(
-      String((129999 * 100) / 190000),
-    ); // 68%
+      String((129999 * 100) / 1385000),
+    ); // 9%
     expect(text(card.querySelector('.bar-line .chip'))).toBe('Within plan');
   });
 
@@ -225,14 +233,25 @@ describe('Dashboard (PRD 5.9)', () => {
       'Income SAR 153,500.25',
       'Spent SAR 1,349.99',
       'Saved SAR 152,150.26',
+      // R-PLN-03: Sep's Unassigned. Saved is 152,150.26 - 139,600.25 more, in words.
+      'Planned saved SAR 139,600.25 Saved SAR 12,550.01 more',
     ]);
+    expect(text(card.querySelector('.fy-saved'))).toBe('Planned saved by the end of FY 2026 SAR 184,900.25');
     expect(card.querySelector('.danger')).toBeNull();
+  });
+
+  // R-PLN-06: set up in Sep 2026, so to date starts there.
+  it('counts to date from the month NAMA was set up', async () => {
+    await open({ ...overview(), carryFromPeriodKey: '2026-09' });
+
+    const card = root().querySelector('[aria-labelledby="to-date-title"]')!;
+    expect(text(card.querySelector('.card-head'))).toBe('FY 2026 to date Sep 2026 · 1 of 12 months');
   });
 
   // UX-07: a negative saved has a text label, not only a color.
   it('says when more was spent than earned', async () => {
     const data = overview();
-    data.toDate = { income: 153500.25, spent: 201349.99, saved: -47849.74 };
+    data.toDate = { income: 153500.25, spent: 201349.99, saved: -47849.74, plannedSaved: 139600.25 };
     await open(data);
 
     const saved = root().querySelector('.saved')!;
@@ -242,9 +261,10 @@ describe('Dashboard (PRD 5.9)', () => {
 
   // DSH-03: a column chart, one Planned and one Spent column per month, on one scale (the largest
   // value, 1,900). The month in progress is written out under the chart; a tap picks another month.
+  // R-PLN-05: the status counts what carried in, so Aug here carries nothing in and goes over.
   it('shows planned vs spent per month as a column chart', async () => {
     const data = overview();
-    data.months[7] = { ...data.months[7], spent: 1600, remaining: -100 };
+    data.months[7] = { ...data.months[7], carriedIn: 0, spent: 1600, remaining: -100 };
     await open(data);
 
     const chart = root().querySelector('app-month-bars')!;
@@ -265,7 +285,7 @@ describe('Dashboard (PRD 5.9)', () => {
     );
     expect(cols[8].getAttribute('aria-pressed')).toBe('true');
     expect(text(chart.querySelector('.detail'))).toBe(
-      'Sep 2026 In progress Within plan Planned SAR 1,900 · Spent SAR 1,299.99',
+      'Sep 2026 In progress Within plan Planned SAR 1,900 · Spent SAR 1,299.99 · From last month SAR 11,950',
     );
     expect(text(chart.querySelector('.over'))).toBe('Over plan: Aug 2026 (Over by SAR 100)');
 

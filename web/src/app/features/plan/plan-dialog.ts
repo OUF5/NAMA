@@ -32,8 +32,8 @@ function minorOf(text: string): number | null {
 
 // PLN-01, PLN-02, PLN-04: the 12 month amounts of one sub-category, labeled with the stored months and
 // their dates, with "Same amount for all months" and "Copy from previous month". Owner's choice (M8):
-// it is a dialog, and each month shows "Unassigned after" while you type, so the effect is seen before
-// saving. That preview is the only sum made in the browser, in exact minor units; the saved numbers
+// it is a dialog, and each month shows "Unassigned after" while you type (carried, so a change shows
+// in every later month), so the effect is seen before saving. That preview is the only sum made in the browser, in exact minor units; the saved numbers
 // come from the API. Closes with the new plans.
 @Component({
   selector: 'app-plan-dialog',
@@ -63,15 +63,23 @@ export class PlanDialog {
 
   private readonly values = toSignal(this.months.valueChanges, { initialValue: this.months.getRawValue() });
 
-  // "Unassigned after" per month: the month's unassigned income minus the change of this amount.
+  // "Unassigned after" per month. Unassigned carries (R-PLN-03), so a change in one month moves that
+  // month and every later one: each month's saved Unassigned minus the changes made up to it.
   protected readonly after = computed(() => {
-    const unplanned = new Map(this.data.plans.totals.map((row) => [row.periodKey, toMinor(row.unplanned)]));
+    const unassigned = new Map(this.data.plans.totals.map((row) => [row.periodKey, toMinor(row.unassigned)]));
+    let change = 0;
+    let valid = true;
     return this.periods.map((period, i) => {
       const typed = minorOf(this.values()[i] ?? '');
       if (typed === null) {
+        valid = false;
+      } else {
+        change += typed - toMinor(this.saved[period.key] ?? 0);
+      }
+      if (!valid) {
         return null;
       }
-      const minor = (unplanned.get(period.key) ?? 0) - (typed - toMinor(this.saved[period.key] ?? 0));
+      const minor = (unassigned.get(period.key) ?? 0) - change;
       return { text: formatMoney(minor, this.data.currency), over: minor < 0 };
     });
   });

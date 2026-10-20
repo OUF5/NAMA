@@ -23,7 +23,7 @@ public sealed class SetupRequest : IValidatableObject
     public decimal? Salary { get; init; }
 
     public List<AdditionalIncomeRequest>? AdditionalIncome { get; init; }
-    public List<string?>? BankAccounts { get; init; }
+    public List<BankAccountSetupRequest>? BankAccounts { get; init; }
     public List<string?>? Categories { get; init; }
 
     // SET-01, PRD 4.7, R-MON-02. Everything that the attributes above cannot express.
@@ -81,9 +81,28 @@ public sealed class SetupRequest : IValidatableObject
             }
         }
 
-        foreach (var error in ValidateNames(nameof(BankAccounts), "bank account", BankAccounts))
+        var accounts = BankAccounts ?? [];
+        foreach (var error in ValidateNames(nameof(BankAccounts), "bank account", accounts.Select(account => account.Name).ToList()))
         {
             yield return error;
+        }
+        // R-BAL-01, R-BAL-02: each account's balance today and its share of income, together 100%.
+        for (var i = 0; i < accounts.Count; i++)
+        {
+            if (accounts[i].OpeningBalance is not { } balance || !Money.IsValidBalance(balance))
+            {
+                yield return Error($"{nameof(BankAccounts)}[{i}].{nameof(BankAccountSetupRequest.OpeningBalance)}",
+                    "Balance is -10,000,000 to 10,000,000 with at most 2 decimals.");
+            }
+            if (accounts[i].Share is not { } share || !Money.IsValidPercent(share))
+            {
+                yield return Error($"{nameof(BankAccounts)}[{i}].{nameof(BankAccountSetupRequest.Share)}", "A share is 0 to 100 with at most 2 decimals.");
+            }
+        }
+        if (accounts.Count > 0 && accounts.All(account => account.Share is { } share && Money.IsValidPercent(share))
+            && accounts.Sum(account => account.Share!.Value) != 100)
+        {
+            yield return Error(nameof(BankAccounts), "The shares of income add up to exactly 100%.");
         }
         foreach (var error in ValidateNames(nameof(Categories), "category", Categories))
         {
@@ -112,6 +131,15 @@ public sealed class SetupRequest : IValidatableObject
     }
 
     private static ValidationResult Error(string member, string message) => new(message, [member]);
+}
+
+// R-BAL-01: OpeningBalance is the balance today (the setup day). R-BAL-02: Share is the percent of
+// income the account gets.
+public sealed class BankAccountSetupRequest
+{
+    public string? Name { get; init; }
+    public decimal? OpeningBalance { get; init; }
+    public decimal? Share { get; init; }
 }
 
 // R-INC-03: Once is one month (ToPeriodKey is ignored); Monthly runs from a month, optionally

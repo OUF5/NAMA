@@ -1,0 +1,404 @@
+// PRD 5.11 Banks, docs/DESIGN.md "Banks". Section cards, tokens only. The page has no filled button;
+// each dialog's Save is the one.
+.page-head,
+.card-head,
+.account-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.page-head {
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+
+  h1 {
+    margin: 0;
+  }
+}
+
+.head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status {
+  min-height: 24px;
+  margin: 0 0 8px;
+  color: var(--text-2);
+}
+
+.card {
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.card-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+
+  h2 {
+    margin: 0;
+  }
+}
+
+h2 .caption {
+  margin-left: 8px;
+  font-weight: 400;
+}
+
+.caption.line {
+  display: block;
+}
+
+.note,
+.error {
+  margin: 0;
+}
+
+.note {
+  padding: 12px 0;
+  color: var(--text-2);
+}
+
+.error {
+  color: var(--danger);
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.kpi {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.33;
+}
+
+// BNK-05: like the FY-01 banner, a 2px border marks it; its actions are outlined.
+.setup {
+  border: 2px solid var(--primary-text);
+
+  p {
+    margin: 8px 0;
+    color: var(--text-2);
+  }
+}
+
+.setup-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  h2 {
+    margin: 0;
+  }
+
+  mat-icon {
+    color: var(--text-2);
+  }
+}
+
+.setup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 44px;
+    border-bottom: 1px solid var(--divider);
+  }
+
+  > button {
+    align-self: flex-start;
+  }
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  .how {
+    margin: 8px 0 0;
+  }
+}
+
+// BNK-02: account cards side by side on wide screens.
+.accounts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0;
+  }
+}
+
+.account-head {
+  h2 {
+    overflow: hidden;
+    margin: 0;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .icons {
+    flex: none;
+    display: flex;
+  }
+}
+
+// How the balance adds up, read top to bottom like Plan's totals.
+.breakdown {
+  margin: 12px 0 0;
+
+  div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 32px;
+    align-items: center;
+    border-bottom: 1px solid var(--divider);
+  }
+
+  dt {
+    color: var(--text-2);
+  }
+
+  dd {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .result {
+    border-bottom: 0;
+    font-weight: 600;
+
+    dt {
+      color: var(--text);
+    }
+  }
+}
+
+.op {
+  display: inline-block;
+  width: 16px;
+  color: var(--text-muted);
+}
+
+.set {
+  align-self: flex-start;
+  margin-top: 8px;
+}
+
+.expenses {
+  align-self: flex-start;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+// BNK-03: one row per account with a bar for its share.
+.split {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: minmax(0, 160px) minmax(0, 1fr) 64px minmax(0, 140px);
+    align-items: center;
+    gap: 12px;
+    min-height: 44px;
+    border-bottom: 1px solid var(--divider);
+  }
+
+  .name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .percent,
+  .amount {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  + .caption {
+    margin: 12px 0 0;
+  }
+}
+
+// docs/DESIGN.md progress bars: 8px, the track, fully rounded. Neutral: a share is no status.
+.bar {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  background: var(--track);
+  border-radius: 4px;
+
+  span {
+    display: block;
+    height: 100%;
+    background: var(--text-2);
+    border-radius: 4px;
+  }
+}
+
+.history {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    padding: 4px 0;
+  }
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--divider);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  .name {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.transfer {
+  .day {
+    flex: none;
+    width: 48px;
+  }
+
+  .year {
+    display: block;
+  }
+
+  .money {
+    white-space: nowrap;
+  }
+}
+
+.arrow {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+  vertical-align: -3px;
+  color: var(--text-muted);
+}
+
+// Folds (docs/DESIGN.md "Folds").
+.fold {
+  margin: 0 0 16px;
+}
+
+.card .fold {
+  margin: 8px 0 0;
+}
+
+.chevron {
+  flex: none;
+  transition: transform 0.15s;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .card {
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .accounts {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .kpi {
+    font-size: 28px;
+  }
+
+  .total .kpi {
+    font-size: 28px;
+  }
+
+  .head-actions {
+    width: 100%;
+
+    > * {
+      flex: 1;
+      height: 44px;
+    }
+  }
+
+  // Name and amount on the first line, the bar and the percent under it.
+  .split li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name amount'
+      'bar percent';
+    gap: 4px 12px;
+    padding: 8px 0;
+  }
+
+  .split .name {
+    grid-area: name;
+  }
+
+  .split .amount {
+    grid-area: amount;
+  }
+
+  .split .bar {
+    grid-area: bar;
+  }
+
+  .split .percent {
+    grid-area: percent;
+  }
+}

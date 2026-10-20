@@ -5,8 +5,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TestbedHarnessEnvironment } from '@angular/cdk/testing/testbed';
 import { MatFormFieldHarness } from '@angular/material/form-field/testing';
 import { MatSelectHarness } from '@angular/material/select/testing';
-import { provideRouter } from '@angular/router';
+import { Router, provideRouter } from '@angular/router';
 import { Me, MeService } from '../../core/me';
+import { Summary, SummaryService } from '../../core/summary';
 import { Category } from '../plan/plan-api';
 import { AddEntry } from './add-entry';
 import { BankAccount, Indicator } from './entry-api';
@@ -51,7 +52,15 @@ const accounts: BankAccount[] = [
   { id: 'snb', name: 'SNB', archived: false },
 ];
 
-const indicator: Indicator = { period: sep, planned: 1500, spent: 1199.99, remaining: 300.01, percent: 79 };
+const indicator: Indicator = {
+  period: sep,
+  carriedIn: 0,
+  planned: 1500,
+  available: 1500,
+  spent: 1199.99,
+  remaining: 300.01,
+  percent: 79,
+};
 
 describe('Add entry (PRD 5.4)', () => {
   let http: HttpTestingController;
@@ -268,7 +277,7 @@ describe('Add entry (PRD 5.4)', () => {
   });
 
   // UX-03: without an active bank account the page says where to add or restore one.
-  it('links to the bank accounts in Settings when no account is active', async () => {
+  it('links to Banks when no account is active', async () => {
     configure(meWith(null));
     const fixture = TestBed.createComponent(AddEntry);
     (await vi.waitFor(() => http.expectOne('/api/categories'))).flush(categories);
@@ -278,7 +287,7 @@ describe('Add entry (PRD 5.4)', () => {
     const root = fixture.nativeElement as HTMLElement;
 
     expect(root.querySelector('.empty h2')?.textContent?.trim()).toBe('No bank account');
-    expect(root.querySelector('.empty a')?.getAttribute('href')).toBe('/settings/bank-accounts');
+    expect(root.querySelector('.empty a')?.getAttribute('href')).toBe('/banks');
     expect(root.querySelector('form')).toBeNull();
   });
 
@@ -299,5 +308,153 @@ describe('Add entry (PRD 5.4)', () => {
 
     expect(root.textContent).toContain('Date is outside every fiscal year.');
     expect(root.querySelector('.saved')?.textContent?.trim()).toBe('');
+  });
+});
+
+// TRF-01: the same page adds a transfer between two of your accounts (?type=transfer).
+describe('Add transfer (PRD 5.4, TRF-01)', () => {
+  let http: HttpTestingController;
+  // R-BAL-03 balances from the top bar's summary.
+  const summary: Summary = {
+    balance: 28000,
+    complete: true,
+    accounts: [
+      { id: 'rajhi', name: 'Al Rajhi', balance: 4100 },
+      { id: 'snb', name: 'SNB', balance: 23900 },
+    ],
+    month: null,
+  };
+
+  async function open(url = '/?type=transfer', bankAccounts = accounts): Promise<ComponentFixture<AddEntry>> {
+    const me = meWith(null);
+    TestBed.configureTestingModule({
+      imports: [AddEntry],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: MeService, useValue: { me: signal(me), load: async () => me, setLastBankAccount: vi.fn() } },
+        { provide: SummaryService, useValue: { summary: signal(summary) } },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    await TestBed.inject(Router).navigateByUrl(url);
+    const fixture = TestBed.createComponent(AddEntry);
+    (await vi.waitFor(() => http.expectOne('/api/categories'))).flush(categories);
+    (await vi.waitFor(() => http.expectOne('/api/bank-accounts'))).flush(bankAccounts);
+    await settle(fixture);
+    return fixture;
+  }
+
+  async function settle(fixture: ComponentFixture<AddEntry>): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve));
+    await fixture.whenStable();
+  }
+
+  async function select(fixture: ComponentFixture<AddEntry>, label: string): Promise<MatSelectHarness> {
+    const field = await TestbedHarnessEnvironment.loader(fixture).getHarness(MatFormFieldHarness.with({ floatingLabelText: label }));
+    return (await field.getControl(MatSelectHarness))!;
+  }
+
+  function type(fixture: ComponentFixture<AddEntry>, label: string, value: string): void {
+    const input = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('input')).find(
+      (el) => el.closest('mat-form-field')?.querySelector('mat-label')?.textContent?.trim() === label,
+    )!;
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+  }
+
+  // Every text node, joined with spaces (Angular drops the whitespace between sibling elements).
+  function words(el: Element | null): string {
+    if (!el) {
+      return '';
+    }
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const parts: string[] = [];
+    while (walker.nextNode()) {
+      parts.push(walker.currentNode.textContent ?? '');
+    }
+    return parts.join(' ').replace(/\s+/g, ' ').trim();
+  }
+
+  it('moves money between two accounts, with both balances before and after', async () => {
+    const fixture = await open();
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(words(root.querySelector('h1'))).toBe('Add transfer');
+    expect(await (await select(fixture, 'From account')).getValueText()).toBe('Al Rajhi');
+    expect(await (await select(fixture, 'To account')).getValueText()).toBe('SNB');
+    expect(Array.from(root.querySelectorAll('.balance-line')).map(words)).toEqual([
+      'From Al Rajhi SAR 4,100',
+      'To SNB SAR 23,900',
+    ]);
+
+    type(fixture, 'Amount (SAR)', '500');
+    type(fixture, 'Note (optional)', ' Savings ');
+    await settle(fixture);
+    expect(Array.from(root.querySelectorAll('.balance-line')).map(words)).toEqual([
+      'From Al Rajhi SAR 4,100 arrow_forward SAR 3,600',
+      'To SNB SAR 23,900 arrow_forward SAR 24,400',
+    ]);
+
+    (root.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    const post = await vi.waitFor(() => http.expectOne('/api/transfers'));
+    expect(post.request.method).toBe('POST');
+    expect(post.request.body).toEqual({
+      fromBankAccountId: 'rajhi',
+      toBankAccountId: 'snb',
+      date: '2026-10-17',
+      amount: 500,
+      note: 'Savings',
+    });
+    post.flush({ ...post.request.body, id: 't1', periodKey: '2026-09', fyId: '2026-01' });
+    await settle(fixture);
+
+    expect(words(root.querySelector('.saved'))).toBe('check_circle Moved SAR 500 from Al Rajhi to SNB');
+    // Amount and note clear; the accounts and the date stay (as ENT-02).
+    expect(await (await select(fixture, 'From account')).getValueText()).toBe('Al Rajhi');
+    http.verify();
+  });
+
+  it('swaps the accounts and refuses the same account twice', async () => {
+    const fixture = await open();
+    const root = fixture.nativeElement as HTMLElement;
+
+    (root.querySelector('button.swap') as HTMLButtonElement).click();
+    await settle(fixture);
+    expect(await (await select(fixture, 'From account')).getValueText()).toBe('SNB');
+    expect(await (await select(fixture, 'To account')).getValueText()).toBe('Al Rajhi');
+
+    await (await select(fixture, 'To account')).clickOptions({ text: 'SNB' });
+    type(fixture, 'Amount (SAR)', '10');
+    (root.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    await settle(fixture);
+
+    expect(root.textContent).toContain('Pick two different accounts.');
+    http.expectNone('/api/transfers');
+  });
+
+  // UX-03: one active account cannot make a transfer.
+  it('needs two active accounts', async () => {
+    const fixture = await open('/?type=transfer', [accounts[0], accounts[1]]);
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(words(root.querySelector('.empty h2'))).toBe('A transfer needs two accounts');
+    expect(root.querySelector('.empty a')?.getAttribute('href')).toBe('/banks');
+  });
+
+  // Expense is the default; the toggle switches and the URL keeps it.
+  it('switches between expense and transfer', async () => {
+    const fixture = await open('/');
+    const root = fixture.nativeElement as HTMLElement;
+    expect(words(root.querySelector('h1'))).toBe('Add expense');
+
+    const toggles = Array.from(root.querySelectorAll<HTMLButtonElement>('mat-button-toggle button'));
+    expect(toggles.map(words)).toEqual(['Expense', 'Transfer']);
+    toggles[1].click();
+    await settle(fixture);
+
+    expect(TestBed.inject(Router).url).toBe('/?type=transfer');
+    expect(words(root.querySelector('h1'))).toBe('Add transfer');
   });
 });

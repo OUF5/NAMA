@@ -2,7 +2,6 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Me, Profile } from '../../core/me';
-import { BankAccount } from '../add-entry/entry-api';
 import { Category, FiscalYear, SubCategory } from '../plan/plan-api';
 
 // PRD 5.7 Settings. Amounts are decimals in JSON (R-MON-01); every sum comes from the API.
@@ -71,7 +70,6 @@ export interface SettingsResponse {
   profile: Profile;
   calendar: Calendar;
   income: Income;
-  bankAccounts: BankAccount[];
   categories: Category[];
   people: People | null;
 }
@@ -129,15 +127,7 @@ export class SettingsApi {
     return firstValueFrom(this.http.delete<Income>(`/api/income/additional/${id}`));
   }
 
-  addBankAccount(name: string): Promise<BankAccount> {
-    return firstValueFrom(this.http.post<BankAccount>('/api/bank-accounts', { name }));
-  }
-
-  // Rename, archive and restore (STG-04, STG-05). There is no delete (PRD 4.6).
-  updateBankAccount(id: string, name: string, archived: boolean): Promise<BankAccount> {
-    return firstValueFrom(this.http.put<BankAccount>(`/api/bank-accounts/${id}`, { name, archived }));
-  }
-
+  // Rename, archive and restore (STG-05). There is no delete (PRD 4.6).
   updateCategory(id: string, name: string, archived: boolean): Promise<Category> {
     return firstValueFrom(this.http.put<Category>(`/api/categories/${id}`, { name, archived }));
   }

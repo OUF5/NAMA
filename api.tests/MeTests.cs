@@ -26,7 +26,7 @@ public class MeTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var sub = "user-" + Guid.NewGuid().ToString("N");
         var profile = new UserProfile("Owner", ApiFactory.AllowedEmail, "Home budget", "SAR", "Asia/Riyadh", 1, 27, true, null);
         var fiscalYear = FiscalCalendar.FirstFiscalYear(new DateOnly(2026, 10, 17), 1, 27);
-        await factory.Store.CreateSetupAsync(sub, new SetupData(profile, fiscalYear, [], [], []));
+        await factory.Store.CreateSetupAsync(sub, new SetupData(profile, fiscalYear, [], [], [], new IncomeSplit(fiscalYear.Id, new Dictionary<string, int>())));
         return sub;
     }
 

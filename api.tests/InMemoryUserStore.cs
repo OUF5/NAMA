@@ -21,6 +21,10 @@ public sealed class InMemoryUserStore : IUserStore
         public List<SubCategory> SubCategories { get; } = [];
         // Key: {fyId}_{subCategoryId}, as in Firestore (PRD 7.4).
         public Dictionary<string, (string FyId, PlanAmounts Plan)> Plans { get; } = [];
+        // Key: fromPeriodKey, as in Firestore (R-BAL-02).
+        public Dictionary<string, IncomeSplit> IncomeSplits { get; } = new() { [setup.IncomeSplit.FromPeriodKey] = setup.IncomeSplit };
+        // In the order added, which stands in for createdAt.
+        public List<Transfer> Transfers { get; } = [];
     }
 
     private readonly ConcurrentDictionary<string, UserData> _users = new();
@@ -69,8 +73,17 @@ public sealed class InMemoryUserStore : IUserStore
         data.Profile = data.Profile with { LastBankAccountId = entry.BankAccountId };
     });
 
-    public Task<IReadOnlyList<Entry>> GetEntriesAsync(string uid, string subCategoryId, string periodKey) =>
-        Read<Entry>(uid, data => data.Entries.Where(entry => entry.SubCategoryId == subCategoryId && entry.PeriodKey == periodKey));
+    public Task<IReadOnlyList<Entry>> GetSubCategoryEntriesAsync(string uid, string subCategoryId, string fyId) =>
+        Read<Entry>(uid, data => data.Entries.Where(entry => entry.SubCategoryId == subCategoryId && entry.FyId == fyId));
+
+    // How many times balances read the entries (the top bar's cost, R-BAL-03).
+    public int EntriesFromReads { get; private set; }
+
+    public Task<IReadOnlyList<Entry>> GetEntriesFromAsync(string uid, DateOnly from)
+    {
+        EntriesFromReads++;
+        return Read<Entry>(uid, data => data.Entries.Where(entry => entry.Date >= from));
+    }
 
     public async Task<Entry?> GetEntryAsync(string uid, string id) =>
         (await Read<Entry>(uid, data => data.Entries.Where(entry => entry.Id == id))).SingleOrDefault();
@@ -148,6 +161,40 @@ public sealed class InMemoryUserStore : IUserStore
 
     public Task<bool> UpdateBankAccountAsync(string uid, BankAccount account) =>
         Change(uid, data => Replace(data.BankAccounts, account, item => item.Id == account.Id));
+
+    public Task<IReadOnlyList<IncomeSplit>> GetIncomeSplitsAsync(string uid) =>
+        Read<IncomeSplit>(uid, data => data.IncomeSplits.Values);
+
+    // Removes all splits from a month on, as a test setup can need.
+    public Task ClearIncomeSplits(string uid) => Write(uid, data => data.IncomeSplits.Clear());
+
+    public Task SetIncomeSplitAsync(string uid, IncomeSplit split, IReadOnlyList<string> replacedFromKeys) => Write(uid, data =>
+    {
+        foreach (var key in replacedFromKeys)
+        {
+            data.IncomeSplits.Remove(key);
+        }
+        data.IncomeSplits[split.FromPeriodKey] = split;
+    });
+
+    // Newest first; Transfers keeps the order they were added in, which stands in for createdAt.
+    public Task<IReadOnlyList<Transfer>> GetTransfersAsync(string uid) =>
+        Read<Transfer>(uid, data => data.Transfers
+            .Select((transfer, added) => (transfer, added))
+            .OrderByDescending(item => item.transfer.Date)
+            .ThenByDescending(item => item.added)
+            .Select(item => item.transfer));
+
+    public async Task<Transfer?> GetTransferAsync(string uid, string id) =>
+        (await Read<Transfer>(uid, data => data.Transfers.Where(transfer => transfer.Id == id))).SingleOrDefault();
+
+    public Task AddTransferAsync(string uid, Transfer transfer) => Write(uid, data => data.Transfers.Add(transfer));
+
+    public Task<bool> UpdateTransferAsync(string uid, Transfer transfer) =>
+        Change(uid, data => Replace(data.Transfers, transfer, item => item.Id == transfer.Id));
+
+    public Task<bool> DeleteTransferAsync(string uid, string id) =>
+        Change(uid, data => data.Transfers.RemoveAll(transfer => transfer.Id == id) > 0);
 
     public Task<bool> UpdateCategoryAsync(string uid, Category category) =>
         Change(uid, data => Replace(data.Categories, category, item => item.Id == category.Id));

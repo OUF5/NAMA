@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MeService } from '../../core/me';
+import { SummaryService } from '../../core/summary';
 import { formatMoney, toMinor } from '../../shared/money';
 import { formatDate, formatDay } from '../../shared/month-label';
 import { MonthSummary } from '../../shared/month-summary';
@@ -12,7 +13,8 @@ import { MonthBars } from './month-bars';
 
 // PRD 5.9 Dashboard preview (DSH-01 to DSH-03) and the FY-01 banner. It shows the FY that contains
 // today, else the latest; there is no FY selector. One call: the overview (NFR-01), plus
-// GET /api/fiscal-years only when no FY contains today. The API makes every sum (R-MON-01).
+// GET /api/fiscal-years only when no FY contains today. The bank balances come from the top bar's
+// summary (UX-08), so they cost no call. The API makes every sum (R-MON-01).
 @Component({
   selector: 'app-dashboard',
   imports: [RouterLink, MonthBars, MonthSummary, RolloverBanner],
@@ -23,6 +25,7 @@ export class Dashboard {
   private readonly overviewApi = inject(OverviewApi);
   private readonly planApi = inject(PlanApi);
   private readonly meService = inject(MeService);
+  private readonly summaryService = inject(SummaryService);
 
   protected readonly formatDate = formatDate;
   protected readonly inProgressLabel = STATUS_LABELS.inProgress;
@@ -60,10 +63,13 @@ export class Dashboard {
     return `${fiscalYear.label} starts on ${formatDate(fiscalYear.startDate)}.`;
   });
 
-  // DSH-02 "to date" (owner's choice, M9): the months that started (Closed and In progress).
+  // DSH-02 "to date" (owner's choice, M9): the months that started (Closed and In progress), from the
+  // first month that carries (R-PLN-06: months before NAMA was set up were never tracked).
   protected readonly toDateRange = computed(() => {
-    const months = this.data()?.months ?? [];
-    const started = months.filter((m) => m.status !== 'yetToCome');
+    const data = this.data();
+    const months = data?.months ?? [];
+    const from = Math.max(0, months.findIndex((m) => m.period.key === data?.carryFromPeriodKey));
+    const started = months.slice(from).filter((m) => m.status !== 'yetToCome');
     if (started.length === 0) {
       return 'No month has started yet';
     }
@@ -75,15 +81,46 @@ export class Dashboard {
   });
 
   protected readonly toDate = computed(() => {
-    const toDate = this.data()?.toDate;
-    return toDate
-      ? {
-          income: this.money(toDate.income),
-          spent: this.money(toDate.spent),
-          saved: this.money(toDate.saved),
-          negative: toDate.saved < 0,
-        }
-      : null;
+    const data = this.data();
+    const toDate = data?.toDate;
+    if (!toDate) {
+      return null;
+    }
+    const ahead = toMinor(toDate.saved) - toMinor(toDate.plannedSaved);
+    return {
+      income: this.money(toDate.income),
+      spent: this.money(toDate.spent),
+      saved: this.money(toDate.saved),
+      negative: toDate.saved < 0,
+      plannedSaved: this.money(toDate.plannedSaved),
+      plannedNegative: toDate.plannedSaved < 0,
+      // How saved compares with the plan, in words (color is never the only signal).
+      versus:
+        ahead === 0
+          ? 'Saved matches the plan'
+          : ahead > 0
+            ? `Saved ${formatMoney(ahead, this.currency())} more`
+            : `Saved ${formatMoney(-ahead, this.currency())} less`,
+      fyPlannedSaved: data.totals.plannedSaved === null ? null : this.money(data.totals.plannedSaved),
+    };
+  });
+
+  // R-BAL-03, from the top bar's summary.
+  protected readonly banks = computed(() => {
+    const summary = this.summaryService.summary();
+    if (!summary) {
+      return null;
+    }
+    return {
+      total: summary.balance === null ? null : this.money(summary.balance),
+      negative: (summary.balance ?? 0) < 0,
+      accounts: summary.accounts.map((account) => ({
+        id: account.id,
+        name: account.name,
+        balance: account.balance === null ? null : this.money(account.balance),
+        negative: (account.balance ?? 0) < 0,
+      })),
+    };
   });
 
   constructor() {

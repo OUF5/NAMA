@@ -79,6 +79,57 @@ h2 {
   }
 }
 
+// Step 4: name, balance today, share of income, remove.
+.accounts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 180px 140px auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--divider);
+  }
+
+  + .caption {
+    margin: 8px 0 0;
+  }
+}
+
+.account-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 767.98px) {
+  .accounts li {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas:
+      'name name remove'
+      'balance share share';
+
+    .account-name {
+      grid-area: name;
+    }
+
+    mat-form-field {
+      grid-area: balance;
+    }
+
+    .share {
+      grid-area: share;
+    }
+
+    button {
+      grid-area: remove;
+    }
+  }
+}
+
 .names {
   margin: 0;
   padding: 0;

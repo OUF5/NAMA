@@ -1,4 +1,5 @@
 using Api.Features.BankAccounts;
+using Api.Features.Banks;
 using Api.Features.Categories;
 using Api.Features.Entries;
 using Api.Features.FiscalYears;
@@ -10,6 +11,8 @@ using Api.Features.Plans;
 using Api.Features.Profile;
 using Api.Features.Settings;
 using Api.Features.Setup;
+using Api.Features.Summary;
+using Api.Features.Transfers;
 using Api.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -69,6 +72,9 @@ api.MapFiscalYears();
 api.MapCategories();
 api.MapPlans();
 api.MapBankAccounts();
+api.MapBanks();
+api.MapTransfers();
+api.MapSummary();
 api.MapIncome();
 api.MapEntries();
 api.MapIndicator();

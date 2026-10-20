@@ -36,7 +36,8 @@ public class SettingsTests(ApiFactory factory) : IClassFixture<ApiFactory>
             (calendar["fiscalStartMonth"]!.GetValue<int>(), calendar["paydayDay"]!.GetValue<int>(),
                 calendar["takesEffectFrom"]!.GetValue<string>(), calendar["nextFiscalYear"]!["label"]!.GetValue<string>()));
         Assert.Equal(15_000m, settings["income"]!["currentTotal"]!.GetValue<decimal>());
-        Assert.Equal(["Al Rajhi", "SNB"], settings["bankAccounts"]!.AsArray().Select(a => a!["name"]!.GetValue<string>()));
+        // Bank accounts live on Banks (BNK-02).
+        Assert.False(settings.AsObject().ContainsKey("bankAccounts"));
         Assert.Equal(["Food", "Transport"], settings["categories"]!.AsArray().Select(c => c!["name"]!.GetValue<string>()));
     }
 

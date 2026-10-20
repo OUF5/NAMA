@@ -41,6 +41,62 @@ export function formatAmount(minor: number): string {
   });
 }
 
+// R-BAL-01: an opening balance may be 0 or negative (an overdraft or a card), at most 10,000,000
+// either way. Returns minor units, or null when the text is not a valid balance.
+export function parseBalance(text: string | null | undefined): number | null {
+  const value = (text ?? '').trim();
+  const negative = value.startsWith('-');
+  const minor = parseAmount(negative ? value.slice(1) : value, true);
+  return minor === null ? null : negative ? -minor : minor;
+}
+
+export function balanceValidator(): ValidatorFn {
+  return (control: AbstractControl): ValidationErrors | null => (parseBalance(control.value) === null ? { balance: true } : null);
+}
+
+// R-BAL-02: a share of income, 0 to 100 with at most 2 decimals, in basis points (80.5% is 8050).
+export function parsePercent(text: string | null | undefined): number | null {
+  const value = (text ?? '').trim();
+  if (!AMOUNT.test(value)) {
+    return null;
+  }
+  const [whole, fraction = ''] = value.split('.');
+  const basisPoints = Number(whole) * 100 + Number(fraction.padEnd(2, '0'));
+  return basisPoints > 10_000 ? null : basisPoints;
+}
+
+export function percentValidator(): ValidatorFn {
+  return (control: AbstractControl): ValidationErrors | null => (parsePercent(control.value) === null ? { percent: true } : null);
+}
+
+// API percents are decimals (80, 33.33).
+export function toBasisPoints(percent: number): number {
+  return Math.round(percent * 100);
+}
+
+// "80%", "33.33%"
+export function formatPercent(basisPoints: number): string {
+  const decimals = basisPoints % 100 === 0 ? 0 : 2;
+  return `${(basisPoints / 100).toFixed(decimals)}%`;
+}
+
+// R-BAL-02, the same rule as BalanceCalculator.Distribute in the API, for the split dialog's preview
+// only: each share rounded down, and the minor units left go to the largest share (the first account
+// id on a tie). The saved amounts come from the API.
+export function distribute(amountMinor: number, shares: Record<string, number>): Record<string, number> {
+  const parts = Object.entries(shares).filter(([, share]) => share > 0);
+  if (parts.length === 0) {
+    return {};
+  }
+  const result: Record<string, number> = {};
+  for (const [id, share] of parts) {
+    result[id] = Math.floor((amountMinor * share) / 10_000);
+  }
+  const [largest] = [...parts].sort(([a, x], [b, y]) => y - x || (a < b ? -1 : a > b ? 1 : 0))[0];
+  result[largest] += amountMinor - Object.values(result).reduce((sum, part) => sum + part, 0);
+  return result;
+}
+
 // API amounts are decimals with at most 2 decimals (R-MON-01); the browser works in minor units.
 export function toMinor(amount: number): number {
   return Math.round(amount * 100);

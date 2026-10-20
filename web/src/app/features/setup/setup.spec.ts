@@ -68,8 +68,12 @@ describe('Setup wizard (PRD 5.2)', () => {
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
     await fixture.whenStable();
 
-    const names = Array.from(root.querySelectorAll('.names li > span')).map((el) => el.textContent);
+    const names = Array.from(root.querySelectorAll('.accounts .account-name')).map((el) => el.textContent);
     expect(names).toEqual(['SNB', 'Al Rajhi']);
+    // R-BAL-02: the first account gets all income at first, so the shares add up to 100%.
+    const shares = Array.from(root.querySelectorAll<HTMLInputElement>('.accounts .share input')).map((el) => el.value);
+    expect(shares).toEqual(['100', '0']);
+    expect(root.querySelector('.accounts + .caption')?.textContent?.trim()).toBe('Shares of income: 100% of 100%.');
   });
 
   it('prefills your name from Google', async () => {

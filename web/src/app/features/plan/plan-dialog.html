@@ -23,7 +23,7 @@
 
     <ul class="months">
       @for (period of periods; track period.key; let i = $index) {
-        <!-- One compact row: the month and its dates (the visible label), the amount, copy, Unassigned after. -->
+        <!-- One compact row: the month and its dates (the visible label), the amount, copy, Unallocated after. -->
         <li class="month">
           <label class="when" [for]="'plan-month-' + i">
             {{ period.label }}
@@ -57,9 +57,9 @@
             <span class="copy" aria-hidden="true"></span>
           }
           <!-- R-PLN-03 after this change: green at 0 or more, red below 0. -->
-          <span class="after caption" [attr.aria-label]="'Unassigned after in ' + period.label">
+          <span class="after caption" [attr.aria-label]="'Unallocated after in ' + period.label">
             @if (after()[i]; as a) {
-              Unassigned after
+              Unallocated after
               <span class="money" [class.ok]="!a.over" [class.danger]="a.over">{{ a.text }}</span>
             }
           </span>

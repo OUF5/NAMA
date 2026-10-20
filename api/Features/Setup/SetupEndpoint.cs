@@ -45,7 +45,8 @@ public static class SetupEndpoint
             {
                 return Results.ValidationProblem(errors);
             }
-            if (await store.GetProfileAsync(uid) is not null || !await store.CreateSetupAsync(uid, Build(request, user, fiscalYear)))
+            var today = FiscalCalendar.Today(time, request.Timezone!);
+            if (await store.GetProfileAsync(uid) is not null || !await store.CreateSetupAsync(uid, Build(request, user, fiscalYear, today)))
             {
                 return Results.Problem(statusCode: StatusCodes.Status409Conflict, detail: "Setup is already complete.");
             }
@@ -77,8 +78,9 @@ public static class SetupEndpoint
     }
 
     // The salary runs from the FY's first month, open ended (owner's choice, M3). Additional
-    // income uses the chosen months: Once is stored with to = from (R-INC-03).
-    private static SetupData Build(SetupRequest request, ClaimsPrincipal user, FiscalYear fiscalYear)
+    // income uses the chosen months: Once is stored with to = from (R-INC-03). Each account opens
+    // with today's balance (R-BAL-01), and the split applies from the FY's first month (R-BAL-02).
+    private static SetupData Build(SetupRequest request, ClaimsPrincipal user, FiscalYear fiscalYear, DateOnly today)
     {
         var incomes = new List<IncomeItem>
         {
@@ -103,11 +105,18 @@ public static class SetupEndpoint
             SetupCompleted: true,
             LastBankAccountId: null);
 
+        var accounts = request.BankAccounts!
+            .Select(account => (Account: new BankAccount(DocumentIds.New(), Names.Normalize(account.Name), Opening:
+                new OpeningBalance(Money.ToMinor(account.OpeningBalance!.Value), today)), account.Share!.Value))
+            .ToList();
         return new SetupData(
             profile,
             fiscalYear,
             incomes,
-            request.BankAccounts!.Select(name => new BankAccount(DocumentIds.New(), Names.Normalize(name))).ToList(),
-            request.Categories!.Select((name, i) => new Category(DocumentIds.New(), Names.Normalize(name), i)).ToList());
+            accounts.Select(item => item.Account).ToList(),
+            request.Categories!.Select((name, i) => new Category(DocumentIds.New(), Names.Normalize(name), i)).ToList(),
+            new IncomeSplit(fiscalYear.Id, accounts
+                .Where(item => item.Value > 0)
+                .ToDictionary(item => item.Account.Id, item => Money.ToBasisPoints(item.Value))));
     }
 }

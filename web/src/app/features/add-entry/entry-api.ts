@@ -11,10 +11,13 @@ export interface BankAccount {
   archived: boolean;
 }
 
-// ENT-01, for one sub-category in the month of a date. percent is null when nothing is planned.
+// ENT-01, for one sub-category in the month of a date. R-PLN-05: available is what carried in from
+// the FY's earlier months plus the plan; percent is null when nothing is available.
 export interface Indicator {
   period: PeriodInfo;
+  carriedIn: number;
   planned: number;
+  available: number;
   spent: number;
   remaining: number;
   percent: number | null;

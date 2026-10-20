@@ -6,20 +6,33 @@ import { App } from './app';
 import { routes } from './app.routes';
 import { AuthService } from './core/auth';
 import { Me, MeService } from './core/me';
+import { Summary, SummaryService } from './core/summary';
 import { settingsMatcher } from './features/settings/settings-sections';
+
+// A top bar number: its caption and its value.
+function statText(stat: Element): string {
+  return Array.from(stat.children).map((child) => child.textContent?.trim()).join(' ');
+}
 
 describe('App', () => {
   const me = signal<Me | null>(null);
   const signOut = vi.fn();
+  // UX-08: the top bar's numbers; load and clear are spied, the summary is set by each test.
+  const summary = signal<Summary | null>(null);
+  const summaryService = { summary, load: vi.fn(async () => undefined), clear: vi.fn() };
 
   beforeEach(async () => {
     me.set({ setupCompleted: true, isAdmin: false, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null });
+    summary.set(null);
+    summaryService.load.mockClear();
+    summaryService.clear.mockClear();
     await TestBed.configureTestingModule({
       imports: [App],
       providers: [
         provideRouter([{ matcher: settingsMatcher, children: [] }]),
         { provide: MeService, useValue: { me } },
         { provide: AuthService, useValue: { signOut } },
+        { provide: SummaryService, useValue: summaryService },
       ],
     }).compileComponents();
   });
@@ -59,12 +72,64 @@ describe('App', () => {
     expect(compiled.querySelector('.month')?.textContent).toBe('Sep 2026 · 27 Sep to 26 Oct');
   });
 
-  it('should show the five navigation items (UX-01)', async () => {
+  // UX-01: five items on phones; Banks (BNK-01) joins them in the side bar.
+  it('should show the five navigation items and Banks on desktop (UX-01, BNK-01)', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    const labels = Array.from(compiled.querySelectorAll('.nav > .nav-item span')).map((el) => el.textContent?.trim());
-    expect(labels).toEqual(['Dashboard', 'Entries', 'Add expense', 'Plan', 'Tracker']);
+    const items = Array.from(compiled.querySelectorAll('.nav > .nav-item'));
+    expect(items.map((el) => el.querySelector('span')?.textContent?.trim())).toEqual(['Dashboard', 'Entries', 'Add', 'Plan', 'Tracker', 'Banks']);
+    expect(items.filter((el) => el.classList.contains('desktop-only')).map((el) => el.getAttribute('href'))).toEqual(['/banks']);
+  });
+
+  // UX-08: Left this month (in its plan status color) and the balance, each a link, on every page.
+  it('should show this month and the balance in the top bar', async () => {
+    summary.set({
+      balance: 28000,
+      complete: true,
+      accounts: [
+        { id: 'main', name: 'Main', balance: 4100 },
+        { id: 'savings', name: 'Savings', balance: 23900 },
+      ],
+      month: {
+        period: { key: '2026-09', label: 'Sep 2026', startDate: '2026-09-27', endDate: '2026-10-26' },
+        daysLeft: 10,
+        income: 17000,
+        carriedIn: 11950,
+        planned: 1500,
+        spent: 1199.99,
+        remaining: 12250.01,
+        unassigned: 139500,
+      },
+    });
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(summaryService.load).toHaveBeenCalledTimes(1);
+
+    const stats = Array.from(compiled.querySelectorAll<HTMLAnchorElement>('.stats.bar .stat'));
+    expect(stats.map(statText)).toEqual([
+      'Left in Sep 2026 · 10 days left SAR 12,250.01',
+      'Balance SAR 28,000',
+    ]);
+    expect(stats.map((a) => a.getAttribute('href'))).toEqual(['/tracker', '/banks']);
+    expect(stats[0].querySelector('.value')!.classList).toContain('ok');
+    expect(stats[1].getAttribute('title')).toBe('Main SAR 4,100 · Savings SAR 23,900');
+    expect(stats[1].getAttribute('aria-label')).toBe('Balance SAR 28,000: Main SAR 4,100 · Savings SAR 23,900. Open Banks');
+    // Phones get the same numbers in the strip under the top bar.
+    expect(compiled.querySelectorAll('.stats.strip .stat').length).toBe(2);
+  });
+
+  // BNK-05: until every account has its opening balance, the top bar asks for it.
+  it('should ask to set up the balance until it is complete', async () => {
+    summary.set({ balance: null, complete: false, accounts: [{ id: 'main', name: 'Main', balance: null }], month: null });
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+
+    const stats = Array.from(compiled.querySelectorAll<HTMLAnchorElement>('.stats.bar .stat'));
+    expect(stats.map(statText)).toEqual(['Balance Set up']);
+    expect(stats[0].getAttribute('aria-label')).toBe('Balance: set up your bank balances. Open Banks');
   });
 
   // Owner's choice (M8): Settings in the side bar, with its sections while you are in Settings.
@@ -82,7 +147,7 @@ describe('App', () => {
 
     expect(settings.getAttribute('aria-expanded')).toBe('true');
     const subs = Array.from(compiled.querySelectorAll<HTMLAnchorElement>('.sub-nav a'));
-    expect(subs.map((a) => a.textContent?.trim())).toEqual(['Profile', 'Fiscal year', 'Income', 'Bank accounts', 'Categories']);
+    expect(subs.map((a) => a.textContent?.trim())).toEqual(['Profile', 'Fiscal year', 'Income', 'Categories']);
     expect(subs[2].classList).toContain('active');
     expect(subs[2].getAttribute('href')).toBe('/settings/income');
 
@@ -128,8 +193,8 @@ describe('App', () => {
     });
   });
 
-  // PRD 5.4 (owner's choice, 20 Oct 2026): Add expense is one tap away in the nav; the top bar has no copy.
-  it('should show Add expense in the nav and not in the top bar', async () => {
+  // PRD 5.4 (owner's choice, 20 Oct 2026): Add is one tap away in the nav; the top bar has no copy.
+  it('should show Add in the nav and not in the top bar', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
@@ -145,6 +210,10 @@ describe('App', () => {
     expect(compiled.querySelector('.brand')?.textContent).toContain('NAMA');
     expect(compiled.querySelector('.nav')).toBeNull();
     expect(compiled.querySelector('[aria-label="Settings"]')).toBeNull();
+    // UX-08: no numbers, and none are loaded.
+    expect(compiled.querySelector('.stats')).toBeNull();
+    expect(summaryService.load).not.toHaveBeenCalled();
+    expect(summaryService.clear).toHaveBeenCalled();
   });
 
   it('should hide navigation and settings until setup is complete', async () => {

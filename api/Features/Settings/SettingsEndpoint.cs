@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Api.Domain;
-using Api.Features.BankAccounts;
 using Api.Features.Categories;
 using Api.Features.FiscalYears;
 using Api.Features.Income;
@@ -13,7 +12,7 @@ namespace Api.Features.Settings;
 
 // PRD 5.7 Settings. Owner's choice (M8, NFR-01): GET /api/settings brings every section in one
 // call (an addition to PRD 7.5); the version comes from GET /api/health. People (STG-07) is there
-// for admins only, and null for everyone else.
+// for admins only, and null for everyone else. Bank accounts live on Banks (BNK-02, 20 Oct 2026).
 public static class SettingsEndpoint
 {
     // STG-02, R-CAL-07: the settings apply from the FY after the latest stored one. NextFiscalYear is
@@ -24,7 +23,6 @@ public static class SettingsEndpoint
         MeEndpoint.ProfileDto Profile,
         CalendarDto Calendar,
         IncomeEndpoint.IncomeResponse Income,
-        IReadOnlyList<BankAccountsEndpoint.BankAccountDto> BankAccounts,
         IReadOnlyList<CategoriesEndpoint.CategoryDto> Categories,
         PeopleEndpoint.PeopleDto? People);
 
@@ -45,7 +43,6 @@ public static class SettingsEndpoint
                 MeEndpoint.ProfileDto.From(profile),
                 calendar,
                 income,
-                BankAccountsEndpoint.Sorted(await store.GetBankAccountsAsync(uid)),
                 (await store.GetCategoriesAsync(uid))
                     .OrderBy(category => category.SortOrder)
                     .Select(category => CategoriesEndpoint.ToDto(category, subCategories))

@@ -1,0 +1,120 @@
+<div class="fields" [formGroup]="form()">
+  <div class="inputs">
+    <!-- From, a swap button, To: one row on wide screens, stacked on phones. -->
+    <div class="accounts">
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>From account</mat-label>
+        <mat-select formControlName="fromBankAccountId">
+          @for (account of options(); track account.id) {
+            <mat-option [value]="account.id">{{ account.name }}@if (account.archived) { (archived)}</mat-option>
+          }
+        </mat-select>
+        @if (form().controls.fromBankAccountId.hasError('server')) {
+          <mat-error>{{ form().controls.fromBankAccountId.getError('server') }}</mat-error>
+        } @else {
+          <mat-error>Choose the account the money leaves.</mat-error>
+        }
+      </mat-form-field>
+
+      <button mat-icon-button type="button" class="swap" (click)="swap()" aria-label="Swap the accounts" title="Swap the accounts">
+        <mat-icon>swap_horiz</mat-icon>
+      </button>
+
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>To account</mat-label>
+        <mat-select formControlName="toBankAccountId">
+          @for (account of options(); track account.id) {
+            <mat-option [value]="account.id">{{ account.name }}@if (account.archived) { (archived)}</mat-option>
+          }
+        </mat-select>
+        @if (form().controls.toBankAccountId.hasError('server')) {
+          <mat-error>{{ form().controls.toBankAccountId.getError('server') }}</mat-error>
+        } @else if (form().controls.toBankAccountId.hasError('sameAccount')) {
+          <mat-error>Pick two different accounts.</mat-error>
+        } @else {
+          <mat-error>Choose the account the money goes to.</mat-error>
+        }
+      </mat-form-field>
+    </div>
+
+    <mat-form-field class="amount" subscriptSizing="dynamic">
+      <mat-label>Amount ({{ currency() }})</mat-label>
+      <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
+      @if (form().controls.amount.hasError('server')) {
+        <mat-error>{{ form().controls.amount.getError('server') }}</mat-error>
+      } @else {
+        <mat-error>More than 0, at most 10,000,000, with up to 2 decimals.</mat-error>
+      }
+    </mat-form-field>
+
+    <div class="row">
+      <!-- FY-03: only dates inside the stored FYs. -->
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Date</mat-label>
+        <input matInput formControlName="date" [matDatepicker]="picker" [min]="minDate()" [max]="maxDate()" />
+        <mat-datepicker-toggle matIconSuffix [for]="picker" />
+        <mat-datepicker #picker />
+        @if (form().controls.date.hasError('server')) {
+          <mat-error>{{ form().controls.date.getError('server') }}</mat-error>
+        } @else if (form().controls.date.hasError('matDatepickerMin') || form().controls.date.hasError('matDatepickerMax')) {
+          <mat-error>Pick a date from {{ dateRange() }}.</mat-error>
+        } @else {
+          <mat-error>Pick a date.</mat-error>
+        }
+      </mat-form-field>
+
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Note (optional)</mat-label>
+        <input matInput formControlName="note" [maxlength]="noteMax" autocomplete="off" />
+        @if (noteLength() > 0) {
+          <mat-hint align="end">{{ noteLength() }}/{{ noteMax }}</mat-hint>
+        }
+        @if (form().controls.note.hasError('server')) {
+          <mat-error>{{ form().controls.note.getError('server') }}</mat-error>
+        } @else {
+          <mat-error>At most {{ noteMax }} characters.</mat-error>
+        }
+      </mat-form-field>
+    </div>
+  </div>
+
+  <!-- Add: both balances before and after, so it is clear what moves. A placeholder until both
+       accounts are chosen, as the planned indicator. -->
+  @if (split()) {
+    <div class="side">
+      @if (preview(); as p) {
+        <div class="balances" aria-live="polite">
+          <p class="caption">{{ p.amount ? 'After moving ' + p.amount : 'Balances today' }}</p>
+          @for (line of [p.from, p.to]; track $index; let first = $first) {
+            <div class="balance-line">
+              <span class="who">
+                <span class="caption">{{ first ? 'From' : 'To' }}</span>
+                <span class="name">{{ line.name }}</span>
+              </span>
+              @if (line.now === null) {
+                <span class="caption">No balance yet</span>
+              } @else {
+                <span class="money amounts">
+                  <span [class.struck]="line.after">{{ line.now }}</span>
+                  @if (line.after) {
+                    <mat-icon aria-hidden="true">arrow_forward</mat-icon>
+                    <span class="after" [class.danger]="line.negative">{{ line.after }}</span>
+                  }
+                </span>
+              }
+            </div>
+          }
+          <p class="caption">A transfer is never spending: your plan and Tracker stay the same.</p>
+        </div>
+      } @else {
+        <div class="placeholder">
+          <mat-icon aria-hidden="true">swap_horiz</mat-icon>
+          <p class="placeholder-title">Move money between your accounts</p>
+          <p class="caption">
+            Choose both accounts to see their balances before and after. A transfer is never spending.
+          </p>
+        </div>
+      }
+    </div>
+  }
+</div>

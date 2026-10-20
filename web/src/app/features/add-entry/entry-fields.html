@@ -90,6 +90,7 @@
       @if (indicator(); as current) {
         <app-planned-indicator
           [period]="current.period"
+          [carriedIn]="toMinor(current.carriedIn)"
           [planned]="toMinor(current.planned)"
           [spent]="toMinor(current.spent)"
           [pending]="pending()"

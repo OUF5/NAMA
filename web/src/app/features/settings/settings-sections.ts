@@ -2,12 +2,11 @@ import { UrlMatchResult, UrlSegment } from '@angular/router';
 
 // The Settings sections (PRD 5.7), each on its own page: /settings/<id>. Desktop lists them under
 // Settings in the side bar; phones open /settings as a list (owner's choice, M8). Sign out (AUTH-04)
-// is outside Settings, in the shell.
+// is outside Settings, in the shell. Bank accounts are on Banks (BNK-02, 20 Oct 2026).
 export const SETTINGS_SECTIONS = [
   { id: 'profile', label: 'Profile', icon: 'person' },
   { id: 'fiscal-year', label: 'Fiscal year', icon: 'event' },
   { id: 'income', label: 'Income', icon: 'payments' },
-  { id: 'bank-accounts', label: 'Bank accounts', icon: 'account_balance' },
   { id: 'categories', label: 'Categories', icon: 'category' },
   { id: 'people', label: 'People', icon: 'group' },
 ] as const;

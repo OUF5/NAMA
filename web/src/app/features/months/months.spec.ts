@@ -81,18 +81,26 @@ const categories: Category[] = [
   },
 ];
 
+// Nothing carries in unless a test says so (R-PLN-05: remaining = carried in + planned - spent).
 function month(
   period: typeof sep,
   status: MonthOverview['status'],
   income: number,
   planned: number,
   spent: number,
+  carriedIn = 0,
 ): MonthOverview {
-  return { period, status, income, planned, spent, remaining: planned - spent };
+  return { period, status, income, carriedIn, planned, spent, remaining: Math.round((carriedIn + planned - spent) * 100) / 100 };
 }
 
 const cells = (...values: [number, number][]) =>
-  values.map(([planned, spent], i) => ({ periodKey: [aug, sep, oct][i].key, planned, spent }));
+  values.map(([planned, spent], i) => ({
+    periodKey: [aug, sep, oct][i].key,
+    carriedIn: 0,
+    planned,
+    spent,
+    remaining: Math.round((planned - spent) * 100) / 100,
+  }));
 
 // Taxi (archived) has 30 spent in Aug with no plan; Fuel has nothing in Aug.
 function overview(
@@ -140,9 +148,10 @@ function overview(
         ],
       },
     ],
-    totals: { income: 51500.25, planned: 5300, spent: 1379.99, remaining: 3920.01 },
-    toDate: { income: 34500.25, spent: 1379.99, saved: 33120.26 },
+    totals: { income: 51500.25, planned: 5300, spent: 1379.99, remaining: 3920.01, plannedSaved: 46200.25 },
+    toDate: { income: 34500.25, spent: 1379.99, saved: 33120.26, plannedSaved: 31100.25 },
     rollover: null,
+    carryFromPeriodKey: '2026-08',
   };
 }
 
@@ -288,11 +297,13 @@ describe('Months (PRD 5.6)', () => {
     expect(text(card('2026-10').querySelector('.status-text'))).toBe('Upcoming');
 
     const kpis = Array.from(card('2026-09').querySelectorAll('.kpi')).map((kpi) => words(kpi));
+    // R-PLN-05: Remaining = From last month + Planned - Spent; Income is the month's own.
     expect(kpis).toEqual([
       'Remaining SAR 600.01',
-      'Income SAR 17,500.25',
+      'From last month SAR 0',
       'Planned SAR 1,900',
       'Spent SAR 1,299.99',
+      'Income SAR 17,500.25',
     ]);
     expect(text(card('2026-09').querySelector('.bar-line .chip'))).toBe('Within plan');
     // Remaining carries the status color; the other numbers stay neutral.
@@ -326,6 +337,47 @@ describe('Months (PRD 5.6)', () => {
     // One FY: no selector, the FY as a caption (MON-03).
     expect(text(root().querySelector('.fy'))).toBe('FY 2026 · 27 Jan 2026 to 26 Jan 2027');
     expect(root().textContent).not.toContain('Fiscal year');
+  });
+
+  // R-PLN-05: what was left last month carries in. Groceries left 300 in Aug, so Sep has 1,800; Fuel
+  // spent 500 of its 400 but 200 carried in, so it is near its limit, not over.
+  it('shows what carried in from last month, and counts it in each line', async () => {
+    const data = overview();
+    data.months[1] = month(sep, 'inProgress', 17500.25, 1900, 1699.99, 500);
+    const food = data.rows[0];
+    food.months[1] = { ...food.months[1], carriedIn: 300, remaining: 600.01 };
+    food.subCategories[0].months[1] = { ...food.subCategories[0].months[1], carriedIn: 300, remaining: 600.01 };
+    const transport = data.rows[1];
+    transport.months[1] = { ...transport.months[1], carriedIn: 200, spent: 500, remaining: 100 };
+    transport.subCategories[0].months[1] = { ...transport.subCategories[0].months[1], carriedIn: 200, spent: 500, remaining: 100 };
+    await open('/months', data);
+
+    expect(Array.from(card('2026-09').querySelectorAll('.kpi')).map((kpi) => words(kpi)).slice(0, 2)).toEqual([
+      'Remaining SAR 700.01',
+      'From last month SAR 500',
+    ]);
+    const lines = Array.from(card('2026-09').querySelectorAll('.spend-row')).map((row) => words(row));
+    expect(lines).toEqual([
+      'Food Within plan SAR 1,199.99 of 1,800',
+      'Groceries Within plan SAR 1,199.99 of 1,800',
+      'Transport Near limit SAR 500 of 600',
+      'Fuel Near limit SAR 500 of 600',
+    ]);
+  });
+
+  // R-PLN-06: set up in Sep 2026, so Aug stands alone and the page says why.
+  it('says which month the carry starts in', async () => {
+    await open('/months', { ...overview(), carryFromPeriodKey: '2026-09' });
+
+    expect(words(root().querySelector('.carry-from'))).toBe(
+      'What is left carries from Sep 2026, the month you started NAMA. Earlier months stand alone.',
+    );
+  });
+
+  it('says nothing about the carry when it starts with the FY', async () => {
+    await open();
+
+    expect(root().querySelector('.carry-from')).toBeNull();
   });
 
   it("loads a month's entries once when its card is expanded", async () => {
@@ -600,7 +652,7 @@ describe('Months (PRD 5.6)', () => {
     expect(words(food)).toBe('SAR 1,199.99 of 1,500');
     expect(food.classList).toContain('ok');
     expect(food.getAttribute('aria-label')).toBe(
-      'Food, Sep 2026: SAR 1,199.99 of SAR 1,500, Within plan. Open entries',
+      'Food, Sep 2026: SAR 1,199.99 of SAR 1,500 available, Within plan. Open entries',
     );
     expect(food.getAttribute('href')).toBe(
       '/entries?fyId=2026-01&periodKey=2026-09&categoryId=food',

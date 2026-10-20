@@ -1,4 +1,18 @@
-<h1>Add expense</h1>
+<!-- TRF-01: one Add page for an expense (the default) or a transfer between your accounts. -->
+<div class="head">
+  <h1>{{ mode() === 'transfer' ? 'Add transfer' : 'Add expense' }}</h1>
+  <mat-button-toggle-group
+    class="mode"
+    aria-label="What to add"
+    hideSingleSelectionIndicator
+    [value]="mode()"
+    (change)="setMode($event.value)"
+  >
+    <mat-button-toggle value="expense">Expense</mat-button-toggle>
+    <mat-button-toggle value="transfer">Transfer</mat-button-toggle>
+  </mat-button-toggle-group>
+</div>
+
 
 @if (loadError()) {
   <p class="error" role="alert">{{ loadError() }}</p>
@@ -17,9 +31,46 @@
       <h2>No bank account</h2>
       <p class="note">
         Every entry needs a bank account that is not archived.
-        <a routerLink="/settings/bank-accounts">Open Settings</a> to add or restore one.
+        <a routerLink="/banks">Open Banks</a> to add or restore one.
       </p>
     </section>
+  } @else if (mode() === 'transfer') {
+    @if (!canTransfer()) {
+      <!-- UX-03 -->
+      <section class="card empty">
+        <h2>A transfer needs two accounts</h2>
+        <p class="note">
+          A transfer moves money between two of your accounts that are not archived.
+          <a routerLink="/banks">Open Banks</a> to add or restore one.
+        </p>
+      </section>
+    } @else {
+      <form class="card" [formGroup]="transferForm" (ngSubmit)="saveTransfer()" novalidate>
+        <app-transfer-fields
+          [split]="true"
+          [form]="transferForm"
+          [accounts]="accounts()"
+          [currency]="currency()"
+          [firstDate]="me()?.firstDate ?? null"
+          [lastDate]="me()?.lastDate ?? null"
+          [balances]="balances()"
+        />
+
+        @if (saveError()) {
+          <p class="error" role="alert">{{ saveError() }}</p>
+        }
+
+        <div class="actions">
+          <p class="saved" role="status" [class.empty]="!saved()">
+            @if (saved()) {
+              <mat-icon aria-hidden="true">check_circle</mat-icon>
+              <span>{{ saved() }}</span>
+            }
+          </p>
+          <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+        </div>
+      </form>
+    }
   } @else {
     <form class="card" [formGroup]="form" (ngSubmit)="save()" novalidate>
       <app-entry-fields

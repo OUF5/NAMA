@@ -107,11 +107,19 @@
   thead td {
     position: sticky;
     left: 0;
-    width: 112px;
+    width: 168px;
     padding-left: 0;
     background: var(--surface);
     text-align: left;
     color: var(--text-muted);
+  }
+
+  // A label and its formula take two or three lines rather than more width.
+  tbody th {
+    padding-top: 6px;
+    padding-bottom: 6px;
+    white-space: normal;
+    line-height: 1.25;
   }
 
   thead th {
@@ -120,6 +128,60 @@
 
   .selected {
     background: var(--primary-soft);
+  }
+}
+
+// The FY column (R-PLN-04) stands apart from the months behind a divider.
+.totals .fy-col {
+  border-left: 1px solid var(--divider);
+  color: var(--text-2);
+
+  .caption {
+    display: block;
+  }
+}
+
+// "Unallocated this month" is a step of the sum, so it gets the line above it but not the weight.
+.totals .subtotal th,
+.totals .subtotal td {
+  border-top: 1px solid var(--divider);
+}
+
+.totals-note {
+  margin: 8px 0 0;
+}
+
+// The last row is the result, so it reads as one.
+.totals .result th,
+.totals .result td {
+  border-top: 1px solid var(--divider);
+  font-weight: 600;
+}
+
+.totals .carried {
+  color: var(--text-2);
+}
+
+// A computed row's formula, under its name ("Income − Planned").
+.formula {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+// R-PLN-04 in the card head: "Planned saved in FY 2026 · SAR 184,900.25".
+.saved-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin: 0 0 0 auto;
+  text-align: right;
+
+  .money {
+    font-size: 16px;
+    font-weight: 600;
   }
 }
 

@@ -61,7 +61,54 @@
               <span class="caption danger">Spent more than income</span>
             }
           </div>
+          <!-- R-PLN-03: the Unassigned of the latest started month, what the plan meant to keep by now. -->
+          <div class="kpi">
+            <span class="caption">Planned saved</span>
+            <span class="money value" [class.danger]="t.plannedNegative">{{ t.plannedSaved }}</span>
+            <span class="caption">{{ t.versus }}</span>
+          </div>
         </div>
+        @if (t.fyPlannedSaved) {
+          <!-- R-PLN-04 -->
+          <p class="caption fy-saved">
+            Planned saved by the end of {{ fiscalYear()?.label }} <span class="money">{{ t.fyPlannedSaved }}</span>
+          </p>
+          <p class="caption">Saved is what you kept; planned saved is what your plan leaves unallocated.</p>
+        }
+      </section>
+    }
+
+    <!-- R-BAL-03: the balances, as on Banks and in the top bar. -->
+    @if (banks(); as b) {
+      <section class="card" aria-labelledby="banks-title">
+        <div class="card-head">
+          <div class="title">
+            <h2 id="banks-title">Bank balances</h2>
+            <span class="caption">Today</span>
+          </div>
+          <a routerLink="/banks">Open Banks</a>
+        </div>
+        @if (b.total) {
+          <div class="kpi bank-total">
+            <span class="caption">Total</span>
+            <span class="money value" [class.danger]="b.negative">{{ b.total }}</span>
+          </div>
+        } @else {
+          <p class="note setup">
+            Set the opening balance of every account and the income split on
+            <a routerLink="/banks">Banks</a> to see your total.
+          </p>
+        }
+        <ul class="accounts">
+          @for (account of b.accounts; track account.id) {
+            <li>
+              <span class="name">{{ account.name }}</span>
+              <span class="money" [class.danger]="account.negative" [class.caption]="!account.balance">
+                {{ account.balance ?? 'No balance yet' }}
+              </span>
+            </li>
+          }
+        </ul>
       </section>
     }
 
