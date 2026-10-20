@@ -13,15 +13,18 @@ import { formatMoney, toMinor } from './money';
   imports: [MatProgressBarModule],
   template: `
     @let l = line();
-    <div class="summary">
+    <!-- No Income while Tracker is filtered to a category (income is null then). -->
+    <div class="summary" [class.no-income]="month().income === null">
       <div class="kpi remaining">
         <span class="caption">Remaining</span>
         <span class="money value" [class]="l.status">{{ money(month().remaining) }}</span>
       </div>
-      <div class="kpi">
-        <span class="caption">Income</span>
-        <span class="money value">{{ money(month().income) }}</span>
-      </div>
+      @if (month().income !== null) {
+        <div class="kpi">
+          <span class="caption">Income</span>
+          <span class="money value">{{ money(month().income!) }}</span>
+        </div>
+      }
       <div class="kpi">
         <span class="caption">Planned</span>
         <span class="money value">{{ money(month().planned) }}</span>

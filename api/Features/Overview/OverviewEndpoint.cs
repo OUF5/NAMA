@@ -7,9 +7,12 @@ using Api.Infrastructure;
 
 namespace Api.Features.Overview;
 
-// PRD 7.5 GET /api/fiscal-years/{fyId}/overview: everything Months (PRD 5.6) and Dashboard
+// PRD 7.5 GET /api/fiscal-years/{fyId}/overview: everything Tracker (PRD 5.6) and Dashboard
 // (PRD 5.9) need in one call (NFR-01). Sums are made in minor units (R-MON-01). Owner's choices (M7): remaining
 // is planned minus spent, and a sub-category appears when it has a plan or spending in the FY.
+// Tracker's filter (owner's choice, 20 Oct 2026): with categoryId, and optionally subCategoryId, the
+// rows, months and totals cover only that category or sub-category, and income is null, because
+// income belongs to the whole budget. ToDate (Dashboard) always covers everything.
 public static class OverviewEndpoint
 {
     // One month of one row (Year grid cell, MON-02).
@@ -26,9 +29,9 @@ public static class OverviewEndpoint
 
     // Status is "closed", "inProgress" or "yetToCome" (R-STA-01), worked out with today in the
     // profile time zone (R-CAL-10).
-    public record MonthDto(MeEndpoint.PeriodDto Period, string Status, decimal Income, decimal Planned, decimal Spent, decimal Remaining);
+    public record MonthDto(MeEndpoint.PeriodDto Period, string Status, decimal? Income, decimal Planned, decimal Spent, decimal Remaining);
 
-    public record TotalsDto(decimal Income, decimal Planned, decimal Spent, decimal Remaining);
+    public record TotalsDto(decimal? Income, decimal Planned, decimal Spent, decimal Remaining);
 
     // DSH-02 (owner's choice, M9): the months that started on or before today, each with its full
     // income and every entry in it. Saved is income minus spent and can be negative.
@@ -49,8 +52,10 @@ public static class OverviewEndpoint
 
     public static IEndpointRouteBuilder MapOverview(this IEndpointRouteBuilder api)
     {
-        // An unknown FY, or another user's, is 404 (as the plans endpoints, M4).
-        api.MapGet("/fiscal-years/{fyId}/overview", async (string fyId, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
+        // An unknown FY, or another user's, is 404 (as the plans endpoints, M4). So is an unknown
+        // category or sub-category, or a sub-category of another category.
+        api.MapGet("/fiscal-years/{fyId}/overview", async (
+            string fyId, string? categoryId, string? subCategoryId, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
         {
             var uid = user.FindFirstValue("sub")!;
             var fiscalYears = (await store.GetFiscalYearsAsync(uid)).OrderBy(fiscalYear => fiscalYear.StartDate).ToList();
@@ -60,21 +65,48 @@ public static class OverviewEndpoint
             {
                 return Results.NotFound();
             }
-            return Results.Ok(await LoadAsync(uid, fiscalYears, fiscalYear, profile, FiscalCalendar.Today(time, profile.Timezone), store));
+            var filter = string.IsNullOrEmpty(categoryId) && string.IsNullOrEmpty(subCategoryId)
+                ? null
+                : new Filter(categoryId, string.IsNullOrEmpty(subCategoryId) ? null : subCategoryId);
+            var response = await LoadAsync(uid, fiscalYears, fiscalYear, profile, FiscalCalendar.Today(time, profile.Timezone), filter, store);
+            return response is null ? Results.NotFound() : Results.Ok(response);
         });
         return api;
     }
 
-    private static async Task<OverviewResponse> LoadAsync(
-        string uid, IReadOnlyList<FiscalYear> fiscalYears, FiscalYear fiscalYear, UserProfile profile, DateOnly today, IUserStore store)
+    private sealed record Filter(string? CategoryId, string? SubCategoryId);
+
+    // Null when the filter names an unknown category or sub-category.
+    private static async Task<OverviewResponse?> LoadAsync(
+        string uid, IReadOnlyList<FiscalYear> fiscalYears, FiscalYear fiscalYear, UserProfile profile, DateOnly today,
+        Filter? filter, IUserStore store)
     {
         var periods = fiscalYear.Periods;
-        var plans = await store.GetPlansAsync(uid, fiscalYear.Id);
+        var allPlans = await store.GetPlansAsync(uid, fiscalYear.Id);
         var income = IncomeCalculator.TotalsForPeriods(await store.GetIncomesAsync(uid), periods);
         // PRD 7.4 "Reads": the FY's entries in one query (the Entries query), added up in memory.
-        var entries = await store.GetFiscalYearEntriesAsync(uid, fiscalYear.Id);
+        var allEntries = await store.GetFiscalYearEntriesAsync(uid, fiscalYear.Id);
         var categories = (await store.GetCategoriesAsync(uid)).OrderBy(category => category.SortOrder).ToList();
         var subCategories = await store.GetSubCategoriesAsync(uid);
+
+        // The filter's sub-categories; a sub-category alone also picks its category.
+        HashSet<string>? scope = null;
+        if (filter is not null)
+        {
+            var sub = filter.SubCategoryId is null ? null : subCategories.FirstOrDefault(item => item.Id == filter.SubCategoryId);
+            var categoryId = filter.CategoryId ?? sub?.CategoryId;
+            if (categories.All(category => category.Id != categoryId)
+                || (filter.SubCategoryId is not null && (sub is null || sub.CategoryId != categoryId)))
+            {
+                return null;
+            }
+            scope = subCategories
+                .Where(item => item.CategoryId == categoryId && (sub is null || item.Id == sub.Id))
+                .Select(item => item.Id)
+                .ToHashSet(StringComparer.Ordinal);
+        }
+        var plans = scope is null ? allPlans : allPlans.Where(plan => scope.Contains(plan.SubCategoryId)).ToList();
+        var entries = scope is null ? allEntries : allEntries.Where(entry => scope.Contains(entry.SubCategoryId)).ToList();
 
         var spent = entries
             .GroupBy(entry => (entry.SubCategoryId, entry.PeriodKey))
@@ -93,7 +125,7 @@ public static class OverviewEndpoint
         {
             // Owner's choice (M7): only sub-categories with a plan or spending in the FY, archived or not.
             var subRows = subCategories
-                .Where(sub => sub.CategoryId == category.Id)
+                .Where(sub => sub.CategoryId == category.Id && (scope is null || scope.Contains(sub.Id)))
                 .OrderBy(sub => sub.SortOrder)
                 .Select(sub => (Sub: sub, Cells: SubCells(sub)))
                 .Where(row => row.Cells.Any(cell => cell.Planned > 0 || cell.Spent > 0))
@@ -130,9 +162,10 @@ public static class OverviewEndpoint
         }).ToList();
         var totalPlanned = months.Sum(month => month.Planned);
         var totalSpent = entries.Sum(entry => entry.AmountMinor);
-        var started = months.Where(month => FiscalCalendar.HasStarted(month.Period, today)).ToList();
-        var incomeToDate = started.Sum(month => income[month.Period.Key]);
-        var spentToDate = started.Sum(month => month.Spent);
+        // DSH-02 covers everything, whatever the filter.
+        var started = periods.Where(period => FiscalCalendar.HasStarted(period, today)).Select(period => period.Key).ToHashSet(StringComparer.Ordinal);
+        var incomeToDate = started.Sum(key => income[key]);
+        var spentToDate = allEntries.Where(entry => started.Contains(entry.PeriodKey)).Sum(entry => entry.AmountMinor);
 
         return new OverviewResponse(
             fiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
@@ -140,14 +173,14 @@ public static class OverviewEndpoint
             months.Select(month => new MonthDto(
                 MeEndpoint.PeriodDto.From(month.Period),
                 StatusName(FiscalCalendar.Status(month.Period, today)),
-                Money.FromMinor(income[month.Period.Key]),
+                scope is null ? Money.FromMinor(income[month.Period.Key]) : null,
                 Money.FromMinor(month.Planned),
                 Money.FromMinor(month.Spent),
                 Money.FromMinor(PlanCalculator.Remaining(month.Planned, month.Spent)))).ToList(),
             categories.Select(category => CategoriesEndpoint.ToDto(category, subCategories)).ToList(),
             rows,
             new TotalsDto(
-                Money.FromMinor(income.Values.Sum()),
+                scope is null ? Money.FromMinor(income.Values.Sum()) : null,
                 Money.FromMinor(totalPlanned),
                 Money.FromMinor(totalSpent),
                 Money.FromMinor(PlanCalculator.Remaining(totalPlanned, totalSpent))),

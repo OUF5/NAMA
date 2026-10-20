@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PeriodInfo } from '../../shared/month-label';
@@ -11,10 +11,11 @@ import { Category, FiscalYear } from '../plan/plan-api';
 // R-STA-01, worked out by the API with today in the profile time zone.
 export type MonthStatus = 'closed' | 'inProgress' | 'yetToCome';
 
+// income is null when Tracker is filtered to a category: income belongs to the whole budget.
 export interface MonthOverview {
   period: PeriodInfo;
   status: MonthStatus;
-  income: number;
+  income: number | null;
   planned: number;
   spent: number;
   remaining: number;
@@ -43,7 +44,7 @@ export interface CategoryRow {
 }
 
 export interface Totals {
-  income: number;
+  income: number | null;
   planned: number;
   spent: number;
   remaining: number;
@@ -71,12 +72,25 @@ export interface OverviewResponse {
   rollover: Rollover | null;
 }
 
+// Tracker's filter (owner's choice, 20 Oct 2026): rows, months and totals cover only this category
+// or sub-category. toDate always covers everything.
+export interface OverviewFilter {
+  categoryId?: string;
+  subCategoryId?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class OverviewApi {
   private readonly http = inject(HttpClient);
 
-  // 404 when the FY is unknown.
-  overview(fyId: string): Promise<OverviewResponse> {
-    return firstValueFrom(this.http.get<OverviewResponse>(`/api/fiscal-years/${fyId}/overview`));
+  // 404 when the FY, the category or the sub-category is unknown.
+  overview(fyId: string, filter: OverviewFilter = {}): Promise<OverviewResponse> {
+    let params = new HttpParams();
+    for (const [key, value] of Object.entries(filter)) {
+      if (value) {
+        params = params.set(key, value);
+      }
+    }
+    return firstValueFrom(this.http.get<OverviewResponse>(`/api/fiscal-years/${fyId}/overview`, { params }));
   }
 }

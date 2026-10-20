@@ -8,6 +8,10 @@
   grid-template-columns: repeat(4, 1fr);
   gap: 12px 16px;
   padding: 16px 0;
+
+  &.no-income {
+    grid-template-columns: repeat(3, 1fr);
+  }
 }
 
 .kpi {
@@ -60,6 +64,10 @@
   .summary {
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
+
+    &.no-income {
+      grid-template-columns: repeat(2, 1fr);
+    }
   }
 
   .remaining {

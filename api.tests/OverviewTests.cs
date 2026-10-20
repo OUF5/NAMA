@@ -53,15 +53,15 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
     }
 
-    private Task<HttpResponseMessage> Get(string sub, string fyId = Fy, DateTimeOffset? utcNow = null)
+    private Task<HttpResponseMessage> Get(string sub, string fyId = Fy, DateTimeOffset? utcNow = null, string query = "")
     {
         factory.Time.UtcNow = utcNow ?? TestTime.Default;
-        return Send(factory, HttpMethod.Get, $"/api/fiscal-years/{fyId}/overview", sub);
+        return Send(factory, HttpMethod.Get, $"/api/fiscal-years/{fyId}/overview{query}", sub);
     }
 
-    private async Task<JsonNode> GetOk(string sub, string fyId = Fy, DateTimeOffset? utcNow = null)
+    private async Task<JsonNode> GetOk(string sub, string fyId = Fy, DateTimeOffset? utcNow = null, string query = "")
     {
-        var response = await Get(sub, fyId, utcNow);
+        var response = await Get(sub, fyId, utcNow, query);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return await Json(response);
     }
@@ -316,6 +316,70 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(0.30m, Dec(Month(overview, "2026-09")["spent"]));
         Assert.Equal(0.30m, Dec(Cell(SubRow(overview, "food", "groceries"), "2026-09")["spent"]));
         Assert.Equal(-0.30m, Dec(overview["totals"]!["remaining"]));
+    }
+
+    private static (decimal, decimal, decimal) Scoped(JsonNode month) =>
+        (Dec(month["planned"]), Dec(month["spent"]), Dec(month["remaining"]));
+
+    // Tracker's filter (owner's choice, 20 Oct 2026): Food alone. Groceries is planned at 1,500 every
+    // month; Food spent 50 in Aug and 1,199.99 in Sep. Fuel (Transport) is left out. Income belongs
+    // to the whole budget, so it is null; Dashboard's to date still covers everything.
+    [Fact]
+    public async Task A_category_filter_covers_only_that_category()
+    {
+        var overview = await GetOk(await SetUp(), query: "?categoryId=food");
+
+        Assert.Equal(["food"], overview["rows"]!.AsArray().Select(row => row!["categoryId"]!.GetValue<string>()));
+        Assert.Equal((1_500m, 1_199.99m, 300.01m), Scoped(Month(overview, "2026-09")));
+        Assert.Equal((1_500m, 50m, 1_450m), Scoped(Month(overview, "2026-08")));
+        Assert.Null(Month(overview, "2026-09")["income"]);
+        Assert.Equal((18_000m, 1_249.99m, 16_750.01m), Scoped(overview["totals"]!));
+        Assert.Null(overview["totals"]!["income"]);
+        Assert.Equal((153_500.25m, 1_349.99m, 152_150.26m), ToDate(overview));
+        // The selectors still get every category.
+        Assert.Equal(2, overview["categories"]!.AsArray().Count);
+    }
+
+    // Restaurants (Food) is planned at 300 in Sep with 120 spent; Groceries is left out.
+    [Theory]
+    [InlineData("?categoryId=food&subCategoryId=restaurants")]
+    [InlineData("?subCategoryId=restaurants")]
+    public async Task A_sub_category_filter_covers_only_that_sub_category(string query)
+    {
+        var sub = await SetUp();
+        await factory.Store.AddSubCategoryAsync(sub, new SubCategory("restaurants", "food", "Restaurants", 1));
+        await factory.Store.SetPlanAsync(sub, Fy, new PlanAmounts("restaurants", "food", new Dictionary<string, long> { ["2026-09"] = 30_000 }));
+        await AddEntry(sub, "restaurants", "2026-10-05", 120m);
+
+        var overview = await GetOk(sub, query: query);
+
+        Assert.Equal(["restaurants"], Row(overview, "food")["subCategories"]!.AsArray().Select(row => row!["subCategoryId"]!.GetValue<string>()));
+        Assert.Single(overview["rows"]!.AsArray());
+        Assert.Equal((300m, 120m, 180m), Scoped(Month(overview, "2026-09")));
+        Assert.Equal((0m, 0m, 0m), Scoped(Month(overview, "2026-08")));
+        Assert.Equal((300m, 120m, 180m), Scoped(overview["totals"]!));
+    }
+
+    // A filter with nothing in the FY is an empty page, not an error.
+    [Fact]
+    public async Task A_category_with_nothing_in_the_FY_has_no_rows()
+    {
+        var sub = await SetUp();
+        await factory.Store.AddCategoryAsync(sub, new Category("health", "Health", 2));
+
+        var overview = await GetOk(sub, query: "?categoryId=health");
+
+        Assert.Empty(overview["rows"]!.AsArray());
+        Assert.Equal((0m, 0m, 0m), Scoped(overview["totals"]!));
+    }
+
+    [Theory]
+    [InlineData("?categoryId=unknown")]
+    [InlineData("?subCategoryId=unknown")]
+    [InlineData("?categoryId=transport&subCategoryId=groceries")]
+    public async Task An_unknown_filter_is_404(string query)
+    {
+        Assert.Equal(HttpStatusCode.NotFound, (await Get(await SetUp(), query: query)).StatusCode);
     }
 
     // NFR-03: an unknown FY, or one only another user has, is 404.

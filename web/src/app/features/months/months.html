@@ -8,6 +8,9 @@
 
 @if (loadError()) {
   <p class="error" role="alert">{{ loadError() }}</p>
+  @if (filtered()) {
+    <button mat-button type="button" (click)="clearFilters()">Clear filters</button>
+  }
 } @else if (data(); as d) {
   <!-- FY-01: during the last month of the latest FY and after it ends. -->
   @if (d.rollover; as rollover) {
@@ -45,6 +48,32 @@
       <mat-button-toggle value="year">Year</mat-button-toggle>
     </mat-button-toggle-group>
   </div>
+
+  <!-- Owner's choice (20 Oct 2026): focus on one category, or on what went over plan. -->
+  <div class="filters" role="group" aria-label="Filters">
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-label>Category</mat-label>
+      <mat-select [value]="categoryId()" (selectionChange)="setCategory($event.value)">
+        <mat-option value="">All categories</mat-option>
+        @for (category of d.categories; track category.id) {
+          <mat-option [value]="category.id">{{ category.name }}@if (category.archived) { (archived)}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-label>Sub-category</mat-label>
+      <mat-select [value]="subCategoryId()" [disabled]="!categoryId()" (selectionChange)="setSubCategory($event.value)">
+        <mat-option value="">All sub-categories</mat-option>
+        @for (sub of subCategoryOptions(); track sub.id) {
+          <mat-option [value]="sub.id">{{ sub.name }}@if (sub.archived) { (archived)}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+    <mat-checkbox [checked]="overOnly()" (change)="setOverOnly($event.checked)">Over plan only</mat-checkbox>
+    @if (filtered()) {
+      <button mat-button type="button" (click)="clearFilters()">Clear filters</button>
+    }
+  </div>
   <p class="status" aria-live="polite">{{ status() }}</p>
 
   <!-- docs/DESIGN.md "Category rows on phones": name and chip, progress bar, "SAR 1,240 of 2,000". -->
@@ -67,7 +96,7 @@
   </ng-template>
 
   @if (view() === 'months') {
-    @if (d.rows.length === 0) {
+    @if (d.rows.length === 0 && !categoryId()) {
       <!-- UX-03: the same empty state as the Year view. -->
       <section class="card empty">
         <h2>Nothing planned or spent in {{ fiscalYear()?.label }} yet</h2>
@@ -76,6 +105,8 @@
           <a routerLink="/add">Add</a>.
         </p>
       </section>
+    } @else if (d.rows.length === 0) {
+      <ng-container *ngTemplateOutlet="filteredEmpty" />
     }
     <div class="cards">
       @for (card of cards(); track card.key) {
@@ -111,7 +142,9 @@
             </mat-expansion-panel-header>
             <ng-template matExpansionPanelContent>
               @if (card.categories.length === 0) {
-                <p class="note">Nothing planned or spent in {{ card.month.period.label }}.</p>
+                <p class="note">
+                  {{ overOnly() ? 'Nothing over plan' : 'Nothing planned or spent' }} in {{ card.month.period.label }}.
+                </p>
               } @else {
                 <ul class="categories">
                   @for (category of card.categories; track category.id) {
@@ -180,7 +213,7 @@
                   <a
                     class="see-all"
                     routerLink="/entries"
-                    [queryParams]="{ fyId: d.fyId, periodKey: card.key }"
+                    [queryParams]="entriesLink(d.fyId, card.key)"
                   >
                     See all {{ rows.length }} entries in {{ card.month.period.label }}
                   </a>
@@ -191,9 +224,24 @@
         </section>
       }
     </div>
+  } @else if (filtered() && gridData()!.rows.length === 0) {
+    <ng-container *ngTemplateOutlet="filteredEmpty" />
   } @else {
-    <app-year-grid [data]="d" [currency]="currency()" />
+    <app-year-grid [data]="gridData()!" [currency]="currency()" />
   }
+
+  <!-- A filter that leaves nothing to show. -->
+  <ng-template #filteredEmpty>
+    <section class="card empty">
+      @if (categoryId() && d.rows.length === 0) {
+        <h2>Nothing planned or spent in {{ scopeLabel() }} in {{ fiscalYear()?.label }}</h2>
+        <p class="note">Pick another category, or clear the filters.</p>
+      } @else {
+        <h2>Nothing is over plan in {{ fiscalYear()?.label }}</h2>
+        <p class="note">Every line is within its plan or near its limit.</p>
+      }
+    </section>
+  </ng-template>
 } @else {
   <p class="caption">Loading…</p>
 }

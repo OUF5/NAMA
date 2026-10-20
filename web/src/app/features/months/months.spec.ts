@@ -203,7 +203,7 @@ describe('Months (PRD 5.6)', () => {
   }
 
   function overviewCall(fyId = '2026-01'): Promise<TestRequest> {
-    return vi.waitFor(() => http.expectOne(`/api/fiscal-years/${fyId}/overview`));
+    return vi.waitFor(() => http.expectOne((req) => req.url === `/api/fiscal-years/${fyId}/overview`));
   }
 
   function entriesCall(periodKey: string): Promise<TestRequest> {
@@ -393,6 +393,59 @@ describe('Months (PRD 5.6)', () => {
     await open();
 
     expect(root().querySelector('.empty')).toBeNull();
+  });
+
+  // Tracker's filter (owner's choice, 20 Oct 2026): the API narrows the sums to Food, income is
+  // hidden (it is null), and the month's entries are Food's.
+  it('focuses on one category from the URL, without income', async () => {
+    const food = overview();
+    food.rows = food.rows.slice(0, 1);
+    food.months = food.months.map((m, i) => ({ ...m, income: null, planned: 1500, spent: [50, 1199.99, 0][i], remaining: 1500 - [50, 1199.99, 0][i] }));
+    harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/months?categoryId=food');
+    (await vi.waitFor(() =>
+      http.expectOne((req) => req.url === '/api/fiscal-years/2026-01/overview' && req.params.get('categoryId') === 'food'),
+    )).flush(food);
+    const sepEntries = await entriesCall('2026-09');
+    expect(sepEntries.request.params.get('categoryId')).toBe('food');
+    sepEntries.flush(entries([big]));
+    await settle();
+
+    expect(words(card('2026-09').querySelector('.summary'))).not.toContain('Income');
+    expect(words(card('2026-09').querySelector('.summary'))).toContain('SAR 300.01');
+    expect(words(root().querySelector('.filters'))).toContain('Clear filters');
+    http.verify();
+  });
+
+  it('writes the category to the URL and clears the sub-category', async () => {
+    await open('/months?categoryId=transport&subCategoryId=fuel');
+    const page = harness.routeDebugElement!.componentInstance as { setCategory(id: string): void };
+    page.setCategory('food');
+    await settle();
+
+    expect(TestBed.inject(Router).url).toBe('/months?categoryId=food');
+  });
+
+  // "Over plan only": Taxi went over in Aug (30 with no plan); nothing went over in Sep.
+  it('shows only what went over plan', async () => {
+    await open('/months?over=1');
+
+    expect(words(card('2026-09'))).toContain('Nothing over plan in Sep 2026.');
+    (card('2026-08').querySelector('mat-expansion-panel-header') as HTMLElement).click();
+    await settle();
+    (await entriesCall('2026-08')).flush(entries([]));
+    await settle();
+    const aug = words(card('2026-08').querySelector('.categories'));
+    expect(aug).toContain('Taxi (archived)');
+    expect(aug).not.toContain('Groceries');
+  });
+
+  it('keeps only the rows over plan in the Year view', async () => {
+    await open('/months?over=1&view=year', overview(), null);
+
+    const grid = words(root().querySelector('app-year-grid'));
+    expect(grid).toContain('Transport');
+    expect(grid).not.toContain('Food');
   });
 
   // Tracker: plan vs actual, with the way back to Plan for the same FY (owner's choice, 20 Oct 2026).

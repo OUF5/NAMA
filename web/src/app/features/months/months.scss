@@ -34,6 +34,21 @@ h1 {
   max-width: 420px;
 }
 
+// Category, sub-category, "Over plan only" and Clear; they wrap on phones.
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-top: 16px;
+
+  mat-form-field {
+    flex: 1 1 200px;
+    min-width: 0;
+    max-width: 280px;
+  }
+}
+
 .view-toggle {
   border-color: var(--border);
 }

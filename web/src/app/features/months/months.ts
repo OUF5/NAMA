@@ -4,6 +4,7 @@ import { Component, Injector, afterNextRender, computed, inject, signal } from '
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -21,7 +22,7 @@ import { EntriesResponse, Entry, EntryApi } from '../add-entry/entry-api';
 import { openEntryDialog } from '../entries/entry-dialog';
 import { PlanApi } from '../plan/plan-api';
 import { STATUS_LABELS, SpendLine, nameMaps, spendLine } from './month-lines';
-import { Cell, MonthOverview, OverviewApi, OverviewResponse } from './overview-api';
+import { Cell, CategoryRow, MonthOverview, OverviewApi, OverviewResponse } from './overview-api';
 import { MonthsView, loadView, saveView } from './view-choice';
 import { YearGrid } from './year-grid';
 
@@ -43,6 +44,7 @@ interface MonthEntries {
     RouterLink,
     MatButtonModule,
     MatButtonToggleModule,
+    MatCheckboxModule,
     MatExpansionModule,
     MatFormFieldModule,
     MatIconModule,
@@ -89,6 +91,33 @@ export class Months {
 
   private readonly names = computed(() => nameMaps(this.data()?.categories ?? []));
 
+  // Tracker's filter (owner's choice, 20 Oct 2026), in the URL like Entries. The API narrows the
+  // rows and sums to the category or sub-category; "Over plan only" hides the lines that are not
+  // over plan, with no sums of its own.
+  protected readonly categoryId = signal('');
+  protected readonly subCategoryId = signal('');
+  protected readonly overOnly = signal(false);
+  protected readonly filtered = computed(() => !!this.categoryId() || this.overOnly());
+  protected readonly subCategoryOptions = computed(
+    () => this.data()?.categories.find((category) => category.id === this.categoryId())?.subCategories ?? [],
+  );
+  // "Food", "Food · Groceries", or the FY label, for the empty states.
+  protected readonly scopeLabel = computed(() => {
+    const names = this.names();
+    const category = names.categories.get(this.categoryId());
+    const sub = names.subs.get(this.subCategoryId());
+    return [category, sub].filter(Boolean).join(' · ');
+  });
+
+  // The Year grid's rows: with "Over plan only", the sub-categories over plan in at least one month.
+  protected readonly gridData = computed(() => {
+    const data = this.data();
+    if (!data || !this.overOnly()) {
+      return data;
+    }
+    return { ...data, rows: this.overRows(data.rows) };
+  });
+
   // MON-02 Months view: one card per month, and the categories and sub-categories with a plan or
   // spending in that month (owner's choice, M7).
   protected readonly cards = computed(() => {
@@ -104,7 +133,7 @@ export class Months {
           name: names.categories.get(row.categoryId) ?? '',
           line: this.line(row.months[i]),
           subs: row.subCategories
-            .filter((sub) => this.hasMoney(sub.months[i]))
+            .filter((sub) => (this.overOnly() ? this.isOver(sub.months[i]) : this.hasMoney(sub.months[i])))
             .map((sub) => ({
               id: sub.subCategoryId,
               name: names.subs.get(sub.subCategoryId) ?? '',
@@ -151,6 +180,9 @@ export class Months {
   constructor() {
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       this.urlFyId = params.get('fyId');
+      this.categoryId.set(params.get('categoryId') ?? '');
+      this.subCategoryId.set(params.get('subCategoryId') ?? '');
+      this.overOnly.set(params.get('over') === '1');
       // Plan's "See the year grid" link (M8) opens the Year view.
       const view = params.get('view');
       if (view === 'months' || view === 'year') {
@@ -165,13 +197,35 @@ export class Months {
     saveView(view);
   }
 
-  // MON-03: the selected FY lives in the URL, so a reload keeps it.
+  // MON-03: the selected FY lives in the URL, so a reload keeps it. The filters stay.
   protected setFiscalYear(fyId: string): void {
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { fyId },
-      replaceUrl: true,
-    });
+    this.navigate({ fyId });
+  }
+
+  // A new category clears the sub-category, as on Entries.
+  protected setCategory(categoryId: string): void {
+    this.navigate({ categoryId: categoryId || null, subCategoryId: null });
+  }
+
+  protected setSubCategory(subCategoryId: string): void {
+    this.navigate({ subCategoryId: subCategoryId || null });
+  }
+
+  protected setOverOnly(on: boolean): void {
+    this.navigate({ over: on ? '1' : null });
+  }
+
+  protected clearFilters(): void {
+    this.navigate({ categoryId: null, subCategoryId: null, over: null });
+  }
+
+  // "See all" opens Entries with the same month and filter.
+  protected entriesLink(fyId: string, periodKey: string): Record<string, string> {
+    return Object.fromEntries(
+      Object.entries({ fyId, periodKey, categoryId: this.categoryId(), subCategoryId: this.subCategoryId() }).filter(
+        ([, value]) => !!value,
+      ),
+    );
   }
 
   protected openMonth(key: string): void {
@@ -233,12 +287,20 @@ export class Months {
         this.loadError.set('There is no fiscal year yet.');
         return;
       }
-      const data = await this.overviewApi.overview(fyId);
+      const data = await this.overviewApi.overview(fyId, {
+        categoryId: this.categoryId(),
+        subCategoryId: this.subCategoryId(),
+      });
       if (request !== this.request) {
         return;
       }
       this.data.set(data);
       this.loadError.set('');
+      // A link with only a sub-category (the API picks its category) shows the category too.
+      if (!this.categoryId() && this.subCategoryId()) {
+        const category = data.categories.find((item) => item.subCategories.some((sub) => sub.id === this.subCategoryId()));
+        this.categoryId.set(category?.id ?? '');
+      }
       if (fresh) {
         const current = data.months.find((month) => month.status === 'inProgress');
         this.expanded.set(new Set(current ? [current.period.key] : []));
@@ -259,7 +321,11 @@ export class Months {
       }
     } catch {
       if (request === this.request) {
-        this.loadError.set('The months could not be loaded. Please reload the page.');
+        this.loadError.set(
+          this.categoryId() || this.subCategoryId()
+            ? 'This category could not be loaded. Clear the filters and try again.'
+            : 'The months could not be loaded. Please reload the page.',
+        );
       }
     }
   }
@@ -279,7 +345,15 @@ export class Months {
     }));
     let next: MonthEntries;
     try {
-      next = { state: 'ok', data: await this.entryApi.entries({ fyId, periodKey: key }) };
+      next = {
+        state: 'ok',
+        data: await this.entryApi.entries({
+          fyId,
+          periodKey: key,
+          categoryId: this.categoryId(),
+          subCategoryId: this.subCategoryId(),
+        }),
+      };
     } catch {
       next = { state: 'error' };
     }
@@ -298,8 +372,28 @@ export class Months {
     );
   }
 
+  private navigate(changes: Record<string, string | null>): void {
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: changes,
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
   private hasMoney(cell: Cell): boolean {
     return cell.planned > 0 || cell.spent > 0;
+  }
+
+  // The "Over by" status of docs/DESIGN.md (spent above planned; spending without a plan counts).
+  private isOver(cell: Cell): boolean {
+    return this.line(cell).status === 'danger';
+  }
+
+  private overRows(rows: CategoryRow[]): CategoryRow[] {
+    return rows
+      .map((row) => ({ ...row, subCategories: row.subCategories.filter((sub) => sub.months.some((cell) => this.isOver(cell))) }))
+      .filter((row) => row.subCategories.length > 0);
   }
 
   // docs/DESIGN.md category rows: name and chip, progress bar, "SAR 1,240 of 2,000".

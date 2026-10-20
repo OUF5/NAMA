@@ -302,6 +302,7 @@ Page **Tracker** (`/tracker`), titled "Plan vs actual", with an "Edit plan" link
     - **Year (compact):** one grid. Rows are categories (expand to sub-categories), columns are the months plus an FY total, and each cell shows spent and planned with a color. The header shows each month's status. On phones the grid scrolls sideways with the first column fixed. 🆕 ADDED · Must (12 columns do not fit on a phone)
 - **MON-03** An FY selector appears when more than one FY exists.
 - **MON-04** Tapping a cell in the Year view opens Entries filtered by that sub-category and month. 🆕 ADDED · Nice
+- **MON-05** Filters for the whole page, kept in the URL: **Category**, then **Sub-category** (both views and every month card show planned, spent and remaining for that scope only; income is hidden, because it belongs to the whole budget), and **Over plan only** (only the lines that went over plan: in a month card, what went over that month; in the Year view, the sub-categories over plan in at least one month). Bank account, note search and month are not filters here: plans are not per account, notes are about single entries (Entries), and the page is already laid out by month. ✅ DECIDED (20 Oct 2026)
 
 ### 5.7 Settings (STG)
 
@@ -453,7 +454,7 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 | `PUT /api/settings/calendar` | FY start month and payday | Applies from the next FY; returns the date it takes effect |
 | `GET /api/fiscal-years` | List FYs |  |
 | `POST /api/fiscal-years/next` | Start the next FY; body has `copyPlans` | 409 before the last month of the current FY |
-| `GET /api/fiscal-years/{fyId}/overview` | Everything Dashboard and Months need: months with status, income, planned and spent per sub-category per month, totals | One call |
+| `GET /api/fiscal-years/{fyId}/overview` | Everything Dashboard and Months need: months with status, income, planned and spent per sub-category per month, totals | One call. Optional `categoryId` and `subCategoryId` (MON-05) narrow rows, months and totals and make income null |
 | `GET /api/indicator?subCategoryId=&date=` | Planned, spent, remaining and percent for one sub-category in the month of that date | Used by Add entry |
 | `GET /api/categories` | Categories with their sub-categories | Archived ones included and flagged |
 | `POST /api/categories` and `PUT /api/categories/{id}` | Add, rename, archive | No DELETE |
