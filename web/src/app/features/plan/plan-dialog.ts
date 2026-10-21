@@ -32,7 +32,7 @@ function minorOf(text: string): number | null {
 
 // PLN-01, PLN-02, PLN-04: the 12 month amounts of one sub-category, labeled with the stored months and
 // their dates, with "Same amount for all months" and "Copy from previous month". Owner's choice (M8):
-// it is a dialog, and each month shows "Unassigned after" while you type (carried, so a change shows
+// it is a dialog, and each month shows "Planned savings after" while you type (carried, so a change shows
 // in every later month), so the effect is seen before saving. That preview is the only sum made in the browser, in exact minor units; the saved numbers
 // come from the API. Closes with the new plans.
 @Component({
@@ -63,7 +63,7 @@ export class PlanDialog {
 
   private readonly values = toSignal(this.months.valueChanges, { initialValue: this.months.getRawValue() });
 
-  // "Unassigned after" per month. Unassigned carries (R-PLN-03), so a change in one month moves that
+  // "Planned savings after" per month. Unassigned carries (R-PLN-03), so a change in one month moves that
   // month and every later one: each month's saved Unassigned minus the changes made up to it.
   protected readonly after = computed(() => {
     const unassigned = new Map(this.data.plans.totals.map((row) => [row.periodKey, toMinor(row.unassigned)]));

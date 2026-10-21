@@ -159,7 +159,7 @@
             <span class="caption" [class.danger]="t.spentOver">{{ t.spentVersus }}</span>
           </div>
           <div class="kpi saved">
-            <span class="caption">Saved</span>
+            <span class="caption">{{ t.savedLabel }}</span>
             <span class="money value" [class.danger]="t.negative">{{ t.saved }}</span>
             @if (t.negative) {
               <span class="caption danger">Spent more than income</span>
@@ -210,14 +210,14 @@
             </div>
           </dl>
           <p class="caption">
-            Planned saving is your plan's income minus planned for the whole year. Leftovers carry into the next
+            Planned saving is your plan's income minus planned {{ s.covers }}. Leftovers carry into the next
             month, so they count as still to spend.
           </p>
         }
       </section>
     }
 
-    <!-- DSH-04: the total balance and a pie by account (R-BAL-03). -->
+    <!-- DSH-04: the total balance and a bar split by account (R-BAL-03, owner note 13). -->
     @if (banks(); as b) {
       <section class="card wide" aria-labelledby="banks-title">
         <div class="card-head">
@@ -235,7 +235,7 @@
               spent in the closed months
             </p>
           }
-          <app-bank-pie [accounts]="b.accounts" [currency]="currency()" />
+          <app-bank-bar [accounts]="b.accounts" [currency]="currency()" />
         } @else {
           <p class="note">
             Set the opening balance of every account and the income split on

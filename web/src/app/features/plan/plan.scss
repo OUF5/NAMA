@@ -186,10 +186,6 @@
   font-weight: 600;
 }
 
-.totals .carried {
-  color: var(--text-2);
-}
-
 // A computed row's formula, under its name ("Income − Planned").
 .formula {
   display: block;
@@ -199,7 +195,7 @@
   opacity: 0.85;
 }
 
-// R-PLN-04 in the card head: "Planned saved in FY 2026 · SAR 184,900.25".
+// R-PLN-04 in the card head: "Accumulated Planned Savings in FY 2026 · SAR 184,900.25".
 .saved-kpi {
   display: flex;
   flex-direction: column;

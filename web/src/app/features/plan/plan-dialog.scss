@@ -31,7 +31,7 @@ h2 .caption {
   list-style: none;
 }
 
-// Month and dates, amount, copy button, then "Unassigned after". Rows are split by a divider.
+// Month and dates, amount, copy button, then "Planned savings after". Rows are split by a divider.
 .month {
   display: grid;
   grid-template-columns: 140px 160px 44px minmax(0, 1fr);

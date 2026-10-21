@@ -34,8 +34,9 @@ export type PlanTab = (typeof PLAN_TABS)[number]['id'];
 // in one month, a month at a time), Allocating (the PLN-03 totals) and Categories (STG-05, moved from
 // Settings). Owner's choice (M8), so the page stays short as it grows:
 // - PLN-03 totals are one table turned sideways that reads top to bottom: Income - Planned = Unassigned
-//   this month (the month on its own), + From last month = Unassigned (R-PLN-03 carries), for every
-//   month and the FY, whose Unassigned is Planned saved (R-PLN-04). A month can be selected.
+//   this month (the month on its own), added up from the FY's first month = Accumulated Planned
+//   Savings (R-PLN-03, owner note 10), for every month and the FY, whose last row is Planned saved
+//   (R-PLN-04). A month can be selected.
 // - Categories are compact rows (closed at first) with their amount in the selected month and their
 //   FY total; a category opens its sub-categories. Allocating and Planning share the selected month.
 // - The 12 month amounts are edited in a dialog (PlanDialog).
@@ -99,7 +100,6 @@ export class Plan {
         period,
         month: period.label.slice(0, 3),
         year: period.label.slice(4),
-        carriedIn: formatAmount(toMinor(row?.carriedIn ?? 0)),
         planned: formatAmount(toMinor(row?.planned ?? 0)),
         income: formatAmount(toMinor(row?.income ?? 0)),
         thisMonth: formatAmount(toMinor(row?.thisMonth ?? 0)),
@@ -110,15 +110,8 @@ export class Plan {
     });
   });
 
-  // R-PLN-06: "Oct 2026" when the carry starts after the FY's first month (NAMA was set up then), so
-  // the page can say why earlier months stand alone; null otherwise.
-  protected readonly carryFrom = computed(() => {
-    const data = this.data();
-    const key = data?.carryFromPeriodKey;
-    return data && key && key !== data.fiscalYear.periods[0]?.key
-      ? (data.fiscalYear.periods.find((period) => period.key === key)?.label ?? null)
-      : null;
-  });
+  // Owner note 10: Accumulated Planned Savings adds up from the FY's first month ("Aug 2026").
+  protected readonly firstMonth = computed(() => this.periods()[0]?.label ?? '');
 
   // R-PLN-04: what the plan leaves at the end of the FY, in the FY column and the card head.
   protected readonly fiscalYearColumn = computed(() => {

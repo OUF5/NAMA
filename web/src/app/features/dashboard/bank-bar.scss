@@ -1,25 +1,21 @@
-// docs/DESIGN.md "Pie (DSH-04)": wedges with a 2px --surface edge, the legend beside it (under it on
-// phones). Colors come from the --series-* tokens only.
+// docs/DESIGN.md "Bank bar (DSH-04)": one thin bar split by account with a 2px --surface gap between
+// parts, then the accounts in up to 3 columns. Colors come from the --series-* tokens only.
 :host {
   display: block;
 }
 
-.pie-row {
+.bar {
   display: flex;
-  align-items: center;
-  gap: 24px;
+  gap: 2px;
+  height: 12px;
+  margin: 16px 0 8px;
+  border-radius: 4px;
+  overflow: hidden;
 }
 
-.pie {
-  flex: none;
-  width: 168px;
-  height: 168px;
-}
-
-.slice {
-  stroke: var(--surface);
-  stroke-width: 2;
-  stroke-linejoin: round;
+.part {
+  flex-basis: 0;
+  min-width: 4px;
   transition: opacity 0.15s;
 
   &:hover {
@@ -27,9 +23,12 @@
   }
 }
 
-.legend {
-  flex: 1;
-  min-width: 0;
+// Columns of at least 240px, never more than 3, so a name stays close to its amount; one column on
+// phones.
+.list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(max(240px, calc((100% - 64px) / 3)), 1fr));
+  column-gap: 32px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -40,10 +39,6 @@
     gap: 8px;
     min-height: 36px;
     border-bottom: 1px solid var(--divider);
-
-    &:last-child {
-      border-bottom: 0;
-    }
   }
 }
 
@@ -72,21 +67,11 @@
   font-weight: 500;
 }
 
+.other-note,
 .outside-title {
   margin: 12px 0 0;
 }
 
 .danger {
   color: var(--danger);
-}
-
-@media (max-width: 599.98px) {
-  .pie-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .pie {
-    align-self: center;
-  }
 }

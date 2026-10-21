@@ -49,6 +49,9 @@ export interface Projection {
   savedToDate: number;
   plannedSaved: number;
   projectedSaving: number;
+  // R-PLN-06: the month savedToDate and plannedSaved count from when NAMA was set up after the FY's
+  // first month; null when they cover the whole FY (owner note 11).
+  countedFrom: PeriodInfo | null;
 }
 
 // balance is the active accounts' total, null until complete (every active account has an opening

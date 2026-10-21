@@ -133,18 +133,21 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((await Get(sub)).ToJsonString(), body.ToJsonString());
 
         var totals = body["totals"]!.AsArray()
-            .Select(t => (t!["periodKey"]!.GetValue<string>(), t["carriedIn"]!.GetValue<decimal>(), t["income"]!.GetValue<decimal>(),
+            .Select(t => (t!["periodKey"]!.GetValue<string>(), t["income"]!.GetValue<decimal>(),
                 t["planned"]!.GetValue<decimal>(), t["unassigned"]!.GetValue<decimal>()))
             .ToList();
         Assert.Equal(12, totals.Count);
         // Each month on its own (not carried): Jan 17,000 - 1,500; Sep 17,500.25 - 1,900.
         Assert.Equal((15500m, 15600.25m), (body["totals"]![0]!["thisMonth"]!.GetValue<decimal>(), body["totals"]![8]!["thisMonth"]!.GetValue<decimal>()));
-        // R-PLN-03 carried: Jan: 0 + 17,000 (15,000 + 2,000) - 1,500 = 15,500.
-        Assert.Equal(("2026-01", 0m, 17000m, 1500m, 15500m), totals[0]);
-        Assert.Equal(("2026-02", 15500m, 17000m, 1500m, 31000m), totals[1]);
-        // Sep: 8 × 15,500 = 124,000 carried; 17,000 + 500.25 income; 1,500 + 400 planned.
-        Assert.Equal(("2026-09", 124000m, 17500.25m, 1900m, 139600.25m), totals[8]);
-        Assert.Equal(("2026-12", 169800.25m, 17000m, 1900m, 184900.25m), totals[11]);
+        // R-PLN-03 added up: Jan: 17,000 (15,000 + 2,000) - 1,500 = 15,500.
+        Assert.Equal(("2026-01", 17000m, 1500m, 15500m), totals[0]);
+        Assert.Equal(("2026-02", 17000m, 1500m, 31000m), totals[1]);
+        // Sep: 8 × 15,500 = 124,000 before it; 17,000 + 500.25 income; 1,500 + 400 planned.
+        Assert.Equal(("2026-09", 17500.25m, 1900m, 139600.25m), totals[8]);
+        Assert.Equal(("2026-12", 17000m, 1900m, 184900.25m), totals[11]);
+        // Only what Plan shows (owner note 10): no From last month, no carry start.
+        Assert.Null(body["totals"]![0]!["carriedIn"]);
+        Assert.Null(body["carryFromPeriodKey"]);
         // R-PLN-04: Planned saved is December's Unassigned = 204,500.25 - 19,600.
         var fy = body["fiscalYearTotals"]!;
         Assert.Equal((204500.25m, 19600m, 184900.25m),
@@ -174,7 +177,7 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((250.75m, 0m, -250.75m),
             (february["planned"]!.GetValue<decimal>(), february["income"]!.GetValue<decimal>(), february["unassigned"]!.GetValue<decimal>()));
         var march = body["totals"]![2]!;
-        Assert.Equal((-250.75m, -250.75m), (march["carriedIn"]!.GetValue<decimal>(), march["unassigned"]!.GetValue<decimal>()));
+        Assert.Equal((0m, -250.75m), (march["thisMonth"]!.GetValue<decimal>(), march["unassigned"]!.GetValue<decimal>()));
         Assert.Equal(-250.75m, body["fiscalYearTotals"]!["plannedSaved"]!.GetValue<decimal>());
     }
 

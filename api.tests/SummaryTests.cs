@@ -116,6 +116,8 @@ public class SummaryTests(ApiFactory factory) : IClassFixture<ApiFactory>
             projection["futureMonths"]!.AsArray().Select(month => (month!["period"]!["key"]!.GetValue<string>(), Dec(month["unallocated"]))));
         Assert.Equal((151_750.01m, 186_000m, 186_000m),
             (Dec(projection["savedToDate"]), Dec(projection["plannedSaved"]), Dec(projection["projectedSaving"])));
+        // No start day: it counts from the FY's first month (R-PLN-06), so it names none.
+        Assert.Null(projection["countedFrom"]);
     }
 
     // Until the balance is complete, the projected saving is known but the projected balance is not.

@@ -27,15 +27,14 @@ const transition = {
   periods: [{ key: '2027-01', label: 'Jan 2027', startDate: '2027-01-27', endDate: '2027-02-26' }],
 };
 
-// Groceries (Food) with the given amounts; income 17,000 every month. Unassigned carries (R-PLN-03).
+// Groceries (Food) with the given amounts; income 17,000 every month. Unassigned adds up (R-PLN-03).
 function plansResponse(amounts: Record<string, number> = {}, fiscalYear = fy2026, fiscalYears = [fy2026]): PlansResponse {
   const planned = (key: string) => amounts[key] ?? 0;
   const total = Object.values(amounts).reduce((sum, amount) => sum + amount, 0);
-  let carried = 0;
+  let added = 0;
   const totals = fiscalYear.periods.map((p) => {
-    const carriedIn = carried;
-    carried = carriedIn + 17000 - planned(p.key);
-    return { periodKey: p.key, carriedIn, income: 17000, planned: planned(p.key), thisMonth: 17000 - planned(p.key), unassigned: carried };
+    added += 17000 - planned(p.key);
+    return { periodKey: p.key, income: 17000, planned: planned(p.key), thisMonth: 17000 - planned(p.key), unassigned: added };
   });
   return {
     fiscalYears,
@@ -46,8 +45,7 @@ function plansResponse(amounts: Record<string, number> = {}, fiscalYear = fy2026
       ? { food: Object.fromEntries(fiscalYear.periods.map((p) => [p.key, planned(p.key)])) }
       : {},
     totals,
-    fiscalYearTotals: { income: 17000 * fiscalYear.periods.length, planned: total, plannedSaved: carried },
-    carryFromPeriodKey: fiscalYear.periods[0].key,
+    fiscalYearTotals: { income: 17000 * fiscalYear.periods.length, planned: total, plannedSaved: added },
   };
 }
 
@@ -174,25 +172,24 @@ describe('Plan (PRD 5.3)', () => {
     const root = await open([food], plansResponse(), '/plan?tab=allocating');
 
     const table = root.querySelector('table.totals')!;
-    // R-PLN-03 ("Unallocated" on screen): each computed row has its formula under its name.
+    // R-PLN-03: each computed row has its formula under its name; no From last month (owner note 10).
     expect(Array.from(table.querySelectorAll('tbody th')).map((th) => text(th))).toEqual([
       'Income',
       'Planned',
       'Unallocated this month Income − Planned',
-      "From last month Last month's accumulated",
-      'Unallocated accumulated This month + From last month',
+      'Accumulated Planned Savings Unallocated this month, added up from Jan 2026',
     ]);
     const rows = Array.from(table.querySelectorAll('tbody tr')).map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => text(td)));
     expect(rows.map((row) => row.slice(0, 2))).toEqual([
       ['17,000', '17,000'],
       ['0', '0'],
       ['17,000', '17,000'],
-      ['0', '17,000'],
       ['17,000', '34,000'],
     ]);
-    // R-PLN-04: the FY column, whose Unassigned is Planned saved, also shown in the card head.
-    expect(rows.map((row) => row.at(-1))).toEqual(['204,000', '0', '204,000', '–', '204,000']);
-    expect(text(root.querySelector('.saved-kpi'))).toBe('Planned saved in FY 2026 SAR 204,000');
+    // R-PLN-04: the FY column, whose last row is Planned saved, also shown in the card head.
+    expect(text(table.querySelector('thead .fy-col'))).toBe('FY total');
+    expect(rows.map((row) => row.at(-1))).toEqual(['204,000', '0', '204,000', '204,000']);
+    expect(text(root.querySelector('.saved-kpi'))).toBe('Accumulated Planned Savings in FY 2026 SAR 204,000');
     const months = Array.from(table.querySelectorAll<HTMLButtonElement>('thead button.month'));
     expect(months.length).toBe(12);
     expect(text(months[0])).toBe('Jan 2026');
@@ -202,13 +199,15 @@ describe('Plan (PRD 5.3)', () => {
     expect(months[8].getAttribute('aria-pressed')).toBe('true');
   });
 
-  // R-PLN-06: set up in Oct 2026, so the FY column covers Oct on and the caption says why.
-  it('says which month the carry starts in', async () => {
-    const root = await open([food], { ...plansResponse(), carryFromPeriodKey: '2026-10' }, '/plan?tab=allocating');
+  // Owner note 10: the note says the running total starts in the FY's first month.
+  it('says Accumulated Planned Savings adds up from the FY\'s first month', async () => {
+    const root = await open([food], plansResponse(), '/plan?tab=allocating');
 
-    const table = root.querySelector('table.totals')!;
-    expect(text(table.querySelector('thead .fy-col'))).toBe('From Oct 2026');
-    expect(text(root.querySelector('.totals-note'))).toContain('It carries from Oct 2026, the month you started NAMA; earlier months stand alone.');
+    expect(text(root.querySelector('.totals-note'))).toBe(
+      "Unallocated is income that no plan uses yet. Accumulated Planned Savings adds up each month's unallocated from " +
+        'Jan 2026, the first month of FY 2026, so its FY total is what your plan saves this FY. Select a month to see ' +
+        'its amounts on Planning.',
+    );
   });
 
   // Categories start closed; the selected month drives the amounts. The month picker steps through
@@ -243,8 +242,8 @@ describe('Plan (PRD 5.3)', () => {
     expect(text(root.querySelector('.row.sub'))).toBe('Groceries FY total SAR 16,600 SAR 900 edit');
   });
 
-  // PLN-01, PLN-02, PLN-04 in the editor dialog, with "Unallocated after" while typing (M8).
-  it('edits the months in a dialog, previews Unallocated, and saves', async () => {
+  // PLN-01, PLN-02, PLN-04 in the editor dialog, with "Planned savings after" while typing (M8).
+  it('edits the months in a dialog, previews Planned savings, and saves', async () => {
     const root = await open([withGroceries], plansResponse({ '2026-01': 99 }));
     root.querySelector<HTMLButtonElement>('button.expand')!.click();
     await settle();
@@ -264,15 +263,15 @@ describe('Plan (PRD 5.3)', () => {
     await settle();
     expect(inputLabeled(dialog(), 'Mar 2026').value).toBe('40000');
 
-    // Unassigned after, carried (R-PLN-03): a change moves its month and every later one.
+    // Planned savings after, added up (R-PLN-03): a change moves its month and every later one.
     // Jan 16,901 - 1,401.50 = 15,499.50; Feb 33,901 - (1,401.50 + 40,000) = -7,500.50 (red);
     // Mar 50,901 - 81,401.50 = -30,500.50.
     const after = Array.from(dialog().querySelectorAll('.after'));
-    expect(text(after[0])).toBe('Unallocated after SAR 15,499.50');
+    expect(text(after[0])).toBe('Planned savings after SAR 15,499.50');
     expect(after[0].querySelector('.money')!.classList).toContain('ok');
-    expect(text(after[1])).toBe('Unallocated after SAR -7,500.50');
+    expect(text(after[1])).toBe('Planned savings after SAR -7,500.50');
     expect(after[1].querySelector('.money')!.classList).toContain('danger');
-    expect(text(after[2])).toBe('Unallocated after SAR -30,500.50');
+    expect(text(after[2])).toBe('Planned savings after SAR -30,500.50');
 
     // Empty and 0 both clear a month (owner's choice, M4).
     type(inputLabeled(dialog(), 'Dec 2026'), '');

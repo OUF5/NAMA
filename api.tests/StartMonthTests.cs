@@ -71,21 +71,31 @@ public class StartMonthTests(ApiFactory factory) : IClassFixture<ApiFactory>
             (Dec(toDate["income"]), Dec(toDate["spent"]), Dec(toDate["saved"]), Dec(toDate["plannedSaved"])));
     }
 
-    // Plan: Unassigned carries from Oct (9,000), and the FY column covers Oct to Jul so it adds up:
-    // income 10 × 10,000 + 1,000 = 101,000, planned 10 × 1,000 = 10,000, Planned saved 91,000.
+    // Plan (owner note 10): Accumulated Planned Savings is the plan alone, so it adds up from Aug, the
+    // FY's first month, even though NAMA was set up in Oct: 9,000 a month, 10,000 in Feb (the bonus).
+    // The FY column is the whole FY: income 12 × 10,000 + 1,000 = 121,000, planned 12 × 1,000 = 12,000,
+    // Planned saved 109,000.
     [Fact]
-    public async Task Plan_carries_unassigned_from_October()
+    public async Task Plan_adds_up_planned_savings_from_the_fiscal_years_first_month()
     {
         var plans = await Get(await SetUp(), $"/api/fiscal-years/{Fy}/plans");
 
-        Assert.Equal("2026-10", plans["carryFromPeriodKey"]!.GetValue<string>());
+        Assert.Null(plans["carryFromPeriodKey"]);
         var totals = plans["totals"]!.AsArray();
-        Assert.Equal([0m, 0m, 0m, 9_000m], totals.Take(4).Select(month => Dec(month!["carriedIn"])));
-        Assert.Equal([9_000m, 9_000m, 9_000m, 18_000m], totals.Take(4).Select(month => Dec(month!["unassigned"])));
-        Assert.All(totals, month => Assert.Equal(month!["planned"]!.GetValue<decimal>() == 1_000m && month["income"]!.GetValue<decimal>() == 11_000m ? 10_000m : 9_000m, Dec(month["thisMonth"])));
-        Assert.Equal(91_000m, Dec(totals[^1]!["unassigned"]));
+        Assert.Equal([9_000m, 18_000m, 27_000m, 36_000m], totals.Take(4).Select(month => Dec(month!["unassigned"])));
+        Assert.All(totals, month => Assert.Equal(month!["income"]!.GetValue<decimal>() == 11_000m ? 10_000m : 9_000m, Dec(month["thisMonth"])));
+        Assert.Equal(109_000m, Dec(totals[^1]!["unassigned"]));
         var fy = plans["fiscalYearTotals"]!;
-        Assert.Equal((101_000m, 10_000m, 91_000m), (Dec(fy["income"]), Dec(fy["planned"]), Dec(fy["plannedSaved"])));
+        Assert.Equal((121_000m, 12_000m, 109_000m), (Dec(fy["income"]), Dec(fy["planned"]), Dec(fy["plannedSaved"])));
+    }
+
+    // Dashboard still counts from Oct (R-PLN-06): its FY Planned saved is Oct to Jul, 91,000.
+    [Fact]
+    public async Task Dashboard_planned_saved_still_counts_from_October()
+    {
+        var overview = await Get(await SetUp(), $"/api/fiscal-years/{Fy}/overview");
+
+        Assert.Equal(91_000m, Dec(overview["totals"]!["plannedSaved"]));
     }
 
     // The top bar: 1,000 left in Oct, never more than what the plan gives; the balance is 2,500.
@@ -98,6 +108,11 @@ public class StartMonthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((0m, 1_000m, 1_000m, 9_000m),
             (Dec(month["carriedIn"]), Dec(month["planned"]), Dec(month["remaining"]), Dec(month["unassigned"])));
         Assert.Equal(2_500m, Dec(summary["balance"]));
+        // Owner note 11: the projection says it counts from Oct, so Dashboard can name it.
+        var projection = summary["projection"]!;
+        Assert.Equal(("2026-10", "Oct 2026"),
+            (projection["countedFrom"]!["key"]!.GetValue<string>(), projection["countedFrom"]!["label"]!.GetValue<string>()));
+        Assert.Equal(91_000m, Dec(projection["plannedSaved"]));
     }
 
     [Fact]

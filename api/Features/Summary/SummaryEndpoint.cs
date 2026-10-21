@@ -45,7 +45,10 @@ public static class SummaryEndpoint
         decimal? ProjectedBalance,
         decimal SavedToDate,
         decimal PlannedSaved,
-        decimal ProjectedSaving);
+        decimal ProjectedSaving,
+        // R-PLN-06: the first month SavedToDate and PlannedSaved count from when it is not the FY's
+        // first month (NAMA was set up later), so Dashboard can say so (owner note 11). Null otherwise.
+        MeEndpoint.PeriodDto? CountedFrom);
 
     // Balance is the active accounts' total, null until every active account has an opening balance
     // and income has a split (Complete). Accounts are the active ones, by name. Month and Projection
@@ -116,7 +119,10 @@ public static class SummaryEndpoint
                     projected.ProjectedBalance is { } end ? Money.FromMinor(end) : null,
                     Money.FromMinor(projected.SavedToDate),
                     Money.FromMinor(projected.PlannedSaved),
-                    Money.FromMinor(projected.ProjectedSaving));
+                    Money.FromMinor(projected.ProjectedSaving),
+                    PlanCalculator.CarryStart(found.FiscalYear.Periods, data.Profile.StartedOn) is var start and > 0
+                        ? MeEndpoint.PeriodDto.From(found.FiscalYear.Periods[Math.Min(start, found.FiscalYear.Periods.Count - 1)])
+                        : null);
             }
 
             return Results.Ok(new SummaryResponse(

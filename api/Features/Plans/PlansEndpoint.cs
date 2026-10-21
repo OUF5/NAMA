@@ -13,13 +13,12 @@ public static class PlansEndpoint
 {
     public record PlanDto(string SubCategoryId, string CategoryId, IReadOnlyDictionary<string, decimal> Amounts, decimal Total);
 
-    // PLN-03, R-PLN-03: one row per month. ThisMonth is the month on its own (Income - Planned, not
-    // carried); CarriedIn is the previous month's Unassigned, so Unassigned = ThisMonth + CarriedIn.
-    public record MonthTotalsDto(
-        string PeriodKey, decimal CarriedIn, decimal Income, decimal Planned, decimal ThisMonth, decimal Unassigned);
+    // PLN-03, R-PLN-03: one row per month. ThisMonth is the month on its own (Income - Planned);
+    // Unassigned ("Accumulated Planned Savings") is every ThisMonth added up from the FY's first month.
+    public record MonthTotalsDto(string PeriodKey, decimal Income, decimal Planned, decimal ThisMonth, decimal Unassigned);
 
-    // The FY column of PLN-03, from the first month that carries (R-PLN-06) to the FY's end, so it adds
-    // up: Income - Planned = PlannedSaved, the last month's Unassigned (R-PLN-04).
+    // The FY column of PLN-03, the whole FY, so it adds up: Income - Planned = PlannedSaved, the last
+    // month's Unassigned (R-PLN-04).
     public record FiscalYearTotalsDto(decimal Income, decimal Planned, decimal PlannedSaved);
 
     // CategoryMonthTotals: category id → month key → planned (R-PLN-02), for Plan's month
@@ -31,8 +30,7 @@ public static class PlansEndpoint
         IReadOnlyDictionary<string, decimal> CategoryTotals,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, decimal>> CategoryMonthTotals,
         IReadOnlyList<MonthTotalsDto> Totals,
-        FiscalYearTotalsDto FiscalYearTotals,
-        string? CarryFromPeriodKey);
+        FiscalYearTotalsDto FiscalYearTotals);
 
     public static IEndpointRouteBuilder MapPlans(this IEndpointRouteBuilder api)
     {
@@ -95,13 +93,11 @@ public static class PlansEndpoint
                 period => period.Key,
                 period => Money.FromMinor(PlanCalculator.CategoryPlanned(plans, categoryId, period.Key))));
 
-        // R-PLN-06: the carry starts in the month NAMA was set up, or the FY's first month.
-        var carryStart = PlanCalculator.CarryStart(fiscalYear.Periods, (await store.GetProfileAsync(uid))?.StartedOn);
-        var months = PlanCalculator.RunningUnassigned(fiscalYear.Periods, income, plans, carryStart);
-        var counted = months.Skip(carryStart).ToList();
+        // R-PLN-03 on Plan (owner note 10): the plan alone, so it adds up from the FY's first month,
+        // not from the month NAMA was set up (R-PLN-06 is for what was spent).
+        var months = PlanCalculator.RunningUnassigned(fiscalYear.Periods, income, plans);
         var totals = months.Select(month => new MonthTotalsDto(
             month.PeriodKey,
-            Money.FromMinor(month.CarriedIn),
             Money.FromMinor(month.Income),
             Money.FromMinor(month.Planned),
             Money.FromMinor(month.ThisMonth),
@@ -119,10 +115,9 @@ public static class PlansEndpoint
             categoryMonthTotals,
             totals,
             new FiscalYearTotalsDto(
-                Money.FromMinor(counted.Sum(month => month.Income)),
-                Money.FromMinor(counted.Sum(month => month.Planned)),
-                Money.FromMinor(PlanCalculator.PlannedSaved(months))),
-            carryStart < fiscalYear.Periods.Count ? fiscalYear.Periods[carryStart].Key : null);
+                Money.FromMinor(months.Sum(month => month.Income)),
+                Money.FromMinor(months.Sum(month => month.Planned)),
+                Money.FromMinor(PlanCalculator.PlannedSaved(months))));
     }
 }
 

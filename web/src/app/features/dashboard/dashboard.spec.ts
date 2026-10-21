@@ -193,6 +193,7 @@ function summary(): Summary {
       savedToDate: 151750.01,
       plannedSaved: 186000,
       projectedSaving: 186000,
+      countedFrom: null,
     },
   };
 }
@@ -427,19 +428,33 @@ describe('Dashboard (PRD 5.9)', () => {
     expect(lines(toDate, '.kpi')).toEqual([
       'Income SAR 153,500.25',
       'Planned until now SAR 13,900',
-      // 13,900 − 1,349.99
-      'Spent SAR 1,349.99 SAR 12,550.01 under plan',
-      // R-PLN-03: Sep's Unassigned is 139,600.25.
-      'Saved SAR 152,150.26 SAR 12,550.01 more than planned',
+      // 13,900 − 1,349.99: Sep is in progress, so what is left of the plan is still to spend (owner note 11).
+      'Spent SAR 1,349.99 SAR 12,550.01 of the plan left this month',
+      // R-PLN-03: Sep's Unassigned is 139,600.25. Sep is not over, so it is Unspent income, not Saved
+      // (owner note 12): 152,150.26 − 12,550.01 still to spend = 139,600.25 to keep.
+      'Unspent income SAR 152,150.26 SAR 12,550.01 still to spend in Sep 2026 · SAR 139,600.25 to keep (as planned)',
     ]);
     expect(toDate.querySelector('.danger')).toBeNull();
+  });
+
+  // A FY with no month in progress: what was not spent is really under plan and saved.
+  it('says under plan and more than planned once the months are closed', async () => {
+    const data = overview();
+    data.months = data.months.map((m) => ({ ...m, status: m.status === 'yetToCome' ? m.status : 'closed' }));
+    await open(data);
+
+    expect(lines(card('to-date'), '.kpi').slice(2)).toEqual([
+      'Spent SAR 1,349.99 SAR 12,550.01 under plan',
+      'Saved SAR 152,150.26 SAR 12,550.01 more than planned',
+    ]);
   });
 
   // R-PLN-06: set up in Sep 2026, so to date starts there.
   it('counts to date from the month NAMA was set up', async () => {
     await open({ ...overview(), carryFromPeriodKey: '2026-09' });
 
-    expect(text(card('to-date').querySelector('.card-head'))).toBe('FY 2026 to date Sep 2026 · 1 of 12 months');
+    // Owner note 11: not "1 of 12 months", which read as if Sep were the FY's first month.
+    expect(text(card('to-date').querySelector('.card-head'))).toBe('FY 2026 to date Sep 2026 · since you started NAMA');
   });
 
   // UX-07: overspending and a negative saved have a text label, not only a color.
@@ -450,7 +465,7 @@ describe('Dashboard (PRD 5.9)', () => {
 
     const toDate = card('to-date');
     expect(text(toDate.querySelector('.spent'))).toBe('Spent SAR 201,349.99 SAR 187,449.99 over plan');
-    expect(text(toDate.querySelector('.saved'))).toBe('Saved SAR -47,849.74 Spent more than income');
+    expect(text(toDate.querySelector('.saved'))).toBe('Unspent income SAR -47,849.74 Spent more than income');
     expect(toDate.querySelector('.saved .value')!.classList).toContain('danger');
   });
 
@@ -467,11 +482,29 @@ describe('Dashboard (PRD 5.9)', () => {
     button(saving, 'chevron_right How?').click();
     harness.detectChanges();
     expect(lines(saving, '.breakdown > div')).toEqual([
-      'Saved so far SAR 151,750.01',
+      'Unspent income SAR 151,750.01',
       '− Still to spend this month SAR 12,250.01',
       '+ Future unallocated SAR 46,500',
       '= Projected saving SAR 186,000',
     ]);
+    expect(text(saving.querySelector('.breakdown + .caption'))).toBe(
+      "Planned saving is your plan's income minus planned for the whole year. Leftovers carry into the next month, so they count as still to spend.",
+    );
+  });
+
+  // Owner note 11, R-PLN-06: set up in Sep, so Planned saving is not the whole FY, and it says so.
+  it('says which months the planned saving covers', async () => {
+    const data = summary();
+    data.projection = { ...data.projection!, countedFrom: periods[8] };
+    await open(overview(), data);
+
+    const saving = card('saving');
+    button(saving, 'chevron_right How?').click();
+    harness.detectChanges();
+    expect(text(saving.querySelector('.breakdown + .caption'))).toBe(
+      "Planned saving is your plan's income minus planned from Sep 2026, when you started NAMA, to the end of FY 2026. " +
+        'Leftovers carry into the next month, so they count as still to spend.',
+    );
   });
 
   it('says how far below plan an overspend leaves the saving', async () => {
@@ -566,9 +599,9 @@ describe('Dashboard (PRD 5.9)', () => {
     expect(card('bars').querySelector('mat-form-field')).toBeNull();
   });
 
-  // DSH-04: the bank total, what the closed months added, and a pie of the accounts above 0; SNB is
-  // below 0, so it is listed under the pie instead.
-  it('shows the total balance as a pie by account', async () => {
+  // DSH-04: the bank total, what the closed months added, and a bar of the accounts above 0 (owner
+  // note 13); SNB is below 0, so it is listed under it instead.
+  it('shows the total balance as a bar by account', async () => {
     await open();
 
     const banks = card('banks');
@@ -577,16 +610,17 @@ describe('Dashboard (PRD 5.9)', () => {
     expect(text(banks.querySelector('.added'))).toBe(
       'This FY added SAR 135,950 · income minus spent in the closed months',
     );
-    const pie = banks.querySelector('app-bank-pie')!;
-    expect(pie.querySelectorAll('.slice').length).toBe(1);
-    expect(pie.querySelector('svg')!.getAttribute('aria-label')).toBe('Balances by account: Al Rajhi SAR 500, 100%');
-    expect(lines(pie, '.pie-row .legend li')).toEqual(['Al Rajhi 100% SAR 500']);
-    expect(lines(pie, '.outside li')).toEqual(['SNB SAR -199.99']);
-    expect(pie.querySelector('.outside .danger')).not.toBeNull();
+    const bar = banks.querySelector('app-bank-bar')!;
+    expect(bar.querySelectorAll('.part').length).toBe(1);
+    expect(bar.querySelector('.bar')!.getAttribute('aria-label')).toBe('Balances by account: Al Rajhi SAR 500, 100%');
+    expect(lines(bar, '.list:not(.outside) li')).toEqual(['Al Rajhi 100% SAR 500']);
+    expect(lines(bar, '.outside li')).toEqual(['SNB SAR -199.99']);
+    expect(bar.querySelector('.outside .danger')).not.toBeNull();
+    expect(bar.querySelector('.other-note')).toBeNull();
   });
 
-  // Each account keeps its color by its place in the list, and the slices go round the whole pie.
-  it('gives each account its own slice and color', async () => {
+  // Each account keeps its color by its place in the list, and its part of the bar is its share.
+  it('gives each account its own part and color', async () => {
     const data = summary();
     data.balance = 4000;
     data.accounts = [
@@ -596,16 +630,52 @@ describe('Dashboard (PRD 5.9)', () => {
     ];
     await open(overview(), data);
 
-    const pie = card('banks').querySelector('app-bank-pie')!;
-    const slices = Array.from(pie.querySelectorAll<SVGPathElement>('path.slice'));
-    expect(slices.map((slice) => slice.style.fill)).toEqual(['var(--series-1)', 'var(--series-3)']);
-    // A from 12 o'clock to 3 o'clock (25%), C from there round to 12 o'clock (75%, the large arc).
-    expect(slices.map((slice) => slice.getAttribute('d'))).toEqual([
-      'M 100 100 L 100 4 A 96 96 0 0 1 196 100 Z',
-      'M 100 100 L 196 100 A 96 96 0 1 1 100 4 Z',
+    const bar = card('banks').querySelector('app-bank-bar')!;
+    const parts = Array.from(bar.querySelectorAll<HTMLElement>('.part'));
+    expect(parts.map((part) => part.style.background)).toEqual(['var(--series-1)', 'var(--series-3)']);
+    expect(parts.map((part) => part.style.flexGrow)).toEqual(['100000', '300000']);
+    expect(parts.map((part) => part.title)).toEqual(['A: SAR 1,000 (25%)', 'C: SAR 3,000 (75%)']);
+    expect(lines(bar, '.list:not(.outside) li')).toEqual(['A 25% SAR 1,000', 'C 75% SAR 3,000']);
+    expect(lines(bar, '.outside li')).toEqual(['B SAR 0']);
+  });
+
+  // More than 5 accounts: the 5th and later share the grey "Other" part of the bar, but each is still
+  // listed with its own amount, and a caption names them.
+  it('lists every account when more than 5 share the bar', async () => {
+    const data = summary();
+    data.balance = 15500;
+    data.accounts = [
+      { id: 'ahli', name: 'Ahli', balance: 3000 },
+      { id: 'albilad', name: 'Albilad', balance: 1000 },
+      { id: 'rajhi', name: 'Alrajhi', balance: 4200 },
+      { id: 'inma', name: 'Inma', balance: 2500 },
+      { id: 'riyad', name: 'Riyad', balance: 2000 },
+      { id: 'snb', name: 'SNB', balance: 1300 },
+      { id: 'stc', name: 'STC', balance: 1500 },
+    ];
+    await open(overview(), data);
+
+    const bar = card('banks').querySelector('app-bank-bar')!;
+    expect(Array.from(bar.querySelectorAll<HTMLElement>('.part')).map((part) => part.title)).toEqual([
+      'Ahli: SAR 3,000 (19%)',
+      'Albilad: SAR 1,000 (6%)',
+      'Alrajhi: SAR 4,200 (27%)',
+      'Inma: SAR 2,500 (16%)',
+      // Riyad + SNB + STC = 4,800.
+      'Other: SAR 4,800 (31%)',
     ]);
-    expect(lines(pie, '.pie-row .legend li')).toEqual(['A 25% SAR 1,000', 'C 75% SAR 3,000']);
-    expect(lines(pie, '.outside li')).toEqual(['B SAR 0']);
+    expect(lines(bar, '.list li')).toEqual([
+      'Ahli 19% SAR 3,000',
+      'Albilad 6% SAR 1,000',
+      'Alrajhi 27% SAR 4,200',
+      'Inma 16% SAR 2,500',
+      'Riyad 13% SAR 2,000',
+      'SNB 8% SAR 1,300',
+      'STC 10% SAR 1,500',
+    ]);
+    const keys = Array.from(bar.querySelectorAll<HTMLElement>('.list .key')).map((key) => key.style.background);
+    expect(keys.slice(3)).toEqual(['var(--series-4)', 'var(--series-other)', 'var(--series-other)', 'var(--series-other)']);
+    expect(text(bar.querySelector('.other-note'))).toBe('The grey part of the bar is Riyad, SNB and STC.');
   });
 
   it('asks for the balances before it shows the total', async () => {
@@ -615,7 +685,7 @@ describe('Dashboard (PRD 5.9)', () => {
     expect(text(banks.querySelector('.note'))).toBe(
       'Set the opening balance of every account and the income split on Banks to see your total.',
     );
-    expect(banks.querySelector('app-bank-pie')).toBeNull();
+    expect(banks.querySelector('app-bank-bar')).toBeNull();
   });
 
   // FY-01 after the latest FY ended: the latest FY (GET /api/fiscal-years), no month in progress,

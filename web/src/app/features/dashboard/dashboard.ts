@@ -13,7 +13,7 @@ import { RolloverBanner } from '../../shared/rollover-banner';
 import { STATUS_LABELS, availableMinor, nameMaps, spendLine } from '../months/month-lines';
 import { MonthOverview, OverviewApi, OverviewResponse } from '../months/overview-api';
 import { PlanApi } from '../plan/plan-api';
-import { BankPie } from './bank-pie';
+import { BankBar } from './bank-bar';
 import { MonthBars } from './month-bars';
 import { Projection } from './projection';
 
@@ -31,7 +31,7 @@ import { Projection } from './projection';
     MatIconModule,
     MatProgressBarModule,
     MatSelectModule,
-    BankPie,
+    BankBar,
     MonthBars,
     Projection,
     RolloverBanner,
@@ -192,7 +192,8 @@ export class Dashboard {
       started.length === 1
         ? started[0].period.label
         : `${started[0].period.label} to ${started.at(-1)!.period.label}`;
-    return `${range} · ${started.length} of ${months.length} months`;
+    // Owner note 11: "1 of 12 months" read as if Oct were the FY's first month.
+    return from > 0 ? `${range} · since you started NAMA` : `${range} · ${started.length} of ${months.length} months`;
   });
 
   protected readonly toDate = computed(() => {
@@ -202,25 +203,38 @@ export class Dashboard {
     }
     const currency = this.currency();
     const under = toMinor(toDate.planned) - toMinor(toDate.spent);
-    const ahead = toMinor(toDate.saved) - toMinor(toDate.plannedSaved);
+    // Owner note 11: while a month is in progress, its unspent plan is still to spend (leftovers carry,
+    // R-PLN-05), not under plan or saved ahead. It is DSH-06's "Still to spend this month".
+    const current = (this.data()?.months ?? []).find((m) => m.status === 'inProgress');
+    const left = current ? Math.max(0, under) : 0;
+    const ahead = toMinor(toDate.saved) - toMinor(toDate.plannedSaved) - left;
     return {
       income: this.money(toDate.income),
       planned: this.money(toDate.planned),
       spent: this.money(toDate.spent),
+      // Owner note 12: income minus spent is only saved once the month is over; before, it is
+      // "Unspent income", and part of it is still planned for this month.
+      savedLabel: current ? 'Unspent income' : 'Saved',
       saved: this.money(toDate.saved),
       negative: toDate.saved < 0,
       // How spent compares with the plan, in words (UX-07: color is never the only signal).
       spentVersus:
         under === 0
           ? 'On plan'
-          : under > 0
-            ? `${formatMoney(under, currency)} under plan`
-            : `${formatMoney(-under, currency)} over plan`,
+          : left > 0
+            ? `${formatMoney(left, currency)} of the plan left this month`
+            : under > 0
+              ? `${formatMoney(under, currency)} under plan`
+              : `${formatMoney(-under, currency)} over plan`,
       spentOver: under < 0,
       // R-PLN-03: the Unassigned of the latest started month, what the plan meant to keep by now.
+      // In progress it splits: what is still to spend in the month, and what is left to keep.
       savedVersus:
         ahead === 0
-          ? 'As planned'
+          ? left > 0
+            ? `${formatMoney(left, currency)} still to spend in ${current!.period.label} · ` +
+              `${formatMoney(toMinor(toDate.saved) - left, currency)} to keep (as planned)`
+            : 'As planned'
           : ahead > 0
             ? `${formatMoney(ahead, currency)} more than planned`
             : `${formatMoney(-ahead, currency)} less than planned`,
@@ -253,6 +267,11 @@ export class Dashboard {
     const below = toMinor(projection.plannedSaved) - toMinor(projection.projectedSaving);
     return {
       fy: projection.fiscalYearLabel,
+      // Owner note 11: say which months Planned saving covers (R-PLN-06), so it is not taken for the
+      // whole FY (Plan's Accumulated Planned Savings is).
+      covers: projection.countedFrom
+        ? `from ${projection.countedFrom.label}, when you started NAMA, to the end of ${projection.fiscalYearLabel}`
+        : 'for the whole year',
       planned: this.money(projection.plannedSaved),
       projected: this.money(projection.projectedSaving),
       plannedNegative: projection.plannedSaved < 0,
@@ -261,7 +280,8 @@ export class Dashboard {
       verdict: below <= 0 ? 'On track' : `${formatMoney(below, currency)} below plan`,
       reason: below <= 0 ? 'Your plan is covered so far.' : 'You have spent more than planned so far.',
       lines: [
-        { op: '', label: 'Saved so far', value: this.money(projection.savedToDate) },
+        // Owner note 12: the same number as FY to date's "Unspent income" (the month is not over).
+        { op: '', label: 'Unspent income', value: this.money(projection.savedToDate) },
         { op: '−', label: 'Still to spend this month', value: this.money(projection.stillToSpend) },
         { op: '+', label: 'Future unallocated', value: this.money(projection.futureUnallocated) },
       ],
