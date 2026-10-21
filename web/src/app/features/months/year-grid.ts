@@ -10,7 +10,7 @@ import { BalancesResponse, Cell, OverviewResponse } from './overview-api';
 // a Total row. The header shows each month's status (MON-01). Each cell opens Entries filtered by
 // its sub-category or category and month (MON-04). R-PLN-05: a month cell shows spent of available
 // (its plan plus what carried in); the FY total is FY spent of FY planned, as the carry starts at 0.
-// Owner note 9: each cell says what its numbers are ("Spent", "Available"), and a Balance row under
+// Owner note 9: each cell says what its numbers are ("Spent", "Plan"), and a Balance row under
 // the Total gives each month's end balance, real or projected (R-PLN-07).
 @Component({
   selector: 'app-year-grid',
@@ -136,7 +136,7 @@ export class YearGrid {
     const money = (minor: number) => formatMoney(minor, this.currency());
     const from = carried === 0 ? '' : ` (${money(toMinor(amounts.planned))} planned, ${money(carried)} from last month)`;
     const label = line.status
-      ? `${name}, ${column}: ${money(spent)} of ${money(available)} available${from}, ${line.chip}. Open entries`
+      ? `${name}, ${column}: ${money(spent)} of ${money(available)} plan${from}, ${line.chip}. Open entries`
       : `${name}, ${column}: nothing planned or spent. Open entries`;
     return { ...line, label, query, spentAmount: formatAmount(spent), availableAmount: formatAmount(available) };
   }

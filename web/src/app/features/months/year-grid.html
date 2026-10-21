@@ -10,7 +10,7 @@
   </section>
 } @else {
   <p class="caption hint">
-    Amounts in {{ currency() }}. Available is the month's plan plus what was left (or overspent) the month
+    Amounts in {{ currency() }}. Plan is the month's plan plus what was left (or overspent) the month
     before. Balance is the money in your accounts at the end of each month, projected from today on. Tap a
     cell to see its entries.
   </p>
@@ -142,7 +142,7 @@
       >
         @if (cell.status) {
           <span class="value-line"><span class="label">Spent</span><span class="money spent">{{ cell.spentAmount }}</span></span>
-          <span class="value-line caption"><span class="label">Available</span><span class="money">{{ cell.availableAmount }}</span></span>
+          <span class="value-line caption"><span class="label">Plan</span><span class="money">{{ cell.availableAmount }}</span></span>
         } @else {
           <span class="nothing" aria-hidden="true">–</span>
         }

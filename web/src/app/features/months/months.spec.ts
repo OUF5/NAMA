@@ -655,13 +655,13 @@ describe('Tracker (PRD 5.6)', () => {
     expect(root().querySelectorAll('td.now').length).toBe(4);
 
     const food = cell('Food, Sep 2026');
-    expect(words(food)).toBe('Spent 1,199.99 Available 1,500');
+    expect(words(food)).toBe('Spent 1,199.99 Plan 1,500');
     expect(food.classList).toContain('ok');
-    expect(food.getAttribute('aria-label')).toBe('Food, Sep 2026: SAR 1,199.99 of SAR 1,500 available, Within plan. Open entries');
+    expect(food.getAttribute('aria-label')).toBe('Food, Sep 2026: SAR 1,199.99 of SAR 1,500 plan, Within plan. Open entries');
     expect(food.getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09&categoryId=food');
     expect(cell('Food, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&categoryId=food');
     expect(cell('Total, Sep 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09');
-    expect(words(cell('Total, Sep 2026'))).toBe('Spent 1,299.99 Available 1,900');
+    expect(words(cell('Total, Sep 2026'))).toBe('Spent 1,299.99 Plan 1,900');
     expect(cell('Total, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01');
 
     // Spending without a plan is red, with "Over by" in the label.
