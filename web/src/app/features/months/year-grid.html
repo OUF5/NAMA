@@ -10,8 +10,9 @@
   </section>
 } @else {
   <p class="caption hint">
-    Each cell shows spent of available: the month's plan plus what was left (or overspent) the month
-    before. Tap a cell to see its entries.
+    Amounts in {{ currency() }}. Available is the month's plan plus what was left (or overspent) the month
+    before. Balance is the money in your accounts at the end of each month, projected from today on. Tap a
+    cell to see its entries.
   </p>
   <!-- MON-02: scrolls sideways inside its card with the first column fixed; the page never does. -->
   <section class="card grid-card" aria-label="Year">
@@ -77,6 +78,54 @@
             <ng-container *ngTemplateOutlet="gridCell; context: { cell, i: $index, last: $last }" />
           }
         </tr>
+        <!-- Owner note 9: the balance at each month's end, real or projected (R-PLN-07). -->
+        <tr class="balance-row">
+          <th scope="row" class="sticky">
+            Balance
+            <span class="caption block">End of month</span>
+          </th>
+          @let row = balanceRow();
+          @if (row.state === 'ready') {
+            @for (month of row.months; track month.key) {
+              <td [class.now]="month.now">
+                <span class="cell balance" [attr.aria-label]="month.label">
+                  @if (month.amount !== null) {
+                    <span class="money" [class.danger]="month.negative">{{ month.amount }}</span>
+                    <span class="caption">{{ month.projected ? 'Projected' : 'Actual' }}</span>
+                  } @else {
+                    <span class="nothing" aria-hidden="true">–</span>
+                  }
+                </span>
+              </td>
+            }
+            <td class="fy-col">
+              <span class="cell balance">
+                @if (row.end?.amount; as amount) {
+                  <span class="money" [class.danger]="row.end?.negative">{{ amount }}</span>
+                  <span class="caption">End of FY</span>
+                } @else {
+                  <span class="nothing" aria-hidden="true">–</span>
+                }
+              </span>
+            </td>
+          } @else {
+            <td [attr.colspan]="g.months.length + 1" class="row-note">
+              <span class="caption">
+                @switch (row.state) {
+                  @case ('loading') {
+                    Loading…
+                  }
+                  @case ('error') {
+                    The balances could not be loaded.
+                  }
+                  @default {
+                    Set every account's balance and the income split on <a routerLink="/banks">Banks</a> to see it.
+                  }
+                }
+              </span>
+            </td>
+          }
+        </tr>
       </tfoot>
     </table>
   </section>
@@ -92,8 +141,8 @@
         [attr.aria-label]="cell.label"
       >
         @if (cell.status) {
-          <span class="money spent">{{ cell.spent }}</span>
-          <span class="caption money">{{ cell.of }}</span>
+          <span class="value-line"><span class="label">Spent</span><span class="money spent">{{ cell.spentAmount }}</span></span>
+          <span class="value-line caption"><span class="label">Available</span><span class="money">{{ cell.availableAmount }}</span></span>
         } @else {
           <span class="nothing" aria-hidden="true">–</span>
         }

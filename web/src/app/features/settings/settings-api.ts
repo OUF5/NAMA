@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Me, Profile } from '../../core/me';
-import { Category, FiscalYear, SubCategory } from '../plan/plan-api';
+import { FiscalYear } from '../plan/plan-api';
 
 // PRD 5.7 Settings. Amounts are decimals in JSON (R-MON-01); every sum comes from the API.
 
@@ -70,7 +70,6 @@ export interface SettingsResponse {
   profile: Profile;
   calendar: Calendar;
   income: Income;
-  categories: Category[];
   people: People | null;
 }
 
@@ -125,15 +124,6 @@ export class SettingsApi {
 
   deleteIncome(id: string): Promise<Income> {
     return firstValueFrom(this.http.delete<Income>(`/api/income/additional/${id}`));
-  }
-
-  // Rename, archive and restore (STG-05). There is no delete (PRD 4.6).
-  updateCategory(id: string, name: string, archived: boolean): Promise<Category> {
-    return firstValueFrom(this.http.put<Category>(`/api/categories/${id}`, { name, archived }));
-  }
-
-  updateSubCategory(id: string, name: string, archived: boolean): Promise<SubCategory> {
-    return firstValueFrom(this.http.put<SubCategory>(`/api/sub-categories/${id}`, { name, archived }));
   }
 
   // AUTH-06, AUTH-07 (admins only). Each answers with the whole People list.

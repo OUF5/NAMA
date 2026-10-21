@@ -90,7 +90,7 @@
 
 // Header status (MON-01): Closed plain, In progress chip and border, Upcoming dashed.
 .month-col {
-  min-width: 96px;
+  min-width: 120px;
 
   .month-label {
     display: block;
@@ -192,8 +192,42 @@ tfoot td.now {
   }
 }
 
+// Owner note 9: each value with its label, "Spent 1,200" over "Available 1,500".
+.value-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+  width: 100%;
+
+  .label {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+}
+
 .nothing {
   color: var(--text-muted);
+}
+
+.block {
+  display: block;
+  font-weight: 400;
+}
+
+// The Balance row: under the Total, apart by a --border line; not a link.
+.balance-row th,
+.balance-row td {
+  border-top: 1px solid var(--border);
+}
+
+.cell.balance:hover {
+  background: none;
+}
+
+.row-note {
+  padding: 12px 16px;
+  text-align: left;
 }
 
 @media (max-width: 767.98px) {
@@ -213,7 +247,7 @@ tfoot td.now {
   }
 
   .month-col {
-    min-width: 88px;
+    min-width: 112px;
   }
 
   .cell {

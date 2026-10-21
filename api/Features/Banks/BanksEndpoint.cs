@@ -41,6 +41,29 @@ public sealed record BalanceData(
 
     // Every active account has an opening balance and income has a split, so the total is complete.
     public bool Complete => Splits.Count > 0 && Accounts.Where(account => !account.Archived).All(account => account.Opening is not null);
+
+    // R-BAL-03 for one account at the end of a day (today for Banks; a month's last day for Tracker's
+    // Year view). The account must have an opening balance.
+    public AccountBalance BalanceOn(BankAccount account, DateOnly date) => BalanceCalculator.Balance(
+        account.Id,
+        account.Opening!,
+        FiscalYears.SelectMany(fiscalYear => fiscalYear.Periods),
+        Income,
+        Splits,
+        Entries.Where(entry => entry.BankAccountId == account.Id).Select(entry => new DatedAmount(entry.Date, entry.AmountMinor)),
+        Transfers.Where(transfer => transfer.ToBankAccountId == account.Id).Select(transfer => new DatedAmount(transfer.Date, transfer.AmountMinor)),
+        Transfers.Where(transfer => transfer.FromBankAccountId == account.Id).Select(transfer => new DatedAmount(transfer.Date, transfer.AmountMinor)),
+        date);
+
+    // Owner note 9: the active accounts' total at the end of a past day. Null until the balance is
+    // complete, and before an active account's opening date (nothing is known then).
+    public long? TotalOn(DateOnly date)
+    {
+        var active = Accounts.Where(account => !account.Archived).ToList();
+        return !Complete || active.Any(account => account.Opening!.Date > date)
+            ? null
+            : active.Sum(account => BalanceOn(account, date).Balance);
+    }
 }
 
 // PRD 5.11 Banks (BNK-01 to BNK-05): every account with its balance and what makes it up, the income
@@ -138,20 +161,13 @@ public static class BanksEndpoint
         }
         var entries = dates.Count == 0 ? [] : await store.GetEntriesFromAsync(uid, dates.Min());
 
-        var balances = accounts
-            .Where(account => account.Opening is not null)
-            .ToDictionary(account => account.Id, account => BalanceCalculator.Balance(
-                account.Id,
-                account.Opening!,
-                periods,
-                income,
-                splits,
-                entries.Where(entry => entry.BankAccountId == account.Id).Select(entry => new DatedAmount(entry.Date, entry.AmountMinor)),
-                transfers.Where(transfer => transfer.ToBankAccountId == account.Id).Select(transfer => new DatedAmount(transfer.Date, transfer.AmountMinor)),
-                transfers.Where(transfer => transfer.FromBankAccountId == account.Id).Select(transfer => new DatedAmount(transfer.Date, transfer.AmountMinor)),
-                today));
-
-        return new BalanceData(profile, today, fiscalYears, accounts, splits, transfers, income, entries, balances);
+        var data = new BalanceData(profile, today, fiscalYears, accounts, splits, transfers, income, entries, new Dictionary<string, AccountBalance>());
+        return data with
+        {
+            Balances = accounts
+                .Where(account => account.Opening is not null)
+                .ToDictionary(account => account.Id, account => data.BalanceOn(account, today)),
+        };
     }
 
     public static async Task<IResult> ResultAsync(string uid, IUserStore store, TimeProvider time, bool created = false)

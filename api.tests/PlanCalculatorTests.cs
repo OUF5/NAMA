@@ -320,6 +320,17 @@ public class PlanCalculatorTests
         Assert.Equal((2_100_000, 2_400_000, 2_400_000), (projection.SavedToDate, projection.ProjectedSaving, projection.PlannedSaved));
     }
 
+    // Owner note 9: the month ends. Oct ends at 28,000 − 1,000 = 27,000, then each month adds 2,000;
+    // Dec is the projected balance, 31,000.
+    [Fact]
+    public void The_month_ends_lead_to_the_projected_balance()
+    {
+        var projection = ProjectOct(octSpent: 1_400_000);
+
+        Assert.Equal([("2026-10", (long?)2_700_000), ("2026-11", 2_900_000), ("2026-12", 3_100_000)], projection.MonthEnds());
+        Assert.All(ProjectOct(octSpent: 1_400_000, balanceToday: null).MonthEnds(), end => Assert.Null(end.Balance));
+    }
+
     // 500 overspent: nothing is still to spend, and the projected saving is 500 below plan (23,500).
     [Fact]
     public void An_overspend_lowers_the_projected_saving()

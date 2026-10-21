@@ -79,6 +79,8 @@ api.MapIncome();
 api.MapEntries();
 api.MapIndicator();
 api.MapOverview();
+api.MapMonth();
+api.MapBalances();
 api.MapPeople();
 
 app.Run();

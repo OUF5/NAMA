@@ -430,4 +430,27 @@ public class FiscalCalendarTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => FiscalCalendar.FirstFiscalYear(Today, startMonth, payday));
     }
+
+    // Owner note 9: Sep 2026 (payday 27) has 30 days, 27 Sep to 26 Oct.
+    [Fact]
+    public void Days_lists_every_day_of_the_month()
+    {
+        var days = FiscalCalendar.Days(FiscalCalendar.PeriodFor(2026, 9, 27));
+
+        Assert.Equal(30, days.Count);
+        Assert.Equal((new DateOnly(2026, 9, 27), new DateOnly(2026, 10, 26)), (days[0], days[^1]));
+    }
+
+    // The month before the first month of an FY is the last month of the FY before.
+    [Fact]
+    public void PreviousPeriod_crosses_into_the_fiscal_year_before()
+    {
+        var fy2026 = FiscalCalendar.FirstFiscalYear(Today, 1, 27);
+        var fy2027 = FiscalCalendar.NextFiscalYear(fy2026, 1, 27);
+
+        Assert.Equal("2026-08", FiscalCalendar.PreviousPeriod([fy2026, fy2027], "2026-09")!.Value.Period.Key);
+        var before = FiscalCalendar.PreviousPeriod([fy2026, fy2027], "2027-01")!.Value;
+        Assert.Equal((fy2026.Id, "2026-12"), (before.FiscalYear.Id, before.Period.Key));
+        Assert.Null(FiscalCalendar.PreviousPeriod([fy2026, fy2027], "2026-01"));
+    }
 }

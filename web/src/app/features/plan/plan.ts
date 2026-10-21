@@ -14,23 +14,43 @@ import { dialogSize } from '../../shared/dialog';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
 import { formatAmount, formatMoney, toMinor } from '../../shared/money';
 import { PeriodInfo, formatDate, formatDay } from '../../shared/month-label';
-import { NameDialog, NameDialogData } from '../settings/name-dialog';
+import { MonthOption, MonthPicker } from '../../shared/month-picker';
 import { Category, PlanApi, PlansResponse, SubCategory } from './plan-api';
+import { PlanCategories, CategoriesChange } from './plan-categories';
 import { PlanDialog, PlanDialogData } from './plan-dialog';
 
 const PHONE = '(max-width: 767.98px)';
 
-// PRD 5.3 Plan (PLN-01 to PLN-06). Owner's choice (M8), so the page stays short as it grows:
+// Owner note 9: three tabs, in the URL as ?tab= so a link can open one.
+export const PLAN_TABS = [
+  { id: 'planning', label: 'Planning' },
+  { id: 'allocating', label: 'Allocating' },
+  { id: 'categories', label: 'Categories' },
+] as const;
+
+export type PlanTab = (typeof PLAN_TABS)[number]['id'];
+
+// PRD 5.3 Plan (PLN-01 to PLN-06), in three tabs (owner note 9): Planning (each sub-category's amount
+// in one month, a month at a time), Allocating (the PLN-03 totals) and Categories (STG-05, moved from
+// Settings). Owner's choice (M8), so the page stays short as it grows:
 // - PLN-03 totals are one table turned sideways that reads top to bottom: Income - Planned = Unassigned
 //   this month (the month on its own), + From last month = Unassigned (R-PLN-03 carries), for every
-//   month and the FY, whose Unassigned is Planned saved (R-PLN-04). It is sticky on desktop and can be folded on phones. A month can be selected.
+//   month and the FY, whose Unassigned is Planned saved (R-PLN-04). A month can be selected.
 // - Categories are compact rows (closed at first) with their amount in the selected month and their
-//   FY total; a category opens its sub-categories.
+//   FY total; a category opens its sub-categories. Allocating and Planning share the selected month.
 // - The 12 month amounts are edited in a dialog (PlanDialog).
 // All sums come from the API (R-PLN-02, R-PLN-03); the page only formats them.
 @Component({
   selector: 'app-plan',
-  imports: [RouterLink, MatButtonModule, MatFormFieldModule, MatIconModule, MatSelectModule],
+  imports: [
+    RouterLink,
+    MatButtonModule,
+    MatFormFieldModule,
+    MatIconModule,
+    MatSelectModule,
+    MonthPicker,
+    PlanCategories,
+  ],
   providers: [OUTLINE_FORM_FIELDS],
   templateUrl: './plan.html',
   styleUrl: './plan.scss',
@@ -44,6 +64,8 @@ export class Plan {
   private readonly breakpoints = inject(BreakpointObserver);
 
   protected readonly formatDate = formatDate;
+  protected readonly tabs = PLAN_TABS;
+  protected readonly tab = signal<PlanTab>('planning');
   protected readonly formatDay = formatDay;
 
   protected readonly loadError = signal('');
@@ -59,6 +81,14 @@ export class Plan {
   protected readonly selected = computed(
     () => this.periods().find((period) => period.key === this.selectedKey()) ?? this.periods()[0] ?? null,
   );
+  protected readonly monthOptions = computed<MonthOption[]>(() => {
+    const current = this.meService.me()?.currentPeriodKey;
+    return this.periods().map((period) => ({
+      key: period.key,
+      label: period.label,
+      hint: period.key === current ? 'This month' : undefined,
+    }));
+  });
 
   // PLN-03, column by column. Unassigned is green at 0 or more and red below 0 (R-PLN-03).
   protected readonly columns = computed(() => {
@@ -103,16 +133,11 @@ export class Plan {
         }
       : null;
   });
-  protected readonly selectedColumn = computed(
-    () => this.columns().find((column) => column.period.key === this.selected()?.key) ?? null,
-  );
 
   // The totals table: the row labels, then equal month columns (scrolls sideways below that width).
   protected readonly labelWidth = 168;
   protected readonly columnWidth = 72;
 
-  // Phones can fold the totals to one line.
-  protected readonly totalsOpen = signal(true);
   private readonly opened = signal<ReadonlySet<string>>(new Set());
   // The sub-category saved last, highlighted for a moment.
   protected readonly flashId = signal<string | null>(null);
@@ -156,6 +181,12 @@ export class Plan {
 
   constructor() {
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
+      const tab = params.get('tab');
+      this.tab.set(PLAN_TABS.some((item) => item.id === tab) ? (tab as PlanTab) : 'planning');
+      // Switching tabs keeps the FY and needs no call.
+      if (this.data() && params.get('fyId') === this.urlFyId) {
+        return;
+      }
       this.urlFyId = params.get('fyId');
       void this.load();
     });
@@ -166,9 +197,14 @@ export class Plan {
     return amount ? formatMoney(toMinor(amount), this.currency()) : '–';
   }
 
-  // The selected FY lives in the URL, as on Months and Entries (owner's choice, M8).
+  // The selected FY lives in the URL, as on Months and Entries (owner's choice, M8); the tab stays.
   protected setFiscalYear(fyId: string): void {
-    void this.router.navigate([], { relativeTo: this.route, queryParams: { fyId }, replaceUrl: true });
+    void this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { fyId },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
   }
 
   protected selectMonth(key: string): void {
@@ -208,49 +244,16 @@ export class Plan {
     }
   }
 
-  // PLN-01: add a sub-category, then go straight to its month amounts.
-  protected async addSubCategory(category: Category): Promise<void> {
-    const sub = await this.open<NameDialog<SubCategory>, NameDialogData<SubCategory>, SubCategory>(
-      NameDialog,
-      {
-        title: `Add sub-category to ${category.name}`,
-        label: 'Sub-category name',
-        name: '',
-        taken: category.subCategories.map((s) => s.name),
-        duplicateMessage: `${category.name} already has this sub-category.`,
-        save: (name) => this.api.addSubCategory(category.id, name),
-      },
-      '480px',
-    );
-    if (sub) {
-      this.categories.update((list) =>
-        list.map((c) => (c.id === category.id ? { ...c, subCategories: [...c.subCategories, sub] } : c)),
-      );
-      this.opened.update((ids) => new Set(ids).add(category.id));
-      this.status.set(`Added ${sub.name}.`);
-      await this.edit(sub, category.name);
-    }
+  // The Categories tab changed the list (STG-05, PLN-05).
+  protected categoriesChanged(change: CategoriesChange): void {
+    this.categories.set(change.categories);
+    this.status.set(change.message);
   }
 
-  // PLN-05: categories can be added after setup. A new category opens, ready for its first sub-category.
-  protected async addCategory(): Promise<void> {
-    const category = await this.open<NameDialog<Category>, NameDialogData<Category>, Category>(
-      NameDialog,
-      {
-        title: 'Add category',
-        label: 'Category name',
-        name: '',
-        taken: this.categories().map((c) => c.name),
-        duplicateMessage: 'This category already exists.',
-        save: (name) => this.api.addCategory(name),
-      },
-      '480px',
-    );
-    if (category) {
-      this.categories.update((list) => [...list, category]);
-      this.opened.update((ids) => new Set(ids).add(category.id));
-      this.status.set(`Added ${category.name}.`);
-    }
+  // PLN-01: a new sub-category goes straight to its month amounts.
+  protected async subAdded(sub: SubCategory, categoryName: string): Promise<void> {
+    this.opened.update((ids) => new Set(ids).add(sub.categoryId));
+    await this.edit(sub, categoryName);
   }
 
   // The FY in the URL, else the one that contains today, else the latest one.

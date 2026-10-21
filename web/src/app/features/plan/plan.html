@@ -1,12 +1,5 @@
 <div class="page-head">
   <h1>Plan</h1>
-  @if (data()) {
-    <!-- PLN-05 -->
-    <button mat-stroked-button type="button" (click)="addCategory()">
-      <mat-icon>add</mat-icon>
-      Add category
-    </button>
-  }
 </div>
 
 @if (loadError()) {
@@ -27,221 +20,237 @@
       {{ d.fiscalYear.label }} · {{ formatDate(d.fiscalYear.startDate) }} to {{ formatDate(d.fiscalYear.endDate) }}
     </p>
   }
+
+  <!-- Owner note 9: Planning, Allocating and Categories, in the URL (?tab=). -->
+  <nav class="tabs" aria-label="Plan sections">
+    @for (item of tabs; track item.id) {
+      <a
+        class="tab"
+        routerLink="/plan"
+        [queryParams]="{ tab: item.id === 'planning' ? null : item.id }"
+        queryParamsHandling="merge"
+        [class.active]="tab() === item.id"
+        [attr.aria-current]="tab() === item.id ? 'page' : null"
+      >
+        {{ item.label }}
+      </a>
+    }
+  </nav>
   <p class="status" aria-live="polite">{{ status() }}</p>
 
-  <!-- PLN-03, R-PLN-03, R-PLN-04: every month at once (owner's choice, M8: the table turned sideways),
-       read top to bottom, each computed row with its formula under its name: Unallocated this month =
-       Income - Planned; Unallocated accumulated = this month + from last month, and it carries into the
-       next month. The FY column's accumulated row is Planned saved. "Unallocated" is R-PLN-03's
-       Unassigned on screen (owner's choice, 20 Oct 2026). Sticky on desktop; it folds on phones. -->
-  <section class="card totals-card" aria-labelledby="totals-title">
-    <div class="card-head">
-      <h2 id="totals-title">Totals per month <span class="caption">({{ currency() }})</span></h2>
-      @if (fiscalYearColumn(); as fy) {
-        <p class="saved-kpi">
-          <span class="caption">Planned saved in {{ d.fiscalYear.label }}</span>
-          <span class="money" [class.ok]="!fy.over" [class.danger]="fy.over">{{ fy.plannedSavedMoney }}</span>
+  <div class="panel">
+    @switch (tab()) {
+      @case ('planning') {
+      <!-- PLN-06 -->
+      @if (!hasSubCategories()) {
+        <section class="card empty">
+          <h2>Add your first sub-category</h2>
+          <p class="note">
+            On <a routerLink="/plan" [queryParams]="{ tab: 'categories' }" queryParamsHandling="merge">Categories</a>,
+            open a category and add a sub-category, for example Groceries under Food. Then enter the planned amount
+            for each month.
+          </p>
+        </section>
+      }
+      <!-- PLN-01: categories (closed at first) with their sub-categories. -->
+      <section class="card" aria-labelledby="list-title">
+        <div class="card-head">
+          <h2 id="list-title">
+            Planned in {{ selected()?.label }}
+            @if (selected(); as month) {
+              <span class="caption">{{ formatDay(month.startDate) }} to {{ formatDay(month.endDate) }}</span>
+            }
+          </h2>
+          <app-month-picker [months]="monthOptions()" [selected]="selected()?.key ?? null" (selectedChange)="selectMonth($event)" />
+        </div>
+        <p class="caption list-note">
+          Open a category to edit its sub-categories' amounts.
+          <a routerLink="/tracker" [queryParams]="{ fyId: d.fiscalYear.id, view: 'year' }">See the year grid</a>
         </p>
-      }
-      <button mat-button type="button" class="fold" [attr.aria-expanded]="totalsOpen()" (click)="totalsOpen.set(!totalsOpen())">
-        {{ totalsOpen() ? 'Hide' : 'Show' }}
-      </button>
-    </div>
-    @if (totalsOpen()) {
-      <div class="scroll">
-        <!-- Equal month columns; the table scrolls sideways when they do not fit. -->
-        <table class="totals" [style.min-width.px]="labelWidth + (columns().length + 1) * columnWidth">
-          <thead>
-            <tr>
-              <td></td>
-              @for (column of columns(); track column.period.key) {
-                <th scope="col" [class.selected]="column.period.key === selected()?.key">
-                  <button
-                    type="button"
-                    class="month"
-                    [attr.aria-pressed]="column.period.key === selected()?.key"
-                    [title]="column.period.label + ' · ' + formatDay(column.period.startDate) + ' to ' + formatDay(column.period.endDate)"
-                    (click)="selectMonth(column.period.key)"
-                  >
-                    {{ column.month }}
-                    <span class="caption">{{ column.year }}</span>
-                  </button>
-                </th>
-              }
-              <!-- R-PLN-06: the column covers the months that carry. -->
-              <th scope="col" class="fy-col">
-                @if (carryFrom(); as from) {
-                  From<span class="caption">{{ from }}</span>
-                } @else {
-                  FY<span class="caption">total</span>
-                }
-              </th>
-            </tr>
-          </thead>
-          @let fy = fiscalYearColumn();
-          <tbody>
-            <tr>
-              <th scope="row">Income</th>
-              @for (column of columns(); track column.period.key) {
-                <td class="money" [class.selected]="column.period.key === selected()?.key">{{ column.income }}</td>
-              }
-              <td class="money fy-col">{{ fy?.income }}</td>
-            </tr>
-            <tr>
-              <th scope="row">Planned</th>
-              @for (column of columns(); track column.period.key) {
-                <td class="money" [class.selected]="column.period.key === selected()?.key">{{ column.planned }}</td>
-              }
-              <td class="money fy-col">{{ fy?.planned }}</td>
-            </tr>
-            <!-- The month on its own, not carried: its income minus its plan. -->
-            <tr class="subtotal">
-              <th scope="row">
-                Unallocated this month
-                <span class="formula">Income − Planned</span>
-              </th>
-              @for (column of columns(); track column.period.key) {
-                <td
-                  class="money"
-                  [class.selected]="column.period.key === selected()?.key"
-                  [class.ok]="!column.thisMonthOver"
-                  [class.danger]="column.thisMonthOver"
-                >
-                  {{ column.thisMonth }}
-                </td>
-              }
-              <td class="money fy-col" [class.ok]="!fy?.over" [class.danger]="fy?.over">{{ fy?.plannedSaved }}</td>
-            </tr>
-            <tr>
-              <th scope="row">
-                From last month
-                <span class="formula">Last month's accumulated</span>
-              </th>
-              @for (column of columns(); track column.period.key) {
-                <td class="money carried" [class.selected]="column.period.key === selected()?.key">{{ column.carriedIn }}</td>
-              }
-              <td class="fy-col" aria-label="Nothing carries into the FY">–</td>
-            </tr>
-            <tr class="result">
-              <!-- R-PLN-03, carried from month to month. -->
-              <th scope="row">
-                Unallocated accumulated
-                <span class="formula">This month + From last month</span>
-              </th>
-              @for (column of columns(); track column.period.key) {
-                <td
-                  class="money"
-                  [class.selected]="column.period.key === selected()?.key"
-                  [class.ok]="!column.over"
-                  [class.danger]="column.over"
-                >
-                  {{ column.unassigned }}
-                </td>
-              }
-              <!-- R-PLN-04 -->
-              <td class="money fy-col" [class.ok]="!fy?.over" [class.danger]="fy?.over" [attr.aria-label]="'Planned saved ' + fy?.plannedSaved">
-                {{ fy?.plannedSaved }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <!-- Under the table, not its caption, so it wraps instead of scrolling with the months. -->
-      <p class="caption totals-note">
-        Unallocated is income that no plan uses yet. What a month leaves unallocated carries into the next
-        month.
-        @if (carryFrom(); as from) {
-          It carries from {{ from }}, the month you started NAMA; earlier months stand alone.
-        }
-        Select a month to see its amounts below.
-      </p>
-    } @else if (selectedColumn(); as column) {
-      <p class="folded">
-        {{ column.period.label }} · Unallocated accumulated
-        <span class="money" [class.ok]="!column.over" [class.danger]="column.over">{{ column.unassigned }}</span>
-      </p>
-    }
-  </section>
-
-  <!-- PLN-06 -->
-  @if (!hasSubCategories()) {
-    <section class="card empty">
-      <h2>Add your first sub-category</h2>
-      <p class="note">
-        Open a category below and add a sub-category, for example Groceries under Food. Then enter the planned
-        amount for each month.
-      </p>
-    </section>
-  }
-
-  <!-- PLN-01: categories (closed at first) with their sub-categories. -->
-  <section class="card" aria-labelledby="list-title">
-    <div class="card-head">
-      <h2 id="list-title">
-        Planned in {{ selected()?.label }}
-        @if (selected(); as month) {
-          <span class="caption">{{ formatDay(month.startDate) }} to {{ formatDay(month.endDate) }}</span>
-        }
-      </h2>
-      <a routerLink="/tracker" [queryParams]="{ fyId: d.fiscalYear.id, view: 'year' }">See the year grid</a>
-    </div>
-    <ul class="list">
-      @for (category of rows(); track category.id) {
-        <li>
-          <div class="row category">
-            <button type="button" class="expand" [attr.aria-expanded]="isOpen(category.id)" (click)="toggle(category.id)">
-              <mat-icon class="chevron" [class.open]="isOpen(category.id)" aria-hidden="true">chevron_right</mat-icon>
-              <span class="name">
-                <span class="strong">{{ category.name }}</span>
-                @if (category.archived) {
-                  <span class="caption"> (archived)</span>
-                }
-                <span class="caption line">FY total {{ money(category.total) }}</span>
-              </span>
-              <span class="money">{{ money(category.month) }}</span>
-            </button>
-          </div>
-          @if (isOpen(category.id)) {
-            <ul class="subs">
-              @for (sub of category.subs; track sub.id) {
-                <li class="row sub" [class.flash]="flashId() === sub.id">
+        <ul class="list">
+          @for (category of rows(); track category.id) {
+            <li>
+              <div class="row category">
+                <button type="button" class="expand" [attr.aria-expanded]="isOpen(category.id)" (click)="toggle(category.id)">
+                  <mat-icon class="chevron" [class.open]="isOpen(category.id)" aria-hidden="true">chevron_right</mat-icon>
                   <span class="name">
-                    {{ sub.name }}
-                    @if (sub.hidden) {
-                      <span class="caption">(archived)</span>
+                    <span class="strong">{{ category.name }}</span>
+                    @if (category.archived) {
+                      <span class="caption"> (archived)</span>
                     }
-                    <span class="caption line">FY total {{ money(sub.total) }}</span>
+                    <span class="caption line">FY total {{ money(category.total) }}</span>
                   </span>
-                  <span class="money">{{ money(sub.month) }}</span>
-                  <button
-                    mat-icon-button
-                    type="button"
-                    (click)="edit(sub, category.name)"
-                    [attr.aria-label]="'Edit amounts of ' + sub.name"
-                    [title]="'Edit amounts of ' + sub.name"
-                  >
-                    <mat-icon>edit</mat-icon>
-                  </button>
-                </li>
-              } @empty {
-                <li class="note">No sub-categories yet.</li>
+                  <span class="money">{{ money(category.month) }}</span>
+                </button>
+              </div>
+              @if (isOpen(category.id)) {
+                <ul class="subs">
+                  @for (sub of category.subs; track sub.id) {
+                    <li class="row sub" [class.flash]="flashId() === sub.id">
+                      <span class="name">
+                        {{ sub.name }}
+                        @if (sub.hidden) {
+                          <span class="caption">(archived)</span>
+                        }
+                        <span class="caption line">FY total {{ money(sub.total) }}</span>
+                      </span>
+                      <span class="money">{{ money(sub.month) }}</span>
+                      <button
+                        mat-icon-button
+                        type="button"
+                        (click)="edit(sub, category.name)"
+                        [attr.aria-label]="'Edit amounts of ' + sub.name"
+                        [title]="'Edit amounts of ' + sub.name"
+                      >
+                        <mat-icon>edit</mat-icon>
+                      </button>
+                    </li>
+                  } @empty {
+                    <li class="note">No sub-categories yet. Add one on <a routerLink="/plan" [queryParams]="{ tab: 'categories' }" queryParamsHandling="merge">Categories</a>.</li>
+                  }
+                </ul>
               }
-              @if (!category.archived) {
-                <li>
-                  <button mat-button type="button" class="add-sub" (click)="addSubCategory(category)">
-                    <mat-icon>add</mat-icon>
-                    Add sub-category
-                  </button>
-                </li>
-              }
-            </ul>
+            </li>
+          } @empty {
+            <li class="note">No categories yet. Add one on <a routerLink="/plan" [queryParams]="{ tab: 'categories' }" queryParamsHandling="merge">Categories</a>.</li>
           }
-        </li>
-      } @empty {
-        <li class="note">No categories yet. Use "Add category" above.</li>
+        </ul>
+      </section>
       }
-    </ul>
-  </section>
+      @case ('allocating') {
+      <!-- PLN-03, R-PLN-03, R-PLN-04: every month at once (owner's choice, M8: the table turned sideways),
+           read top to bottom, each computed row with its formula under its name: Unallocated this month =
+           Income - Planned; Unallocated accumulated = this month + from last month, and it carries into the
+           next month. The FY column's accumulated row is Planned saved. "Unallocated" is R-PLN-03's
+           Unassigned on screen (owner's choice, 20 Oct 2026). Its own tab since owner note 9. -->
+      <section class="card totals-card" aria-labelledby="totals-title">
+        <div class="card-head">
+          <h2 id="totals-title">Totals per month <span class="caption">({{ currency() }})</span></h2>
+          @if (fiscalYearColumn(); as fy) {
+            <p class="saved-kpi">
+              <span class="caption">Planned saved in {{ d.fiscalYear.label }}</span>
+              <span class="money" [class.ok]="!fy.over" [class.danger]="fy.over">{{ fy.plannedSavedMoney }}</span>
+            </p>
+          }
+        </div>
+        <div class="scroll">
+          <!-- Equal month columns; the table scrolls sideways when they do not fit. -->
+          <table class="totals" [style.min-width.px]="labelWidth + (columns().length + 1) * columnWidth">
+            <thead>
+              <tr>
+                <td></td>
+                @for (column of columns(); track column.period.key) {
+                  <th scope="col" [class.selected]="column.period.key === selected()?.key">
+                    <button
+                      type="button"
+                      class="month"
+                      [attr.aria-pressed]="column.period.key === selected()?.key"
+                      [title]="column.period.label + ' · ' + formatDay(column.period.startDate) + ' to ' + formatDay(column.period.endDate)"
+                      (click)="selectMonth(column.period.key)"
+                    >
+                      {{ column.month }}
+                      <span class="caption">{{ column.year }}</span>
+                    </button>
+                  </th>
+                }
+                <!-- R-PLN-06: the column covers the months that carry. -->
+                <th scope="col" class="fy-col">
+                  @if (carryFrom(); as from) {
+                    From<span class="caption">{{ from }}</span>
+                  } @else {
+                    FY<span class="caption">total</span>
+                  }
+                </th>
+              </tr>
+            </thead>
+            @let fy = fiscalYearColumn();
+            <tbody>
+              <tr>
+                <th scope="row">Income</th>
+                @for (column of columns(); track column.period.key) {
+                  <td class="money" [class.selected]="column.period.key === selected()?.key">{{ column.income }}</td>
+                }
+                <td class="money fy-col">{{ fy?.income }}</td>
+              </tr>
+              <tr>
+                <th scope="row">Planned</th>
+                @for (column of columns(); track column.period.key) {
+                  <td class="money" [class.selected]="column.period.key === selected()?.key">{{ column.planned }}</td>
+                }
+                <td class="money fy-col">{{ fy?.planned }}</td>
+              </tr>
+              <!-- The month on its own, not carried: its income minus its plan. -->
+              <tr class="subtotal">
+                <th scope="row">
+                  Unallocated this month
+                  <span class="formula">Income − Planned</span>
+                </th>
+                @for (column of columns(); track column.period.key) {
+                  <td
+                    class="money"
+                    [class.selected]="column.period.key === selected()?.key"
+                    [class.ok]="!column.thisMonthOver"
+                    [class.danger]="column.thisMonthOver"
+                  >
+                    {{ column.thisMonth }}
+                  </td>
+                }
+                <td class="money fy-col" [class.ok]="!fy?.over" [class.danger]="fy?.over">{{ fy?.plannedSaved }}</td>
+              </tr>
+              <tr>
+                <th scope="row">
+                  From last month
+                  <span class="formula">Last month's accumulated</span>
+                </th>
+                @for (column of columns(); track column.period.key) {
+                  <td class="money carried" [class.selected]="column.period.key === selected()?.key">{{ column.carriedIn }}</td>
+                }
+                <td class="fy-col" aria-label="Nothing carries into the FY">–</td>
+              </tr>
+              <tr class="result">
+                <!-- R-PLN-03, carried from month to month. -->
+                <th scope="row">
+                  Unallocated accumulated
+                  <span class="formula">This month + From last month</span>
+                </th>
+                @for (column of columns(); track column.period.key) {
+                  <td
+                    class="money"
+                    [class.selected]="column.period.key === selected()?.key"
+                    [class.ok]="!column.over"
+                    [class.danger]="column.over"
+                  >
+                    {{ column.unassigned }}
+                  </td>
+                }
+                <!-- R-PLN-04 -->
+                <td class="money fy-col" [class.ok]="!fy?.over" [class.danger]="fy?.over" [attr.aria-label]="'Planned saved ' + fy?.plannedSaved">
+                  {{ fy?.plannedSaved }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <!-- Under the table, not its caption, so it wraps instead of scrolling with the months. -->
+        <p class="caption totals-note">
+          Unallocated is income that no plan uses yet. What a month leaves unallocated carries into the next
+          month.
+          @if (carryFrom(); as from) {
+            It carries from {{ from }}, the month you started NAMA; earlier months stand alone.
+          }
+          Select a month to see its amounts on Planning.
+        </p>
+      </section>
+      }
+      @case ('categories') {
+        <app-plan-categories
+          [categories]="categories()"
+          (changed)="categoriesChanged($event)"
+          (subAdded)="subAdded($event.sub, $event.categoryName)"
+        />
+      }
+    }
+  </div>
 } @else {
   <p class="caption">Loading…</p>
 }

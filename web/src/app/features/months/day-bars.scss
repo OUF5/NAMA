@@ -1,0 +1,57 @@
+// docs/DESIGN.md "Spending by day": thin neutral columns on a --divider base line. Tokens only.
+$plot: 96px;
+
+.plot {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: $plot;
+  border-bottom: 1px solid var(--border);
+}
+
+.col {
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  min-width: 0;
+  height: 100%;
+
+  &:hover .bar {
+    opacity: 0.8;
+  }
+}
+
+.bar {
+  width: 100%;
+  min-height: 0;
+  border-radius: 2px 2px 0 0;
+  background: var(--text-2);
+}
+
+.today .bar {
+  background: var(--primary-text);
+}
+
+// Days still to come: a short track, so the month's length still shows.
+.future .bar {
+  height: 2px !important;
+  background: var(--track);
+}
+
+.axis {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.today-label {
+  position: absolute;
+  transform: translateX(-50%);
+  padding: 0 4px;
+  background: var(--surface);
+  color: var(--primary-text);
+  font-weight: 600;
+}

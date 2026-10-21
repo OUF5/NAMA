@@ -1,4 +1,19 @@
 <mat-toolbar class="top-bar">
+  @if (showNav()) {
+    <!-- Phones: every page in a drawer (owner note 9). Desktop has the side bar instead. -->
+    <button
+      #menuButton
+      mat-icon-button
+      type="button"
+      class="menu-button"
+      aria-label="Menu"
+      aria-controls="drawer"
+      [attr.aria-expanded]="menuOpen()"
+      (click)="openMenu()"
+    >
+      <mat-icon>menu</mat-icon>
+    </button>
+  }
   <div class="title">
     <span class="brand"
       ><span class="logo" aria-hidden="true"></span>NAMA@if (projectName(); as name) {<span class="project"> · {{ name }}</span>}</span
@@ -11,13 +26,6 @@
   @if (showNav()) {
     <!-- UX-08, desktop: this month's money left and the bank balance, on every page. -->
     <ng-container *ngTemplateOutlet="stats; context: { $implicit: 'bar' }" />
-    <a mat-icon-button routerLink="/settings" routerLinkActive="active" aria-label="Settings">
-      <mat-icon>settings</mat-icon>
-    </a>
-    <!-- Phones: the bottom bar has no room, so Sign out is here (desktop: the bottom of the side bar). -->
-    <button mat-icon-button type="button" class="top-sign-out" aria-label="Sign out" title="Sign out" (click)="signOut()">
-      <mat-icon>logout</mat-icon>
-    </button>
   }
 </mat-toolbar>
 
@@ -51,7 +59,19 @@
 
 <div class="layout">
   @if (showNav()) {
-    <nav class="nav" aria-label="Main">
+    <nav class="nav" [class.collapsed]="collapsed()" aria-label="Main">
+      <!-- Desktop: the side bar folds to its icons, so pages get more room (owner note 9). -->
+      <button
+        type="button"
+        class="nav-item collapse"
+        [attr.aria-expanded]="!collapsed()"
+        [attr.aria-label]="collapsed() ? 'Expand the menu' : 'Collapse the menu'"
+        [title]="collapsed() ? 'Expand the menu' : 'Collapse the menu'"
+        (click)="toggleCollapsed()"
+      >
+        <mat-icon aria-hidden="true">{{ collapsed() ? 'menu' : 'menu_open' }}</mat-icon>
+        <span class="label">Collapse</span>
+      </button>
       @for (item of navItems; track item.path) {
         <a
           class="nav-item"
@@ -60,19 +80,27 @@
           [routerLink]="item.path"
           routerLinkActive="active"
           [routerLinkActiveOptions]="{ exact: item.path === '/' }"
+          [title]="collapsed() ? item.label : ''"
         >
           <mat-icon aria-hidden="true">{{ item.icon }}</mat-icon>
-          <span>{{ item.label }}</span>
+          <span class="label">{{ item.label }}</span>
         </a>
       }
-      <!-- Desktop only: Settings, with its sections while you are in Settings (owner's choice, M8). -->
+      <!-- Desktop only: Settings, with its sections while you are in Settings (owner's choice, M8).
+           Folded, it is one icon. -->
       <div class="settings-group">
-        <a class="nav-item" routerLink="/settings" [class.open]="inSettings()" [attr.aria-expanded]="inSettings()">
+        <a
+          class="nav-item"
+          routerLink="/settings"
+          [class.open]="inSettings()"
+          [attr.aria-expanded]="inSettings()"
+          [title]="collapsed() ? 'Settings' : ''"
+        >
           <mat-icon aria-hidden="true">settings</mat-icon>
-          <span>Settings</span>
+          <span class="label">Settings</span>
           <mat-icon class="chevron" aria-hidden="true">{{ inSettings() ? 'expand_less' : 'expand_more' }}</mat-icon>
         </a>
-        @if (inSettings()) {
+        @if (inSettings() && !collapsed()) {
           <div class="sub-nav" role="group" aria-label="Settings sections">
             @for (section of settingsSections(); track section.id) {
               <a class="nav-item sub" [routerLink]="['/settings', section.id]" routerLinkActive="active">
@@ -83,9 +111,16 @@
         }
       </div>
       <!-- AUTH-04, owner's choice (M8): outside Settings, after a confirmation. -->
-      <button mat-stroked-button type="button" class="nav-sign-out" (click)="signOut()">
+      <button
+        mat-stroked-button
+        type="button"
+        class="nav-sign-out"
+        [attr.aria-label]="collapsed() ? 'Sign out' : null"
+        [title]="collapsed() ? 'Sign out' : ''"
+        (click)="signOut()"
+      >
         <mat-icon>logout</mat-icon>
-        Sign out
+        <span class="label">Sign out</span>
       </button>
     </nav>
   }
@@ -96,3 +131,6 @@
     </div>
   </main>
 </div>
+
+<!-- Phones: the drawer with every page, Settings and Sign out (owner note 9), placed here when it opens. -->
+<ng-container #drawerHost />

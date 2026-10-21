@@ -46,7 +46,7 @@ export interface NameDialogData<T> {
       </mat-dialog-actions>
     </form>
   `,
-  styleUrl: './dialog.scss',
+  styleUrl: '../settings/dialog.scss',
 })
 export class NameDialog<T> {
   private readonly dialogRef = inject<MatDialogRef<NameDialog<T>, T>>(MatDialogRef);

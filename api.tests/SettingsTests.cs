@@ -38,7 +38,8 @@ public class SettingsTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(15_000m, settings["income"]!["currentTotal"]!.GetValue<decimal>());
         // Bank accounts live on Banks (BNK-02).
         Assert.False(settings.AsObject().ContainsKey("bankAccounts"));
-        Assert.Equal(["Food", "Transport"], settings["categories"]!.AsArray().Select(c => c!["name"]!.GetValue<string>()));
+        // Categories live on Plan's Categories tab (owner note 9).
+        Assert.False(settings.AsObject().ContainsKey("categories"));
     }
 
     // STG-01: the answer is the new /api/me; the time zone moves "today" (R-CAL-10).

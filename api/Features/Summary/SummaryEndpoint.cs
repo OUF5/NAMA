@@ -53,6 +53,24 @@ public static class SummaryEndpoint
     public record SummaryResponse(
         decimal? Balance, bool Complete, IReadOnlyList<AccountDto> Accounts, MonthDto? Month, ProjectionDto? Projection);
 
+    // The month in progress for the whole budget: its carried remaining (R-PLN-05), its Unassigned
+    // (R-PLN-03) and the projection (R-PLN-07, R-PLN-08), all from the month NAMA was set up (R-PLN-06).
+    // The FY's entries come from data (one entries query serves the balances too). Tracker's Year view
+    // uses it for the projected month ends (owner note 9).
+    public static async Task<(CarriedMonth Remaining, UnassignedMonth Unassigned, Projection Projection)> CurrentMonthAsync(
+        string uid, IUserStore store, BalanceData data, (FiscalYear FiscalYear, Period Period) found, long? balance)
+    {
+        var periods = found.FiscalYear.Periods.TakeWhile(period => string.CompareOrdinal(period.Key, found.Period.Key) <= 0).ToList();
+        var carryStart = PlanCalculator.CarryStart(found.FiscalYear.Periods, data.Profile.StartedOn);
+        var plans = await store.GetPlansAsync(uid, found.FiscalYear.Id);
+        var entries = data.Entries.Where(entry => entry.FyId == found.FiscalYear.Id).ToList();
+        var toToday = PlanCalculator.Carry(periods.Select(period => (
+            PlanCalculator.MonthPlanned(plans, period.Key),
+            entries.Where(entry => entry.PeriodKey == period.Key).Sum(entry => entry.AmountMinor))), carryStart);
+        var wholeYear = PlanCalculator.RunningUnassigned(found.FiscalYear.Periods, data.Income, plans, carryStart);
+        return (toToday[^1], wholeYear[periods.Count - 1], PlanCalculator.Project(wholeYear, toToday, carryStart, balance));
+    }
+
     public static IEndpointRouteBuilder MapSummary(this IEndpointRouteBuilder api)
     {
         api.MapGet("/summary", async (ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
@@ -71,17 +89,7 @@ public static class SummaryEndpoint
             ProjectionDto? projection = null;
             if (current is { } found)
             {
-                var periods = found.FiscalYear.Periods.TakeWhile(period => string.CompareOrdinal(period.Key, found.Period.Key) <= 0).ToList();
-                // R-PLN-06: carried from the month NAMA was set up, or the FY's first month.
-                var carryStart = PlanCalculator.CarryStart(found.FiscalYear.Periods, profile.StartedOn);
-                var plans = await store.GetPlansAsync(uid, found.FiscalYear.Id);
-                var entries = data.Entries.Where(entry => entry.FyId == found.FiscalYear.Id).ToList();
-                var toToday = PlanCalculator.Carry(periods.Select(period => (
-                    PlanCalculator.MonthPlanned(plans, period.Key),
-                    entries.Where(entry => entry.PeriodKey == period.Key).Sum(entry => entry.AmountMinor))), carryStart);
-                var remaining = toToday[^1];
-                var wholeYear = PlanCalculator.RunningUnassigned(found.FiscalYear.Periods, data.Income, plans, carryStart);
-                var unassigned = wholeYear[periods.Count - 1];
+                var (remaining, unassigned, projected) = await CurrentMonthAsync(uid, store, data, found, balance);
                 month = new MonthDto(
                     MeEndpoint.PeriodDto.From(found.Period),
                     data.Today.DayNumber - found.Period.StartDate.DayNumber + 1,
@@ -94,7 +102,6 @@ public static class SummaryEndpoint
                     Money.FromMinor(remaining.Remaining),
                     Money.FromMinor(unassigned.Unassigned));
 
-                var projected = PlanCalculator.Project(wholeYear, toToday, carryStart, balance);
                 projection = new ProjectionDto(
                     found.FiscalYear.Label,
                     found.FiscalYear.EndDate,

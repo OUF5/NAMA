@@ -1,0 +1,156 @@
+<section class="card" aria-labelledby="categories-title">
+  <div class="card-head">
+    <div class="title">
+      <h2 id="categories-title">Categories and sub-categories</h2>
+      <span class="caption">Rename or archive any time; history and totals are kept.</span>
+    </div>
+    <button mat-stroked-button type="button" (click)="addCategory()">
+      <mat-icon>add</mat-icon>
+      Add category
+    </button>
+  </div>
+  <ul class="list">
+    @for (category of lists().active; track category.id) {
+      <ng-container *ngTemplateOutlet="categoryRow; context: { $implicit: category }" />
+    } @empty {
+      <li class="note">No categories yet. Use "Add category" above.</li>
+    }
+  </ul>
+  @if (lists().archived.length) {
+    <ng-container
+      *ngTemplateOutlet="
+        fold;
+        context: { key: 'archived-categories', label: 'Archived', count: lists().archived.length }
+      "
+    />
+    @if (isOpen('archived-categories')) {
+      <ul class="list">
+        @for (category of lists().archived; track category.id) {
+          <ng-container *ngTemplateOutlet="categoryRow; context: { $implicit: category }" />
+        }
+      </ul>
+    }
+  }
+</section>
+
+<!-- A category row opens its sub-categories. -->
+<ng-template #categoryRow let-category>
+  @let key = 'category-' + category.id;
+  <li class="group">
+    <div class="item">
+      <button
+        type="button"
+        class="expand"
+        [attr.aria-expanded]="isOpen(key)"
+        [attr.aria-controls]="key"
+        (click)="toggle(key)"
+      >
+        <mat-icon class="chevron" [class.open]="isOpen(key)" aria-hidden="true"
+          >chevron_right</mat-icon
+        >
+        <span class="name">
+          <span class="strong">{{ category.name }}</span>
+          @if (category.archived) {
+            <span class="caption"> (archived)</span>
+          }
+          <span class="caption count">{{ subCount(category.subs.active.length) }}</span>
+        </span>
+      </button>
+      <ng-container
+        *ngTemplateOutlet="actions; context: { $implicit: category, kind: 'category' }"
+      />
+    </div>
+    @if (isOpen(key)) {
+      <div class="subs" [id]="key">
+        <ul class="list">
+          @for (sub of category.subs.active; track sub.id) {
+            <li class="item">
+              <ng-container
+                *ngTemplateOutlet="itemRow; context: { $implicit: sub, category: category }"
+              />
+            </li>
+          }
+        </ul>
+        @if (category.subs.archived.length) {
+          <ng-container
+            *ngTemplateOutlet="
+              fold;
+              context: {
+                key: 'archived-' + key,
+                label: 'Archived',
+                count: category.subs.archived.length,
+              }
+            "
+          />
+          @if (isOpen('archived-' + key)) {
+            <ul class="list">
+              @for (sub of category.subs.archived; track sub.id) {
+                <li class="item">
+                  <ng-container
+                    *ngTemplateOutlet="itemRow; context: { $implicit: sub, category: category }"
+                  />
+                </li>
+              }
+            </ul>
+          }
+        }
+        @if (!category.archived) {
+          <button mat-button type="button" class="add-sub" (click)="addSubCategory(category)">
+            <mat-icon>add</mat-icon>
+            Add sub-category
+          </button>
+        }
+      </div>
+    }
+  </li>
+</ng-template>
+
+<!-- "Archived (2)": a list part that is folded away until opened. -->
+<ng-template #fold let-key="key" let-label="label" let-count="count">
+  <button
+    mat-button
+    type="button"
+    class="fold"
+    [attr.aria-expanded]="isOpen(key)"
+    (click)="toggle(key)"
+  >
+    <mat-icon class="chevron" [class.open]="isOpen(key)" aria-hidden="true">chevron_right</mat-icon>
+    {{ label }} ({{ count }})
+  </button>
+</ng-template>
+
+<!-- A sub-category: its name, then rename and archive or restore. -->
+<ng-template #itemRow let-item let-category="category">
+  <span class="name">
+    {{ item.name }}
+    @if (item.archived) {
+      <span class="caption">(archived)</span>
+    }
+  </span>
+  <ng-container
+    *ngTemplateOutlet="actions; context: { $implicit: item, kind: 'sub', category: category }"
+  />
+</ng-template>
+
+<!-- 44px icon buttons with labels. -->
+<ng-template #actions let-item let-kind="kind" let-category="category">
+  <button
+    mat-icon-button
+    type="button"
+    [attr.aria-label]="'Rename ' + item.name"
+    [title]="'Rename ' + item.name"
+    (click)="kind === 'category' ? renameCategory(item) : renameSub(category, item)"
+  >
+    <mat-icon>edit</mat-icon>
+  </button>
+  <button
+    mat-icon-button
+    type="button"
+    [disabled]="busy()"
+    [attr.aria-label]="(item.archived ? 'Restore ' : 'Archive ') + item.name"
+    [title]="(item.archived ? 'Restore ' : 'Archive ') + item.name"
+    (click)="kind === 'category' ? toggleCategory(item) : toggleSub(item)"
+  >
+    <mat-icon>{{ item.archived ? 'unarchive' : 'archive' }}</mat-icon>
+  </button>
+</ng-template>

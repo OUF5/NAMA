@@ -81,25 +81,6 @@
   }
   <p class="status" aria-live="polite">{{ status() }}</p>
 
-  <!-- docs/DESIGN.md "Category rows on phones": name and chip, progress bar, "SAR 1,240 of 2,000". -->
-  <ng-template #spendRow let-name="name" let-line="line">
-    <div class="line-head">
-      <span class="line-name">{{ name }}</span>
-      @if (line.status) {
-        <span class="chip" [class]="line.status">{{ line.chip }}</span>
-      }
-    </div>
-    @if (line.bar !== null) {
-      <mat-progress-bar
-        mode="determinate"
-        [class]="line.status"
-        [value]="line.bar"
-        [attr.aria-label]="name + ': ' + line.chip"
-      />
-    }
-    <p class="caption money line-amounts">{{ line.spent }} {{ line.of }}</p>
-  </ng-template>
-
   @if (view() === 'months') {
     @if (d.rows.length === 0 && !categoryId()) {
       <!-- UX-03: the same empty state as the Year view. -->
@@ -113,126 +94,27 @@
     } @else if (d.rows.length === 0) {
       <ng-container *ngTemplateOutlet="filteredEmpty" />
     }
-    <div class="cards">
-      @for (card of cards(); track card.key) {
-        <!-- MON-01: Closed plain, In progress 2px border and chip, Upcoming dashed. -->
-        <section
-          class="card month"
-          [class]="card.month.status"
-          [id]="'month-' + card.key"
-          [attr.aria-labelledby]="'month-title-' + card.key"
-        >
-          <div class="month-head">
-            <div class="month-title">
-              <h2 [id]="'month-title-' + card.key">{{ card.month.period.label }}</h2>
-              <span class="caption">{{ card.dates }}</span>
-            </div>
-            @if (card.month.status === 'inProgress') {
-              <span class="now-chip">{{ statusLabels.inProgress }}</span>
-            } @else {
-              <span class="status-text">{{ statusLabels[card.month.status] }}</span>
-            }
-          </div>
-
-          <app-month-summary [month]="card.month" [currency]="currency()" />
-
-          <mat-expansion-panel
-            class="details"
-            [expanded]="expanded().has(card.key)"
-            (opened)="openMonth(card.key)"
-            (closed)="closeMonth(card.key)"
-          >
-            <mat-expansion-panel-header>
-              <mat-panel-title>Categories and entries</mat-panel-title>
-            </mat-expansion-panel-header>
-            <ng-template matExpansionPanelContent>
-              @if (card.categories.length === 0) {
-                <p class="note">
-                  {{ overOnly() ? 'Nothing over plan' : 'Nothing planned or spent' }} in {{ card.month.period.label }}.
-                </p>
-              } @else {
-                <ul class="categories">
-                  @for (category of card.categories; track category.id) {
-                    <li>
-                      <div class="spend-row">
-                        <ng-container
-                          *ngTemplateOutlet="
-                            spendRow;
-                            context: { name: category.name, line: category.line }
-                          "
-                        />
-                      </div>
-                      <ul class="subs">
-                        @for (sub of category.subs; track sub.id) {
-                          <li class="spend-row sub">
-                            <ng-container
-                              *ngTemplateOutlet="
-                                spendRow;
-                                context: { name: sub.name, line: sub.line }
-                              "
-                            />
-                          </li>
-                        }
-                      </ul>
-                    </li>
-                  }
-                </ul>
-              }
-
-              <h3 class="entries-title">Entries</h3>
-              @let month = monthEntries()[card.key];
-              @let rows = entryRows()[card.key] ?? [];
-              @if (month?.state === 'error') {
-                <p class="error" role="alert">
-                  The entries could not be loaded.
-                  <button mat-button type="button" (click)="retryEntries(card.key)">Retry</button>
-                </p>
-              } @else if (!month?.data) {
-                <p class="caption">Loading…</p>
-              } @else if (rows.length === 0) {
-                <p class="note">
-                  No entries in {{ card.month.period.label }}.
-                  <a routerLink="/add">Add an entry</a>.
-                </p>
-              } @else {
-                <!-- The newest few (owner's choice, M7); Entries has the full list, filters and export. -->
-                <ul class="entry-list">
-                  @for (row of rows.slice(0, entryLimit); track row.entry.id) {
-                    <!-- One line per entry; category, account and note are in the dialog and on Entries. -->
-                    <li class="entry">
-                      <span class="caption day">{{ row.day }}</span>
-                      <span class="name">{{ row.sub }}</span>
-                      <span class="money">{{ row.amount }}</span>
-                      <button
-                        mat-icon-button
-                        type="button"
-                        (click)="edit(row.entry, card.key)"
-                        [attr.aria-label]="row.editLabel"
-                      >
-                        <mat-icon>edit</mat-icon>
-                      </button>
-                    </li>
-                  }
-                </ul>
-                @if (rows.length > entryLimit) {
-                  <a
-                    class="see-all"
-                    routerLink="/entries"
-                    [queryParams]="entriesLink(d.fyId, card.key)"
-                  >
-                    See all {{ rows.length }} entries in {{ card.month.period.label }}
-                  </a>
-                }
-              }
-            </ng-template>
-          </mat-expansion-panel>
-        </section>
-      }
+    <!-- Owner note 9: one month at a time, picked here and kept in the URL. -->
+    <div class="month-bar">
+      <app-month-picker [months]="monthOptions()" [selected]="monthKey()" (selectedChange)="setMonth($event)" />
     </div>
+    @if (monthKey(); as key) {
+      <app-month-detail
+        [overview]="d"
+        [periodKey]="key"
+        [overOnly]="overOnly()"
+        [detail]="monthDetail()"
+        [currency]="currency()"
+        [today]="today()"
+        [entriesQuery]="entriesQuery()"
+        (edit)="edit($event)"
+        (retry)="retryMonth()"
+      />
+    }
   } @else if (filtered() && gridData()!.rows.length === 0) {
     <ng-container *ngTemplateOutlet="filteredEmpty" />
   } @else {
-    <app-year-grid [data]="gridData()!" [currency]="currency()" />
+    <app-year-grid [data]="gridData()!" [currency]="currency()" [balances]="balances()" />
   }
 
   <!-- A filter that leaves nothing to show. -->

@@ -77,7 +77,7 @@ describe('App', () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
-    const items = Array.from(compiled.querySelectorAll('.nav > .nav-item'));
+    const items = Array.from(compiled.querySelectorAll('.nav > a.nav-item'));
     expect(items.map((el) => el.querySelector('span')?.textContent?.trim())).toEqual(['Dashboard', 'Entries', 'Add', 'Plan', 'Tracker', 'Banks']);
     expect(items.filter((el) => el.classList.contains('desktop-only')).map((el) => el.getAttribute('href'))).toEqual(['/banks']);
   });
@@ -150,7 +150,7 @@ describe('App', () => {
 
     expect(settings.getAttribute('aria-expanded')).toBe('true');
     const subs = Array.from(compiled.querySelectorAll<HTMLAnchorElement>('.sub-nav a'));
-    expect(subs.map((a) => a.textContent?.trim())).toEqual(['Profile', 'Fiscal year', 'Income', 'Categories']);
+    expect(subs.map((a) => a.textContent?.trim())).toEqual(['Profile', 'Fiscal year', 'Income']);
     expect(subs[2].classList).toContain('active');
     expect(subs[2].getAttribute('href')).toBe('/settings/income');
 
@@ -165,7 +165,6 @@ describe('App', () => {
       const fixture = TestBed.createComponent(App);
       await fixture.whenStable();
       const compiled = fixture.nativeElement as HTMLElement;
-      expect(compiled.querySelector('.top-sign-out')?.getAttribute('aria-label')).toBe('Sign out');
 
       compiled.querySelector<HTMLButtonElement>('.nav-sign-out')!.click();
       const dialog = await vi.waitFor(() => {
@@ -194,6 +193,88 @@ describe('App', () => {
       await vi.waitFor(() => expect(document.querySelector('app-sign-out-dialog')).toBeNull());
       expect(signOut).not.toHaveBeenCalled();
     });
+  });
+
+  // Owner note 9: no Settings gear in the top bar; Settings is in the side bar and the drawer.
+  it('should have no Settings gear in the top bar', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('.top-bar a[href="/settings"]')).toBeNull();
+    expect(compiled.querySelector('.top-bar [aria-label="Sign out"]')).toBeNull();
+  });
+
+  // Owner note 9: the side bar folds to its icons, and remembers it on this device.
+  it('should fold the side bar to its icons', async () => {
+    localStorage.removeItem('nama.nav.collapsed');
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const nav = compiled.querySelector('.nav')!;
+    const toggle = compiled.querySelector<HTMLButtonElement>('.collapse')!;
+    expect(nav.classList).not.toContain('collapsed');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.getAttribute('aria-label')).toBe('Collapse the menu');
+
+    toggle.click();
+    await fixture.whenStable();
+
+    expect(nav.classList).toContain('collapsed');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toBe('Expand the menu');
+    expect(compiled.querySelector('.nav a[href="/banks"]')!.getAttribute('title')).toBe('Banks');
+    expect(localStorage.getItem('nama.nav.collapsed')).toBe('1');
+    localStorage.removeItem('nama.nav.collapsed');
+  });
+
+  // Owner note 9: phones open every page, Settings and Sign out from a drawer.
+  it('should open every page from the menu drawer', async () => {
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const menu = compiled.querySelector<HTMLButtonElement>('.menu-button')!;
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    expect(compiled.querySelector('.drawer')).toBeNull();
+
+    // The drawer's code loads on the first tap.
+    menu.click();
+    const drawer = await vi.waitFor(() => {
+      fixture.detectChanges();
+      const el = compiled.querySelector('.drawer');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    expect(menu.getAttribute('aria-expanded')).toBe('true');
+    expect(Array.from(drawer.querySelectorAll('.drawer-item span')).map((item) => item.textContent?.trim())).toEqual([
+      'Dashboard',
+      'Entries',
+      'Add',
+      'Plan',
+      'Tracker',
+      'Banks',
+      'Settings',
+      'Sign out',
+    ]);
+    await vi.waitFor(() => expect(document.activeElement).toBe(drawer.querySelector('.drawer-close')));
+
+    // The test runs at desktop width, where the menu button is hidden and cannot hold the focus, so
+    // the focus call itself is checked.
+    const focus = vi.spyOn(menu, 'focus');
+    drawer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await fixture.whenStable();
+    expect(compiled.querySelector('.drawer')).toBeNull();
+    await vi.waitFor(() => expect(focus).toHaveBeenCalled());
+
+    menu.click();
+    const backdrop = await vi.waitFor(() => {
+      fixture.detectChanges();
+      const el = compiled.querySelector<HTMLElement>('.backdrop');
+      expect(el).not.toBeNull();
+      return el!;
+    });
+    backdrop.click();
+    await fixture.whenStable();
+    expect(compiled.querySelector('.drawer')).toBeNull();
   });
 
   // PRD 5.4 (owner's choice, 20 Oct 2026): Add is one tap away in the nav; the top bar has no copy.
@@ -243,5 +324,23 @@ describe('the old Months address', () => {
     await harness.navigateByUrl('/months?fyId=2026-01&view=year');
 
     expect(TestBed.inject(Router).url).toBe('/tracker?fyId=2026-01&view=year');
+  });
+});
+
+// Categories moved from Settings to Plan's Categories tab (owner note 9): old links still work.
+describe('the old Settings categories address', () => {
+  @Component({ template: '' })
+  class PlanPage {}
+
+  it('goes to the Categories tab of Plan', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([routes.find((route) => route.path === 'settings/categories')!, { path: 'plan', component: PlanPage }]),
+      ],
+    });
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/settings/categories');
+
+    expect(TestBed.inject(Router).url).toBe('/plan?tab=categories');
   });
 });

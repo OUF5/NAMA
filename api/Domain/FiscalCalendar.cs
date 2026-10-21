@@ -136,6 +136,26 @@ public static class FiscalCalendar
     // The month key before a YYYY-MM key.
     public static string PreviousKey(string key) => AddMonthsToKey(key, -1);
 
+    // Owner note 9 (Tracker's month): every day of a month, payday first.
+    public static IReadOnlyList<DateOnly> Days(Period period) =>
+        Enumerable.Range(0, period.EndDate.DayNumber - period.StartDate.DayNumber + 1)
+            .Select(period.StartDate.AddDays)
+            .ToList();
+
+    // The stored month before a month, in its FY or the FY before; null for the first stored month.
+    public static (FiscalYear FiscalYear, Period Period)? PreviousPeriod(IEnumerable<FiscalYear> fiscalYears, string periodKey)
+    {
+        var key = PreviousKey(periodKey);
+        foreach (var fiscalYear in fiscalYears)
+        {
+            if (fiscalYear.Periods.FirstOrDefault(period => period.Key == key) is { } period)
+            {
+                return (fiscalYear, period);
+            }
+        }
+        return null;
+    }
+
     // FY-02 plan copy (owner's choice, M8): the same month a year earlier.
     public static string YearEarlierKey(string key) => AddMonthsToKey(key, -MonthsPerYear);
 

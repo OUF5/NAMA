@@ -70,6 +70,8 @@ export const routes: Routes = [
   },
   // Bank accounts moved from Settings to Banks (20 Oct 2026); old links still work.
   { path: 'settings/bank-accounts', redirectTo: 'banks' },
+  // Categories moved from Settings to Plan's Categories tab (owner note 9); old links still work.
+  { path: 'settings/categories', redirectTo: () => '/plan?tab=categories' },
   {
     matcher: settingsMatcher,
     title: 'NAMA · Settings',

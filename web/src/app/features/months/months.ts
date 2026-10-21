@@ -1,42 +1,38 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
-import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
-import { Component, Injector, afterNextRender, computed, inject, signal } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
+import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
-import { MatExpansionModule } from '@angular/material/expansion';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSelectModule } from '@angular/material/select';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MeService } from '../../core/me';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
-import { formatMoney, toMinor } from '../../shared/money';
-import { formatDate, formatDay } from '../../shared/month-label';
-import { MonthSummary } from '../../shared/month-summary';
+import { toMinor } from '../../shared/money';
+import { formatDate } from '../../shared/month-label';
+import { MonthOption, MonthPicker } from '../../shared/month-picker';
 import { RolloverBanner } from '../../shared/rollover-banner';
-import { EntriesResponse, Entry, EntryApi } from '../add-entry/entry-api';
+import { Entry } from '../add-entry/entry-api';
 import { openEntryDialog } from '../entries/entry-dialog';
 import { PlanApi } from '../plan/plan-api';
+import { MonthApi } from './month-api';
+import { MonthDetail, MonthDetailState } from './month-detail';
 import { STATUS_LABELS, SpendLine, availableMinor, nameMaps, spendLine } from './month-lines';
-import { Cell, CategoryRow, MonthOverview, OverviewApi, OverviewResponse } from './overview-api';
+import { BalancesResponse, Cell, CategoryRow, OverviewApi, OverviewResponse } from './overview-api';
 import { MonthsView, loadView, saveView } from './view-choice';
 import { YearGrid } from './year-grid';
 
 const PHONE = '(max-width: 767.98px)';
 
-// The entries of one expanded month (MON-02), kept while the page is open. data stays while a
-// reload runs, so the list does not flicker.
-interface MonthEntries {
-  state: 'loading' | 'error' | 'ok';
-  data?: EntriesResponse;
-}
-
-// PRD 5.6 Months (MON-01 to MON-04). Page load is the overview, plus the entries of the in-progress
-// month, which opens expanded (NFR-01). The API makes every sum (R-MON-01); the page only formats.
+// PRD 5.6 Months (MON-01 to MON-04), Tracker on screen. Owner note 9: the Months view shows one month
+// at a time (the month in progress first, or ?month=), in detail (MonthDetail). Page load is the
+// overview plus that month's detail (NFR-01: 2 calls); picking another month makes only its detail
+// call. The Year view makes the overview and the balances call instead. The API makes every sum
+// (R-MON-01); the page only formats.
 @Component({
   selector: 'app-months',
   imports: [
@@ -45,12 +41,11 @@ interface MonthEntries {
     MatButtonModule,
     MatButtonToggleModule,
     MatCheckboxModule,
-    MatExpansionModule,
     MatFormFieldModule,
     MatIconModule,
-    MatProgressBarModule,
     MatSelectModule,
-    MonthSummary,
+    MonthDetail,
+    MonthPicker,
     RolloverBanner,
     YearGrid,
   ],
@@ -63,25 +58,23 @@ export class Months {
   private readonly router = inject(Router);
   private readonly overviewApi = inject(OverviewApi);
   private readonly planApi = inject(PlanApi);
-  private readonly entryApi = inject(EntryApi);
+  private readonly monthApi = inject(MonthApi);
   private readonly meService = inject(MeService);
   private readonly dialog = inject(MatDialog);
   private readonly breakpoints = inject(BreakpointObserver);
-  private readonly document = inject(DOCUMENT);
-  private readonly injector = inject(Injector);
 
   protected readonly formatDate = formatDate;
-  // A month card lists only its newest entries (owner's choice, M7).
-  protected readonly entryLimit = 5;
-  protected readonly statusLabels = STATUS_LABELS;
 
   protected readonly loadError = signal('');
   protected readonly data = signal<OverviewResponse | null>(null);
   protected readonly status = signal('');
   // MON-02: the last choice is remembered (Months by default).
   protected readonly view = signal<MonthsView>(loadView());
-  protected readonly expanded = signal<ReadonlySet<string>>(new Set());
-  protected readonly monthEntries = signal<Record<string, MonthEntries>>({});
+  // Owner note 9: the month in the URL (?month=YYYY-MM), and its detail call.
+  private readonly urlMonth = signal<string | null>(null);
+  protected readonly monthDetail = signal<MonthDetailState | null>(null);
+  // Owner note 9: the Year view's Balance row (null while it loads).
+  protected readonly balances = signal<BalancesResponse | 'error' | null>(null);
 
   protected readonly currency = computed(() => this.meService.me()?.profile?.currency ?? 'SAR');
   protected readonly fiscalYear = computed(() => {
@@ -127,64 +120,45 @@ export class Months {
     return { ...data, rows: this.overRows(data.rows) };
   });
 
-  // MON-02 Months view: one card per month, and the categories and sub-categories with a plan or
-  // spending in that month (owner's choice, M7).
-  protected readonly cards = computed(() => {
-    const data = this.data();
-    if (!data) {
-      return [];
-    }
-    const names = this.names();
-    return data.months.map((month, i) => {
-      const categories = data.rows
-        .map((row) => ({
-          id: row.categoryId,
-          name: names.categories.get(row.categoryId) ?? '',
-          line: this.line(row.months[i]),
-          subs: row.subCategories
-            .filter((sub) => (this.overOnly() ? this.isOver(sub.months[i]) : this.hasMoney(sub.months[i])))
-            .map((sub) => ({
-              id: sub.subCategoryId,
-              name: names.subs.get(sub.subCategoryId) ?? '',
-              line: this.line(sub.months[i]),
-            })),
-        }))
-        .filter((category) => category.subs.length > 0);
-      return {
-        month,
-        key: month.period.key,
-        dates: `${formatDay(month.period.startDate)} to ${formatDay(month.period.endDate)}`,
-        categories,
-      };
-    });
+  // The month shown: the one in the URL, else the month in progress, else the FY's first month.
+  protected readonly monthKey = computed(() => {
+    const months = this.data()?.months ?? [];
+    return (
+      months.find((month) => month.period.key === this.urlMonth())?.period.key ??
+      months.find((month) => month.status === 'inProgress')?.period.key ??
+      months[0]?.period.key ??
+      null
+    );
   });
 
-  // The rows of the expanded months' entry lists, with names looked up by id.
-  protected readonly entryRows = computed(() => {
-    const names = this.names();
-    const rows: Record<
-      string,
-      { entry: Entry; day: string; sub: string; amount: string; editLabel: string }[]
-    > = {};
-    for (const [key, month] of Object.entries(this.monthEntries())) {
-      rows[key] = (month.data?.entries ?? []).map((entry) => {
-        const sub = names.subs.get(entry.subCategoryId) ?? '';
-        const amount = this.money(toMinor(entry.amount));
-        return {
-          entry,
-          day: formatDay(entry.date),
-          sub,
-          amount,
-          editLabel: `Edit ${sub}, ${amount}, ${formatDate(entry.date)}`,
-        };
-      });
-    }
-    return rows;
-  });
+  // The month picker: each month with its status (MON-01).
+  protected readonly monthOptions = computed<MonthOption[]>(() =>
+    (this.data()?.months ?? []).map((month) => ({
+      key: month.period.key,
+      label: month.period.label,
+      hint: STATUS_LABELS[month.status],
+    })),
+  );
+
+  // "See all" opens Entries with the same month and filter.
+  protected readonly entriesQuery = computed<Record<string, string>>(() =>
+    Object.fromEntries(
+      Object.entries({
+        fyId: this.data()?.fyId ?? '',
+        periodKey: this.monthKey() ?? '',
+        categoryId: this.categoryId(),
+        subCategoryId: this.subCategoryId(),
+      }).filter(([, value]) => !!value),
+    ),
+  );
+
+  protected readonly today = computed(() => this.meService.me()?.today ?? null);
 
   private urlFyId: string | null = null;
   private request = 0;
-  private readonly entriesRequests = new Map<string, number>();
+  private monthRequest = 0;
+  // What the overview was loaded for: a change of month alone needs only the month's detail.
+  private loadedFor: string | null = null;
 
   constructor() {
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
@@ -192,18 +166,35 @@ export class Months {
       this.categoryId.set(params.get('categoryId') ?? '');
       this.subCategoryId.set(params.get('subCategoryId') ?? '');
       this.overOnly.set(params.get('over') === '1');
+      this.urlMonth.set(params.get('month'));
       // Plan's "See the year grid" link (M8) opens the Year view.
       const view = params.get('view');
       if (view === 'months' || view === 'year') {
         this.setView(view);
       }
-      void this.load(true);
+      const scope = [this.urlFyId, this.categoryId(), this.subCategoryId()].join('|');
+      if (this.data() && scope === this.loadedFor) {
+        void this.loadMonth();
+      } else {
+        void this.load();
+      }
     });
   }
 
   protected setView(view: MonthsView): void {
     this.view.set(view);
     saveView(view);
+    if (view === 'months' && this.data() && !this.monthDetail()) {
+      void this.loadMonth();
+    }
+    if (view === 'year' && this.data() && !this.balances()) {
+      void this.loadBalances();
+    }
+  }
+
+  // Owner note 9: the month lives in the URL, so a reload or a shared link keeps it.
+  protected setMonth(key: string): void {
+    this.navigate({ month: key });
   }
 
   // MON-03: the selected FY lives in the URL, so a reload keeps it. The filters stay.
@@ -228,44 +219,18 @@ export class Months {
     this.navigate({ categoryId: null, subCategoryId: null, over: null });
   }
 
-  // "See all" opens Entries with the same month and filter.
-  protected entriesLink(fyId: string, periodKey: string): Record<string, string> {
-    return Object.fromEntries(
-      Object.entries({ fyId, periodKey, categoryId: this.categoryId(), subCategoryId: this.subCategoryId() }).filter(
-        ([, value]) => !!value,
-      ),
-    );
-  }
-
-  protected openMonth(key: string): void {
-    if (!this.expanded().has(key)) {
-      this.expanded.update((keys) => new Set(keys).add(key));
-    }
-    if (!this.monthEntries()[key]) {
-      void this.loadEntries(key);
-    }
-  }
-
-  protected closeMonth(key: string): void {
-    this.expanded.update((keys) => {
-      const next = new Set(keys);
-      next.delete(key);
-      return next;
-    });
-  }
-
-  protected retryEntries(key: string): void {
-    void this.loadEntries(key);
+  protected retryMonth(): void {
+    void this.loadMonth();
   }
 
   // TBL-02, TBL-03, ENT-04: the Entries edit dialog. A save or delete can change any month, so the
-  // overview and every open month's entries are loaded again.
-  protected edit(entry: Entry, key: string): void {
+  // overview and the month are loaded again.
+  protected edit(entry: Entry): void {
     const me = this.meService.me();
     const dialog = openEntryDialog(this.dialog, this.breakpoints.isMatched(PHONE), {
       entry,
       categories: this.data()?.categories ?? [],
-      accounts: this.monthEntries()[key]?.data?.bankAccounts ?? [],
+      accounts: this.monthDetail()?.data?.bankAccounts ?? [],
       currency: this.currency(),
       firstDate: me?.firstDate ?? null,
       lastDate: me?.lastDate ?? null,
@@ -273,7 +238,7 @@ export class Months {
     dialog.afterClosed().subscribe((result) => {
       if (result) {
         this.status.set(result === 'saved' ? 'Entry updated.' : 'Entry deleted.');
-        void this.load(false);
+        void this.load();
       }
     });
   }
@@ -282,12 +247,11 @@ export class Months {
   // FY in the URL the page follows the new /api/me (the FY that now contains today).
   protected rolledOver(label: string): void {
     this.status.set(`${label} started.`);
-    void this.load(true);
+    void this.load();
   }
 
-  // A new FY (fresh = true) starts with only the in-progress month open, scrolled into view
-  // (MON-02). Otherwise the open months stay open and their entries are loaded again.
-  private async load(fresh: boolean): Promise<void> {
+  // The overview, then the shown month's detail (Months view only).
+  private async load(): Promise<void> {
     const request = ++this.request;
     try {
       const me = await this.meService.load();
@@ -304,29 +268,19 @@ export class Months {
         return;
       }
       this.data.set(data);
+      this.loadedFor = [this.urlFyId, this.categoryId(), this.subCategoryId()].join('|');
       this.loadError.set('');
       // A link with only a sub-category (the API picks its category) shows the category too.
       if (!this.categoryId() && this.subCategoryId()) {
         const category = data.categories.find((item) => item.subCategories.some((sub) => sub.id === this.subCategoryId()));
         this.categoryId.set(category?.id ?? '');
       }
-      if (fresh) {
-        const current = data.months.find((month) => month.status === 'inProgress');
-        this.expanded.set(new Set(current ? [current.period.key] : []));
-        this.monthEntries.set({});
-        if (current && this.view() === 'months') {
-          this.scrollTo(current);
-        }
-      } else {
-        this.monthEntries.update((months) =>
-          Object.fromEntries(Object.entries(months).filter(([key]) => this.expanded().has(key))),
-        );
-      }
-      // In the Year view the cards are not shown; an open card loads its entries when it appears.
+      this.monthDetail.set(null);
+      this.balances.set(null);
       if (this.view() === 'months') {
-        for (const key of this.expanded()) {
-          void this.loadEntries(key);
-        }
+        void this.loadMonth();
+      } else {
+        void this.loadBalances();
       }
     } catch {
       if (request === this.request) {
@@ -339,46 +293,46 @@ export class Months {
     }
   }
 
-  // GET /api/entries for one month (M6), which also brings the accounts. Only the latest answer
-  // for a month, in the FY still shown, is kept.
-  private async loadEntries(key: string): Promise<void> {
+  // GET .../months/{periodKey} for the shown month, with Tracker's filter. Only the latest answer, for
+  // the month still shown, is kept.
+  private async loadMonth(): Promise<void> {
     const fyId = this.data()?.fyId;
-    if (!fyId) {
+    const key = this.monthKey();
+    if (!fyId || !key) {
       return;
     }
-    const request = (this.entriesRequests.get(key) ?? 0) + 1;
-    this.entriesRequests.set(key, request);
-    this.monthEntries.update((months) => ({
-      ...months,
-      [key]: { state: 'loading', data: months[key]?.data },
-    }));
-    let next: MonthEntries;
+    const request = ++this.monthRequest;
+    this.monthDetail.update((detail) => ({ state: 'loading', data: detail?.data?.period.key === key ? detail.data : undefined }));
+    let next: MonthDetailState;
     try {
       next = {
         state: 'ok',
-        data: await this.entryApi.entries({
-          fyId,
-          periodKey: key,
-          categoryId: this.categoryId(),
-          subCategoryId: this.subCategoryId(),
-        }),
+        data: await this.monthApi.month(fyId, key, { categoryId: this.categoryId(), subCategoryId: this.subCategoryId() }),
       };
     } catch {
       next = { state: 'error' };
     }
-    if (this.entriesRequests.get(key) === request && this.data()?.fyId === fyId) {
-      this.monthEntries.update((months) => ({ ...months, [key]: next }));
+    if (request === this.monthRequest) {
+      this.monthDetail.set(next);
     }
   }
 
-  private scrollTo(month: MonthOverview): void {
-    afterNextRender(
-      () =>
-        this.document
-          .getElementById(`month-${month.period.key}`)
-          ?.scrollIntoView?.({ block: 'start' }),
-      { injector: this.injector },
-    );
+  // The Year view's Balance row for the FY shown; only the latest answer is kept.
+  private async loadBalances(): Promise<void> {
+    const fyId = this.data()?.fyId;
+    if (!fyId) {
+      return;
+    }
+    const request = this.request;
+    let next: BalancesResponse | 'error';
+    try {
+      next = await this.overviewApi.balances(fyId);
+    } catch {
+      next = 'error';
+    }
+    if (request === this.request) {
+      this.balances.set(next);
+    }
   }
 
   private navigate(changes: Record<string, string | null>): void {
@@ -388,11 +342,6 @@ export class Months {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
-  }
-
-  // A plan, spending, or money (or an overspend) carried in from last month.
-  private hasMoney(cell: Cell): boolean {
-    return cell.planned > 0 || cell.spent > 0 || cell.carriedIn !== 0;
   }
 
   // The "Over by" status of docs/DESIGN.md: spent above what was available (R-PLN-05); spending
@@ -410,9 +359,5 @@ export class Months {
   // docs/DESIGN.md category rows: name and chip, progress bar, "SAR 1,240 of 2,000" (available).
   private line(cell: Cell): SpendLine {
     return spendLine(availableMinor(cell), toMinor(cell.spent), this.currency());
-  }
-
-  private money(minor: number): string {
-    return formatMoney(minor, this.currency());
   }
 }

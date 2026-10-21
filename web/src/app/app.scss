@@ -13,6 +13,11 @@
   border-bottom: 1px solid var(--border);
 }
 
+// Phones only: opens the drawer (owner note 9).
+.menu-button {
+  display: none;
+}
+
 // UX-02: NAMA · project name, then the current month with its dates.
 .title {
   display: flex;
@@ -56,7 +61,7 @@
   flex: 1;
 }
 
-// UX-08: this month's money left and the bank balance. Desktop: in the top bar, before the gear.
+// UX-08: this month's money left and the bank balance. Desktop: at the end of the top bar.
 // Phones: a strip under the top bar. Each number is a link (Tracker, Banks); like the Year grid
 // cells they are not underlined, and hover and focus show them (docs/DESIGN.md "Top bar numbers").
 .stats {
@@ -65,7 +70,7 @@
   gap: 8px;
 
   &.bar {
-    margin-right: 12px;
+    margin-right: 4px;
   }
 
   &.strip {
@@ -204,8 +209,39 @@
   margin-top: auto;
 }
 
-.top-sign-out {
-  display: none;
+// Desktop: the fold button sits first, quiet like a nav item.
+.collapse {
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+// Owner note 9: folded, the side bar keeps only its icons (72px); each item's name is its tooltip.
+@media (min-width: 768px) {
+  .nav.collapsed {
+    width: 72px;
+
+    .nav-item {
+      justify-content: center;
+      padding: 0;
+    }
+
+    // Each item's title names it (the toggle and Sign out have an aria-label).
+    .label,
+    .chevron {
+      display: none;
+    }
+
+    .nav-sign-out {
+      min-width: 0;
+      padding: 0;
+
+      mat-icon {
+        margin: 0;
+      }
+    }
+  }
 }
 
 .content {
@@ -223,7 +259,11 @@
 // Phones (under 768 px): bottom bar with Add in the center.
 @media (max-width: 767.98px) {
   .top-bar {
-    padding: 0 4px 0 16px;
+    padding: 0 4px;
+  }
+
+  .menu-button {
+    display: inline-flex;
   }
 
   // Two lines: NAMA · project (cut with "…"), then the month caption.
@@ -255,16 +295,12 @@
     border-top: 1px solid var(--border);
   }
 
-  // Phones open Settings from the gear, as a list, Sign out from the top bar, and Banks from the
-  // top bar's Balance.
+  // Phones open Settings, Sign out and Banks from the drawer (Banks also from the top bar's Balance).
   .settings-group,
   .nav-sign-out,
+  .collapse,
   .desktop-only {
     display: none;
-  }
-
-  .top-sign-out {
-    display: inline-flex;
   }
 
   // 48px high plus its border: add-entry.scss counts it when it centers the Add form.

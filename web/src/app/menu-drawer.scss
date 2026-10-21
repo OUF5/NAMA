@@ -1,0 +1,94 @@
+// Owner note 9: the phones' drawer over a scrim of the page background. Tokens only. Desktop has the
+// side bar, so the drawer never shows there.
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  background: var(--bg);
+  opacity: 0.7;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 901;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  box-sizing: border-box;
+  width: min(300px, 85vw);
+  padding: 8px 12px calc(16px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  box-shadow: var(--shadow-overlay);
+}
+
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding-left: 12px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--divider);
+}
+
+// The NAMA mark and name, as in the top bar.
+.brand {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+
+.logo {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  background: var(--bg);
+  border: 2px solid var(--primary);
+}
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text-2);
+  background: none;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  &.active {
+    background: var(--primary-soft);
+    color: var(--primary-text);
+    font-weight: 500;
+  }
+
+  &.sign-out {
+    margin-top: 8px;
+    border-top: 1px solid var(--divider);
+    border-radius: 0 0 8px 8px;
+  }
+}
+
+@media (min-width: 768px) {
+  :host {
+    display: none;
+  }
+}

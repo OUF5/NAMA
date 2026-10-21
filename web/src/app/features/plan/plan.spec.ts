@@ -142,11 +142,37 @@ describe('Plan (PRD 5.3)', () => {
     subCategories: [{ id: 'groceries', categoryId: 'food', name: 'Groceries', sortOrder: 0, archived: false }],
   };
 
-  // PLN-06; PLN-03 turned sideways (owner's choice, M8): every month's numbers at once.
-  it('guides you to the first sub-category and shows every month in the totals', async () => {
+  function tabs(root: ParentNode): HTMLAnchorElement[] {
+    return Array.from(root.querySelectorAll<HTMLAnchorElement>('nav.tabs a'));
+  }
+
+  // Owner note 9: three tabs in the URL; Planning first. PLN-06 on Planning.
+  it('opens on Planning and switches tabs without a call', async () => {
     const root = await open([food], plansResponse());
 
+    expect(tabs(root).map((tab) => text(tab))).toEqual(['Planning', 'Allocating', 'Categories']);
+    expect(tabs(root).map((tab) => tab.getAttribute('aria-current'))).toEqual(['page', null, null]);
+    expect(tabs(root)[1].getAttribute('href')).toBe('/plan?tab=allocating');
     expect(text(root)).toContain('Add your first sub-category');
+    expect(text(root.querySelector('#list-title'))).toBe('Planned in Sep 2026 27 Sep to 26 Oct');
+    expect(root.querySelector('table.totals')).toBeNull();
+
+    await harness.navigateByUrl('/plan?tab=allocating');
+    await settle();
+    expect(tabs(root).map((tab) => tab.getAttribute('aria-current'))).toEqual([null, 'page', null]);
+    expect(root.querySelector('table.totals')).not.toBeNull();
+    expect(root.querySelector('#list-title')).toBeNull();
+
+    await harness.navigateByUrl('/plan?tab=categories');
+    await settle();
+    expect(root.querySelector('app-plan-categories')).not.toBeNull();
+    // afterEach checks that no call was made.
+  });
+
+  // PLN-03 turned sideways (owner's choice, M8), on Allocating: every month's numbers at once.
+  it('shows every month in the totals on Allocating', async () => {
+    const root = await open([food], plansResponse(), '/plan?tab=allocating');
+
     const table = root.querySelector('table.totals')!;
     // R-PLN-03 ("Unallocated" on screen): each computed row has its formula under its name.
     expect(Array.from(table.querySelectorAll('tbody th')).map((th) => text(th))).toEqual([
@@ -174,36 +200,47 @@ describe('Plan (PRD 5.3)', () => {
     expect(text(table.querySelectorAll('tbody tr')[0].querySelectorAll('td')[0])).toBe('17,000');
     // The current month (Sep 2026) is selected.
     expect(months[8].getAttribute('aria-pressed')).toBe('true');
-    expect(text(root.querySelector('#list-title'))).toBe('Planned in Sep 2026 27 Sep to 26 Oct');
   });
 
   // R-PLN-06: set up in Oct 2026, so the FY column covers Oct on and the caption says why.
   it('says which month the carry starts in', async () => {
-    const root = await open([food], { ...plansResponse(), carryFromPeriodKey: '2026-10' });
+    const root = await open([food], { ...plansResponse(), carryFromPeriodKey: '2026-10' }, '/plan?tab=allocating');
 
     const table = root.querySelector('table.totals')!;
     expect(text(table.querySelector('thead .fy-col'))).toBe('From Oct 2026');
     expect(text(root.querySelector('.totals-note'))).toContain('It carries from Oct 2026, the month you started NAMA; earlier months stand alone.');
   });
 
-  // Categories start closed; the selected month drives the amounts.
+  // Categories start closed; the selected month drives the amounts. The month picker steps through
+  // the months, and a month picked on Allocating is the one Planning shows.
   it('shows each category in the selected month and opens its sub-categories', async () => {
     const amounts = Object.fromEntries(periods.map((p) => [p.key, 1500]));
     amounts['2026-01'] = 900;
+    amounts['2026-08'] = 700;
     const root = await open([withGroceries], plansResponse(amounts));
 
-    const category = root.querySelector<HTMLButtonElement>('button.expand')!;
-    expect(text(category)).toBe('chevron_right Food FY total SAR 17,400 SAR 1,500');
-    expect(category.getAttribute('aria-expanded')).toBe('false');
+    const category = () => root.querySelector<HTMLButtonElement>('button.expand')!;
+    expect(text(category())).toBe('chevron_right Food FY total SAR 16,600 SAR 1,500');
+    expect(category().getAttribute('aria-expanded')).toBe('false');
     expect(root.querySelector('[aria-label="Edit amounts of Groceries"]')).toBeNull();
 
+    button(root, 'Previous month').click();
+    await settle();
+    expect(text(root.querySelector('#list-title'))).toContain('Planned in Aug 2026');
+    expect(text(category())).toContain('SAR 700');
+
+    await harness.navigateByUrl('/plan?tab=allocating');
+    await settle();
     root.querySelectorAll<HTMLButtonElement>('thead button.month')[0].click();
-    category.click();
+    await harness.navigateByUrl('/plan');
+    await settle();
+    category().click();
     await settle();
 
     expect(text(root.querySelector('#list-title'))).toContain('Planned in Jan 2026');
-    expect(text(category)).toContain('SAR 900');
-    expect(text(root.querySelector('.row.sub'))).toBe('Groceries FY total SAR 17,400 SAR 900 edit');
+    expect(button(root, 'Previous month').disabled).toBe(true);
+    expect(text(category())).toContain('SAR 900');
+    expect(text(root.querySelector('.row.sub'))).toBe('Groceries FY total SAR 16,600 SAR 900 edit');
   });
 
   // PLN-01, PLN-02, PLN-04 in the editor dialog, with "Unallocated after" while typing (M8).
@@ -273,9 +310,33 @@ describe('Plan (PRD 5.3)', () => {
     expect(text(dialog())).toContain('at most 2 decimals');
   });
 
+  // STG-05 on the Categories tab (owner note 9): one row per category; it opens its sub-categories.
+  it('opens a category on Categories to rename or archive its sub-categories', async () => {
+    const root = await open([withGroceries], plansResponse(), '/plan?tab=categories');
+    const row = root.querySelector<HTMLButtonElement>('app-plan-categories button.expand')!;
+    expect(text(row)).toContain('Food 1 sub-category');
+    expect(row.getAttribute('aria-expanded')).toBe('false');
+    expect(root.querySelector('[aria-label="Archive Groceries"]')).toBeNull();
+
+    row.click();
+    await settle();
+
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+    expect(root.querySelector('[aria-label="Rename Groceries"]')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('[aria-label="Archive Groceries"]')!.click();
+    const put = await vi.waitFor(() => http.expectOne('/api/sub-categories/groceries'));
+    expect(put.request.body).toEqual({ name: 'Groceries', archived: true });
+    put.flush({ id: 'groceries', categoryId: 'food', name: 'Groceries', sortOrder: 0, archived: true });
+    await settle();
+
+    expect(text(root.querySelector('.status'))).toBe('Groceries archived.');
+    expect(text(root)).toContain('Archived (1)');
+    expect(root.querySelector('[aria-label="Archive Groceries"]')).toBeNull();
+  });
+
   // PLN-01: a new sub-category opens its month amounts right away.
   it('adds a sub-category and opens its months', async () => {
-    const root = await open([food], plansResponse());
+    const root = await open([food], plansResponse(), '/plan?tab=categories');
     root.querySelector<HTMLButtonElement>('button.expand')!.click();
     await settle();
 
@@ -290,12 +351,13 @@ describe('Plan (PRD 5.3)', () => {
     await vi.waitFor(() => expect(document.querySelector('app-plan-dialog')).not.toBeNull());
     await settle();
     expect(inputLabeled(dialog(), 'Jan 2026')).toBeDefined();
-    expect(text(root.querySelector('.row.sub'))).toContain('Groceries');
+    expect(text(root.querySelector('.status'))).toBe('Added Groceries.');
+    expect(text(root.querySelector('app-plan-categories .subs'))).toContain('Groceries');
   });
 
   // PLN-05, PRD 4.7
   it('refuses a category name that exists, ignoring case, without calling the API', async () => {
-    const root = await open([food], plansResponse());
+    const root = await open([food], plansResponse(), '/plan?tab=categories');
 
     button(root, 'Add category').click();
     await settle();
@@ -309,12 +371,16 @@ describe('Plan (PRD 5.3)', () => {
 
   // Owner's choice (M8): an FY selector with more than one FY; the FY is in the URL.
   it('shows the FY from the URL and switches FY with the selector', async () => {
-    const root = await open([withGroceries], plansResponse({}, transition, [fy2026, transition]), '/plan?fyId=2027-01');
+    const root = await open(
+      [withGroceries],
+      plansResponse({}, transition, [fy2026, transition]),
+      '/plan?fyId=2027-01&tab=allocating',
+    );
 
     expect(root.querySelector('mat-select')?.textContent).toContain('FY 2027 · 27 Jan 2027 to 26 Jul 2027');
     expect(root.querySelectorAll('thead button.month').length).toBe(1);
 
-    await harness.navigateByUrl('/plan?fyId=2026-01');
+    await harness.navigateByUrl('/plan?fyId=2026-01&tab=allocating');
     (await vi.waitFor(() => http.expectOne('/api/categories'))).flush([withGroceries]);
     (await vi.waitFor(() => http.expectOne('/api/fiscal-years/2026-01/plans'))).flush(
       plansResponse({}, fy2026, [fy2026, transition]),

@@ -1,0 +1,122 @@
+// Plan's Categories tab (docs/DESIGN.md "Plan"): the Settings list it came from. Tokens only.
+.card {
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.note {
+  margin: 0;
+  padding: 12px 0;
+  color: var(--text-2);
+}
+
+.list {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--divider);
+
+  .name {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.count {
+  display: block;
+}
+
+// A category row: the whole name area opens its sub-categories.
+.expand {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chevron {
+  flex: none;
+  transition: transform 0.15s;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.fold {
+  margin-top: 4px;
+}
+
+.subs {
+  padding: 0 0 8px 28px;
+
+  .list {
+    margin: 0;
+  }
+}
+
+.add-sub {
+  margin-top: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .card {
+    padding: 16px;
+  }
+
+  .card-head {
+    flex-wrap: wrap;
+  }
+
+  .subs {
+    padding-left: 16px;
+  }
+}

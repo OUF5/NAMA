@@ -72,15 +72,6 @@ function settings(currentPeriodKey: string | null = '2026-09', peopleList: Peopl
       currentPeriodKey,
       currentTotal: currentPeriodKey ? 11500.25 : null,
     },
-    categories: [
-      {
-        id: 'food',
-        name: 'Food',
-        sortOrder: 0,
-        archived: false,
-        subCategories: [{ id: 'groceries', categoryId: 'food', name: 'Groceries', sortOrder: 0, archived: false }],
-      },
-    ],
     people: peopleList,
   };
 }
@@ -195,7 +186,6 @@ describe('Settings (PRD 5.7)', () => {
       'person Profile Home budget · SAR chevron_right',
       'event Fiscal year Starts in July · Payday 27 chevron_right',
       'payments Income SAR 11,500.25 this month chevron_right',
-      'category Categories 1 active chevron_right',
     ]);
     expect(text(root.querySelector('.version'))).toBe('Version 3e8c699');
     expect(rows[2].getAttribute('href')).toBe('/settings/income');
@@ -226,22 +216,6 @@ describe('Settings (PRD 5.7)', () => {
     expect(text(root)).toContain('No fiscal year contains today.');
   });
 
-  // STG-05: one row per category; it opens its sub-categories.
-  it('opens a category to show its sub-categories', async () => {
-    const root = await open('/settings/categories');
-    const row = root.querySelector<HTMLButtonElement>('button.expand')!;
-    expect(text(row)).toContain('Food 1 sub-category');
-    expect(row.getAttribute('aria-expanded')).toBe('false');
-    expect(root.querySelector('[aria-label="Archive Groceries"]')).toBeNull();
-
-    row.click();
-    harness.detectChanges();
-
-    expect(row.getAttribute('aria-expanded')).toBe('true');
-    expect(root.querySelector('[aria-label="Archive Groceries"]')).not.toBeNull();
-    expect(text(root)).toContain('Add sub-category');
-  });
-
   // STG-07: People is for admins only. /api/settings sends people: null to everyone else.
   it('hides People from someone who is not an admin', async () => {
     await open('/settings/people');
@@ -254,8 +228,8 @@ describe('Settings (PRD 5.7)', () => {
     const root = await open('/settings', settings('2026-09', people));
 
     const rows = Array.from(root.querySelectorAll<HTMLAnchorElement>('a.menu-row'));
-    expect(text(rows[4])).toBe('group People 1 person · 1 unused link chevron_right');
-    expect(rows[4].getAttribute('href')).toBe('/settings/people');
+    expect(text(rows[3])).toBe('group People 1 person · 1 unused link chevron_right');
+    expect(rows[3].getAttribute('href')).toBe('/settings/people');
   });
 
   // AUTH-07: the admins, who joined and when, and the unused links with their expiry.

@@ -1,7 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Api.Domain;
-using Api.Features.Categories;
 using Api.Features.FiscalYears;
 using Api.Features.Income;
 using Api.Features.People;
@@ -12,7 +11,8 @@ namespace Api.Features.Settings;
 
 // PRD 5.7 Settings. Owner's choice (M8, NFR-01): GET /api/settings brings every section in one
 // call (an addition to PRD 7.5); the version comes from GET /api/health. People (STG-07) is there
-// for admins only, and null for everyone else. Bank accounts live on Banks (BNK-02, 20 Oct 2026).
+// for admins only, and null for everyone else. Bank accounts live on Banks (BNK-02, 20 Oct 2026), and
+// categories on Plan's Categories tab, which reads GET /api/categories (owner note 9).
 public static class SettingsEndpoint
 {
     // STG-02, R-CAL-07: the settings apply from the FY after the latest stored one. NextFiscalYear is
@@ -23,7 +23,6 @@ public static class SettingsEndpoint
         MeEndpoint.ProfileDto Profile,
         CalendarDto Calendar,
         IncomeEndpoint.IncomeResponse Income,
-        IReadOnlyList<CategoriesEndpoint.CategoryDto> Categories,
         PeopleEndpoint.PeopleDto? People);
 
     public static IEndpointRouteBuilder MapSettings(this IEndpointRouteBuilder api)
@@ -38,15 +37,10 @@ public static class SettingsEndpoint
             {
                 return Results.NotFound();
             }
-            var subCategories = await store.GetSubCategoriesAsync(uid);
             return Results.Ok(new SettingsResponse(
                 MeEndpoint.ProfileDto.From(profile),
                 calendar,
                 income,
-                (await store.GetCategoriesAsync(uid))
-                    .OrderBy(category => category.SortOrder)
-                    .Select(category => CategoriesEndpoint.ToDto(category, subCategories))
-                    .ToList(),
                 admins.IsAdmin(user) ? await PeopleEndpoint.LoadAsync(access, admins, time, profile.Timezone) : null));
         });
 

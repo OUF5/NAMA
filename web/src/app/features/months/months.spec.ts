@@ -12,12 +12,15 @@ import { MatSelectHarness } from '@angular/material/select/testing';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { Me, MeService } from '../../core/me';
-import { EntriesResponse, Entry } from '../add-entry/entry-api';
+import { Entry } from '../add-entry/entry-api';
 import { Category, FiscalYear } from '../plan/plan-api';
 import { Months } from './months';
-import { MonthOverview, OverviewResponse } from './overview-api';
+import { MonthDetail } from './month-api';
+import { BalancesResponse, MonthOverview, OverviewResponse } from './overview-api';
 
-// Today is 17 Oct 2026; FY 2026 has payday 27, so Sep 2026 (27 Sep to 26 Oct) is in progress.
+// Today is 17 Oct 2026; FY 2026 has payday 27, so Sep 2026 (27 Sep to 26 Oct) is in progress. Owner
+// note 9: Tracker shows one month at a time (the overview plus that month's detail), and the Year view
+// has a Balance row (the overview plus the balances).
 const aug = { key: '2026-08', label: 'Aug 2026', startDate: '2026-08-27', endDate: '2026-09-26' };
 const sep = { key: '2026-09', label: 'Sep 2026', startDate: '2026-09-27', endDate: '2026-10-26' };
 const oct = { key: '2026-10', label: 'Oct 2026', startDate: '2026-10-27', endDate: '2026-11-26' };
@@ -167,17 +170,62 @@ const big: Entry = {
   note: 'Big shop',
 };
 
-function entries(list: Entry[]): EntriesResponse {
+const fuelEntry: Entry = { ...big, id: 'e1', date: '2026-10-01', categoryId: 'transport', subCategoryId: 'fuel', bankAccountId: 'snb', amount: 100, note: '' };
+
+// Every day of a month, with the given spending on some of them.
+function days(period: typeof sep, spent: Record<string, number> = {}): MonthDetail['days'] {
+  const list: MonthDetail['days'] = [];
+  const day = new Date(`${period.startDate}T00:00:00Z`);
+  const end = new Date(`${period.endDate}T00:00:00Z`);
+  for (; day <= end; day.setUTCDate(day.getUTCDate() + 1)) {
+    const date = day.toISOString().slice(0, 10);
+    list.push({ date, spent: spent[date] ?? 0 });
+  }
+  return list;
+}
+
+// Sep 2026 as the API's hand check would give it: Fuel 100 on 1 Oct (SNB) and the 799.99 big shop
+// on 17 Oct (Al Rajhi); Aug had Food 50 and Transport 30.
+function detail(period = sep, latest: Entry[] = [big, fuelEntry], count = latest.length): MonthDetail {
+  const total = latest.reduce((sum, entry) => sum + entry.amount, 0);
   return {
-    fiscalYears: [fy2026],
-    fyId: '2026-01',
-    bankAccounts: [{ id: 'rajhi', name: 'Al Rajhi', archived: false }],
-    entries: list,
-    total: list.reduce((sum, entry) => sum + entry.amount, 0),
+    period,
+    lastMonth: period === sep ? aug : null,
+    total,
+    count,
+    days: days(period, Object.fromEntries(latest.map((entry) => [entry.date, entry.amount]))),
+    accounts: latest.length
+      ? [
+          { bankAccountId: 'rajhi', spent: 799.99 },
+          { bankAccountId: 'snb', spent: 100 },
+        ]
+      : [],
+    categories: latest.length
+      ? [
+          { categoryId: 'food', spent: 799.99, lastSpent: 50 },
+          { categoryId: 'transport', spent: 100, lastSpent: 130 },
+        ]
+      : [],
+    latest,
+    biggest: [...latest].sort((a, b) => b.amount - a.amount),
+    bankAccounts: [
+      { id: 'rajhi', name: 'Al Rajhi', archived: false },
+      { id: 'snb', name: 'SNB', archived: false },
+    ],
   };
 }
 
-describe('Months (PRD 5.6)', () => {
+// Aug closed at 18,450; Sep and Oct are projected.
+const balances: BalancesResponse = {
+  complete: true,
+  months: [
+    { periodKey: '2026-08', balance: 18450, projected: false },
+    { periodKey: '2026-09', balance: 22000, projected: true },
+    { periodKey: '2026-10', balance: -500, projected: true },
+  ],
+};
+
+describe('Tracker (PRD 5.6)', () => {
   let http: HttpTestingController;
   let harness: RouterTestingHarness;
   let meValue: Me;
@@ -215,28 +263,23 @@ describe('Months (PRD 5.6)', () => {
     return vi.waitFor(() => http.expectOne((req) => req.url === `/api/fiscal-years/${fyId}/overview`));
   }
 
-  function entriesCall(periodKey: string): Promise<TestRequest> {
-    return vi.waitFor(() =>
-      http.expectOne(
-        (req) =>
-          req.url === '/api/entries' &&
-          req.params.get('periodKey') === periodKey &&
-          req.params.get('fyId') === '2026-01',
-      ),
-    );
+  function monthCall(periodKey: string, fyId = '2026-01'): Promise<TestRequest> {
+    return vi.waitFor(() => http.expectOne((req) => req.url === `/api/fiscal-years/${fyId}/months/${periodKey}`));
   }
 
-  // NFR-01: the overview, plus the entries of the in-progress month, which opens expanded.
-  async function open(
-    url = '/months',
-    data = overview(),
-    current: string | null = data.months.find((m) => m.status === 'inProgress')?.period.key ?? null,
-  ): Promise<void> {
+  function balancesCall(fyId = '2026-01'): Promise<TestRequest> {
+    return vi.waitFor(() => http.expectOne(`/api/fiscal-years/${fyId}/balances`));
+  }
+
+  // NFR-01: the overview, then the shown month's detail (Months view) or the balances (Year view).
+  async function open(url = '/months', data = overview(), month: MonthDetail | BalancesResponse = detail()): Promise<void> {
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl(url);
     (await overviewCall(data.fyId)).flush(data);
-    if (current) {
-      (await entriesCall(current)).flush(entries([big]));
+    if ('months' in month) {
+      (await balancesCall(data.fyId)).flush(month);
+    } else {
+      (await monthCall(month.period.key, data.fyId)).flush(month);
     }
     await settle();
     http.verify();
@@ -263,8 +306,12 @@ describe('Months (PRD 5.6)', () => {
     return parts.join(' ').replace(/\s+/g, ' ').trim();
   }
 
-  function card(key: string): HTMLElement {
-    return root().querySelector(`#month-${key}`)!;
+  function section(title: string): HTMLElement {
+    return root().querySelector(`[aria-labelledby="${title}-title"]`)!;
+  }
+
+  function lines(scope: ParentNode, selector: string): string[] {
+    return Array.from(scope.querySelectorAll(selector)).map((el) => words(el));
   }
 
   function button(scope: ParentNode, label: string): HTMLButtonElement {
@@ -282,61 +329,90 @@ describe('Months (PRD 5.6)', () => {
     )!;
   }
 
-  // MON-01, MON-02
-  it('shows one card per month with its status, numbers and the in-progress month expanded', async () => {
+  // MON-01, MON-02, owner note 9: the month in progress first, with its status, numbers and plan lines.
+  it('shows the month in progress with its status, numbers and plan lines', async () => {
     await open();
 
-    expect(root().querySelectorAll('section.month').length).toBe(3);
-    expect(card('2026-08').classList).toContain('closed');
-    expect(words(card('2026-08').querySelector('.month-head'))).toBe(
-      'Aug 2026 27 Aug to 26 Sep Closed',
-    );
-    expect(card('2026-09').classList).toContain('inProgress');
-    expect(text(card('2026-09').querySelector('.month-head .now-chip'))).toBe('In progress');
-    expect(card('2026-10').classList).toContain('yetToCome');
-    expect(text(card('2026-10').querySelector('.status-text'))).toBe('Upcoming');
-
-    const kpis = Array.from(card('2026-09').querySelectorAll('.kpi')).map((kpi) => words(kpi));
+    const summary = section('month');
+    expect(summary.classList).toContain('inProgress');
+    expect(words(summary.querySelector('.card-head'))).toBe('Sep 2026 27 Sep to 26 Oct In progress');
     // R-PLN-05: Remaining = From last month + Planned - Spent; Income is the month's own.
-    expect(kpis).toEqual([
+    expect(lines(summary, '.kpi')).toEqual([
       'Remaining SAR 600.01',
       'From last month SAR 0',
       'Planned SAR 1,900',
       'Spent SAR 1,299.99',
       'Income SAR 17,500.25',
     ]);
-    expect(text(card('2026-09').querySelector('.bar-line .chip'))).toBe('Within plan');
-    // Remaining carries the status color; the other numbers stay neutral.
-    expect(card('2026-09').querySelector('.remaining .value')!.classList).toContain('ok');
-    expect(
-      card('2026-09').querySelectorAll('.kpi .value.ok, .kpi .value.warn, .kpi .value.danger')
-        .length,
-    ).toBe(1);
+    expect(text(summary.querySelector('.bar-line .chip'))).toBe('Within plan');
+    expect(summary.querySelector('.remaining .value')!.classList).toContain('ok');
+    expect(summary.querySelectorAll('.kpi .value.ok, .kpi .value.warn, .kpi .value.danger').length).toBe(1);
 
-    // Only the in-progress month is open, with its categories and entries.
-    expect(card('2026-09').querySelector('mat-expansion-panel')!.classList).toContain(
-      'mat-expanded',
-    );
-    expect(card('2026-08').querySelector('mat-expansion-panel')!.classList).not.toContain(
-      'mat-expanded',
-    );
-    const lines = Array.from(card('2026-09').querySelectorAll('.spend-row')).map((row) =>
-      words(row),
-    );
-    expect(lines).toEqual([
+    expect(lines(section('plan'), '.spend-row')).toEqual([
       'Food Within plan SAR 1,199.99 of 1,500',
       'Groceries Within plan SAR 1,199.99 of 1,500',
       'Transport Within plan SAR 100 of 400',
       'Fuel Within plan SAR 100 of 400',
     ]);
-    const entry = card('2026-09').querySelector('.entry')!;
-    expect(
-      ['.day', '.name', '.money'].map((selector) => text(entry.querySelector(selector))),
-    ).toEqual(['17 Oct', 'Groceries', 'SAR 799.99']);
+
+    // The month picker, with each month's status.
+    expect(root().querySelector('app-month-picker mat-select')?.textContent).toContain('Sep 2026');
+    expect(button(root(), 'Next month').disabled).toBe(false);
 
     // One FY: no selector, the FY as a caption (MON-03).
     expect(text(root().querySelector('.fy'))).toBe('FY 2026 · 27 Jan 2026 to 26 Jan 2027');
     expect(root().textContent).not.toContain('Fiscal year');
+  });
+
+  // Owner note 9: spending by day, against last month, by account, the biggest and the newest entries.
+  it('shows the month in detail', async () => {
+    await open('/months', overview(), detail(sep, [big, fuelEntry], 7));
+
+    const byDay = section('days');
+    expect(words(byDay.querySelector('.card-head'))).toBe('Spending by day SAR 899.99 in 7 entries Biggest day: 17 Oct · SAR 799.99');
+    const chart = byDay.querySelector('app-day-bars [role="img"]')!;
+    expect(chart.getAttribute('aria-label')).toBe('Spending by day: 1 Oct SAR 100, 17 Oct SAR 799.99');
+    const columns = byDay.querySelectorAll<HTMLElement>('.col');
+    expect(columns.length).toBe(30);
+    expect(columns[20].classList).toContain('today');
+    expect(columns[21].classList).toContain('future');
+    expect(columns[20].querySelector<HTMLElement>('.bar')!.style.height).toBe('100%');
+    expect(columns[20].title).toBe('17 Oct: SAR 799.99');
+
+    expect(words(section('change').querySelector('.card-head'))).toBe('Compared with last month Aug 2026');
+    expect(lines(section('change'), '.row')).toEqual([
+      'Food SAR 749.99 more than Aug 2026 SAR 799.99',
+      'Transport SAR 30 less than Aug 2026 SAR 100',
+    ]);
+    expect(lines(section('accounts'), '.row')).toEqual(['Al Rajhi 89% SAR 799.99', 'SNB 11% SAR 100']);
+
+    expect(lines(section('biggest'), '.entry').map((line) => line.replace(' edit', ''))).toEqual([
+      '17 Oct Groceries SAR 799.99',
+      '1 Oct Fuel SAR 100',
+    ]);
+    expect(lines(section('latest'), '.entry')).toHaveLength(2);
+    const link = section('latest').querySelector('a.see-all')!;
+    expect(text(link)).toBe('See all 7 entries in Sep 2026');
+    expect(link.getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09');
+  });
+
+  // Owner note 9: the picker steps through the months; the month is kept in the URL and only its
+  // detail is loaded again.
+  it('picks another month and keeps it in the URL', async () => {
+    await open();
+
+    button(root(), 'Previous month').click();
+    (await monthCall('2026-08')).flush(detail(aug, []));
+    await settle();
+    http.verify();
+
+    expect(TestBed.inject(Router).url).toBe('/months?month=2026-08');
+    expect(words(section('month').querySelector('.card-head'))).toBe('Aug 2026 27 Aug to 26 Sep Closed');
+    expect(button(root(), 'Previous month').disabled).toBe(true);
+    // Spending without a plan is over plan (R-PLN-01): Taxi (archived) is listed in Aug.
+    expect(lines(section('plan'), '.spend-row')[3]).toBe('Taxi (archived) Over by SAR 30 SAR 30 of 0');
+    expect(text(section('change').querySelector('.note'))).toBe('This is the first month NAMA has.');
+    expect(text(section('latest').querySelector('.note'))).toBe('No entries in Aug 2026.');
   });
 
   // R-PLN-05: what was left last month carries in. Groceries left 300 in Aug, so Sep has 1,800; Fuel
@@ -352,12 +428,8 @@ describe('Months (PRD 5.6)', () => {
     transport.subCategories[0].months[1] = { ...transport.subCategories[0].months[1], carriedIn: 200, spent: 500, remaining: 100 };
     await open('/months', data);
 
-    expect(Array.from(card('2026-09').querySelectorAll('.kpi')).map((kpi) => words(kpi)).slice(0, 2)).toEqual([
-      'Remaining SAR 700.01',
-      'From last month SAR 500',
-    ]);
-    const lines = Array.from(card('2026-09').querySelectorAll('.spend-row')).map((row) => words(row));
-    expect(lines).toEqual([
+    expect(lines(section('month'), '.kpi').slice(0, 2)).toEqual(['Remaining SAR 700.01', 'From last month SAR 500']);
+    expect(lines(section('plan'), '.spend-row')).toEqual([
       'Food Within plan SAR 1,199.99 of 1,800',
       'Groceries Within plan SAR 1,199.99 of 1,800',
       'Transport Near limit SAR 500 of 600',
@@ -380,65 +452,14 @@ describe('Months (PRD 5.6)', () => {
     expect(root().querySelector('.carry-from')).toBeNull();
   });
 
-  it("loads a month's entries once when its card is expanded", async () => {
-    await open();
-    const header = card('2026-08').querySelector('mat-expansion-panel-header') as HTMLElement;
-
-    header.click();
-    (await entriesCall('2026-08')).flush(entries([]));
-    await settle();
-
-    // Spending without a plan is over plan (R-PLN-01): Taxi (archived) is listed in Aug.
-    expect(words(card('2026-08').querySelectorAll('.spend-row')[3])).toBe(
-      'Taxi (archived) Over by SAR 30 SAR 30 of 0',
-    );
-    expect(text(card('2026-08').querySelector('.note'))).toBe(
-      'No entries in Aug 2026. Add an entry.',
-    );
-
-    header.click();
-    await settle();
-    header.click();
-    await settle();
-    http.verify();
-  });
-
-  // Owner's choice (M7): only the newest 5, and a link to the month in Entries.
-  it('lists the newest 5 entries of a month and links to the rest in Entries', async () => {
-    await open();
-    expect(card('2026-09').querySelector('.see-all')).toBeNull();
-
-    (card('2026-08').querySelector('mat-expansion-panel-header') as HTMLElement).click();
-    const augEntries = Array.from({ length: 7 }, (_, i) => ({
-      ...big,
-      id: `a${i}`,
-      date: `2026-09-${String(20 - i).padStart(2, '0')}`,
-      periodKey: '2026-08',
-      amount: 10 + i,
-    }));
-    (await entriesCall('2026-08')).flush(entries(augEntries));
-    await settle();
-
-    const shown = Array.from(card('2026-08').querySelectorAll('.entry .money')).map((el) =>
-      text(el),
-    );
-    expect(shown).toEqual(['SAR 10', 'SAR 11', 'SAR 12', 'SAR 13', 'SAR 14']);
-    const link = card('2026-08').querySelector('a.see-all')!;
-    expect(text(link)).toBe('See all 7 entries in Aug 2026');
-    expect(link.getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-08');
-  });
-
   // UX-03: the Months view says what to do when nothing is planned or spent in the FY.
-  it('shows an empty state above the month cards when nothing is planned or spent', async () => {
-    await open('/months', { ...overview(), rows: [] });
+  it('shows an empty state above the month when nothing is planned or spent', async () => {
+    await open('/months', { ...overview(), rows: [] }, detail(sep, []));
 
     const empty = root().querySelector('.empty')!;
     expect(text(empty.querySelector('h2'))).toBe('Nothing planned or spent in FY 2026 yet');
-    expect(Array.from(empty.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
-      '/plan',
-      '/add',
-    ]);
-    expect(root().querySelectorAll('section.month').length).toBe(3);
+    expect(Array.from(empty.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual(['/plan', '/add']);
+    expect(section('month')).not.toBeNull();
   });
 
   it('shows no empty state when something is planned or spent', async () => {
@@ -448,7 +469,7 @@ describe('Months (PRD 5.6)', () => {
   });
 
   // Tracker's filter (owner's choice, 20 Oct 2026): the API narrows the sums to Food, income is
-  // hidden (it is null), and the month's entries are Food's.
+  // hidden (it is null), and the month's detail is Food's.
   it('focuses on one category from the URL, without income', async () => {
     const food = overview();
     food.rows = food.rows.slice(0, 1);
@@ -458,14 +479,15 @@ describe('Months (PRD 5.6)', () => {
     (await vi.waitFor(() =>
       http.expectOne((req) => req.url === '/api/fiscal-years/2026-01/overview' && req.params.get('categoryId') === 'food'),
     )).flush(food);
-    const sepEntries = await entriesCall('2026-09');
-    expect(sepEntries.request.params.get('categoryId')).toBe('food');
-    sepEntries.flush(entries([big]));
+    const sepDetail = await monthCall('2026-09');
+    expect(sepDetail.request.params.get('categoryId')).toBe('food');
+    sepDetail.flush(detail(sep, [big]));
     await settle();
 
-    expect(words(card('2026-09').querySelector('.summary'))).not.toContain('Income');
-    expect(words(card('2026-09').querySelector('.summary'))).toContain('SAR 300.01');
+    expect(words(section('month'))).not.toContain('Income');
+    expect(words(section('month'))).toContain('SAR 300.01');
     expect(words(root().querySelector('.filters'))).toContain('Clear filters');
+    expect(section('latest').querySelector('a.see-all')).toBeNull();
     http.verify();
   });
 
@@ -481,40 +503,36 @@ describe('Months (PRD 5.6)', () => {
   // "Over plan only": Taxi went over in Aug (30 with no plan); nothing went over in Sep.
   it('shows only what went over plan', async () => {
     await open('/months?over=1');
+    expect(words(section('plan'))).toContain('Nothing over plan in Sep 2026.');
 
-    expect(words(card('2026-09'))).toContain('Nothing over plan in Sep 2026.');
-    (card('2026-08').querySelector('mat-expansion-panel-header') as HTMLElement).click();
+    await harness.navigateByUrl('/months?over=1&month=2026-08');
+    (await monthCall('2026-08')).flush(detail(aug, []));
     await settle();
-    (await entriesCall('2026-08')).flush(entries([]));
-    await settle();
-    const aug = words(card('2026-08').querySelector('.categories'));
-    expect(aug).toContain('Taxi (archived)');
-    expect(aug).not.toContain('Groceries');
+    const plan = words(section('plan'));
+    expect(plan).toContain('Taxi (archived)');
+    expect(plan).not.toContain('Groceries');
   });
 
   it('keeps only the rows over plan in the Year view', async () => {
-    await open('/months?over=1&view=year', overview(), null);
+    await open('/months?over=1&view=year', overview(), balances);
 
-    const grid = words(root().querySelector('app-year-grid'));
+    const grid = words(root().querySelector('app-year-grid tbody'));
     expect(grid).toContain('Transport');
     expect(grid).not.toContain('Food');
   });
 
   // Tracker: plan vs actual, with the way back to Plan for the same FY (owner's choice, 20 Oct 2026).
   it('is titled Plan vs actual and links to Plan for the shown FY', async () => {
-    await open('/months?fyId=2026-01', overview('2026-01', ['closed', 'closed', 'closed']));
+    await open('/months?fyId=2026-01', overview('2026-01', ['closed', 'closed', 'closed']), detail(aug, []));
 
     expect(root().querySelector('h1')?.textContent).toBe('Plan vs actual');
     expect(root().querySelector('.page-head a')?.getAttribute('href')).toBe('/plan?fyId=2026-01');
-    http.verify();
   });
 
-  it('opens no card when no month is in progress', async () => {
-    const past = overview('2026-01', ['closed', 'closed', 'closed']);
-    await open('/months?fyId=2026-01', past);
+  it("shows the FY's first month when no month is in progress", async () => {
+    await open('/months?fyId=2026-01', overview('2026-01', ['closed', 'closed', 'closed']), detail(aug, []));
 
-    expect(root().querySelectorAll('mat-expansion-panel.mat-expanded').length).toBe(0);
-    http.verify();
+    expect(words(section('month').querySelector('h2'))).toBe('Aug 2026');
   });
 
   // MON-03: same default as Entries; with no current FY, the latest.
@@ -524,9 +542,8 @@ describe('Months (PRD 5.6)', () => {
     await harness.navigateByUrl('/months');
 
     (await vi.waitFor(() => http.expectOne('/api/fiscal-years'))).flush([fy2026, fy2027]);
-    (await overviewCall('2027-01')).flush({
-      ...overview('2027-01', ['yetToCome', 'yetToCome', 'yetToCome'], [fy2026, fy2027]),
-    });
+    (await overviewCall('2027-01')).flush(overview('2027-01', ['yetToCome', 'yetToCome', 'yetToCome'], [fy2026, fy2027]));
+    (await monthCall('2026-08', '2027-01')).flush(detail(aug, []));
     await settle();
     http.verify();
   });
@@ -540,9 +557,8 @@ describe('Months (PRD 5.6)', () => {
     await (await field.getControl(MatSelectHarness))!.clickOptions({ text: /FY 2027/ });
 
     expect(TestBed.inject(Router).url).toBe('/months?fyId=2027-01');
-    (await overviewCall('2027-01')).flush(
-      overview('2027-01', ['yetToCome', 'yetToCome', 'yetToCome'], [fy2026, fy2027]),
-    );
+    (await overviewCall('2027-01')).flush(overview('2027-01', ['yetToCome', 'yetToCome', 'yetToCome'], [fy2026, fy2027]));
+    (await monthCall('2026-08', '2027-01')).flush(detail(aug, []));
     await settle();
     http.verify();
   });
@@ -558,7 +574,7 @@ describe('Months (PRD 5.6)', () => {
       nextLabel: 'FY 2027',
       nextStartDate: '2027-01-27',
     };
-    await open('/months', lastMonth);
+    await open('/months', lastMonth, detail(oct, []));
     const banner = root().querySelector('app-rollover-banner')!;
     expect(text(banner)).toContain('FY 2026 ends on 26 Jan 2027.');
 
@@ -567,9 +583,8 @@ describe('Months (PRD 5.6)', () => {
     expect(post.request.body).toEqual({ copyPlans: true });
     post.flush({ fiscalYear: fy2027, copiedPlans: 1, me: { ...me, currentFyId: '2027-01', lastDate: '2028-01-26' } });
 
-    (await overviewCall('2027-01')).flush(
-      overview('2027-01', ['yetToCome', 'yetToCome', 'yetToCome'], [fy2026, fy2027]),
-    );
+    (await overviewCall('2027-01')).flush(overview('2027-01', ['yetToCome', 'yetToCome', 'yetToCome'], [fy2026, fy2027]));
+    (await monthCall('2026-08', '2027-01')).flush(detail(aug, []));
     await settle();
     http.verify();
 
@@ -579,41 +594,39 @@ describe('Months (PRD 5.6)', () => {
 
   // Plan's "See the year grid" link (M8).
   it('opens the Year view from the URL', async () => {
-    await open('/months?fyId=2026-01&view=year', overview(), null);
+    await open('/months?fyId=2026-01&view=year', overview(), balances);
 
     expect(root().querySelector('app-year-grid')).not.toBeNull();
     expect(localStorage.getItem('nama.months.view')).toBe('year');
   });
 
-  // MON-02: the last choice is remembered.
+  // MON-02: the last choice is remembered; each view loads its own call once.
   it('remembers the view choice', async () => {
     await open();
 
     button(root(), 'Year').click();
+    (await balancesCall()).flush(balances);
     await settle();
     expect(localStorage.getItem('nama.months.view')).toBe('year');
     expect(root().querySelector('table.grid')).not.toBeNull();
 
     button(root(), 'Months').click();
     await settle();
+    http.verify();
     expect(localStorage.getItem('nama.months.view')).toBe('months');
-    expect(root().querySelectorAll('section.month').length).toBe(3);
+    expect(section('month')).not.toBeNull();
   });
 
-  it('opens on the remembered Year view, and the open card loads its entries when Months is shown', async () => {
+  it('opens on the remembered Year view, and loads the month when Months is shown', async () => {
     localStorage.setItem('nama.months.view', 'year');
-    await open('/months', overview(), null);
+    await open('/months', overview(), balances);
     expect(root().querySelector('table.grid')).not.toBeNull();
 
     button(root(), 'Months').click();
-    await settle();
-    (await entriesCall('2026-09')).flush(entries([big]));
+    (await monthCall('2026-09')).flush(detail());
     await settle();
     http.verify();
-    expect(card('2026-09').querySelector('mat-expansion-panel')!.classList).toContain(
-      'mat-expanded',
-    );
-    expect(card('2026-09').querySelector('.entry')).not.toBeNull();
+    expect(section('latest').querySelector('.entry')).not.toBeNull();
   });
 
   it('works without storage', async () => {
@@ -624,46 +637,31 @@ describe('Months (PRD 5.6)', () => {
       throw new Error('blocked');
     });
     await open();
-    expect(root().querySelectorAll('section.month').length).toBe(3);
+    expect(section('month')).not.toBeNull();
 
     button(root(), 'Year').click();
+    (await balancesCall()).flush(balances);
     await settle();
     expect(root().querySelector('table.grid')).not.toBeNull();
   });
 
-  // MON-02 Year view and MON-04 links.
-  it('shows the year grid with month statuses, colors and links to Entries', async () => {
-    await open();
-    button(root(), 'Year').click();
-    await settle();
+  // MON-02 Year view and MON-04 links; owner note 9: every value has its label.
+  it('shows the year grid with month statuses, labels, colors and links to Entries', async () => {
+    await open('/months?view=year', overview(), balances);
 
     const headers = Array.from(root().querySelectorAll('thead th')).map((th) => words(th));
-    expect(headers).toEqual([
-      'Category',
-      'Aug 2026 Closed',
-      'Sep 2026 In progress',
-      'Oct 2026 Upcoming',
-      'FY total',
-    ]);
-    // The in-progress column is marked in every row (Food, Transport, Total).
-    expect(root().querySelectorAll('td.now').length).toBe(3);
+    expect(headers).toEqual(['Category', 'Aug 2026 Closed', 'Sep 2026 In progress', 'Oct 2026 Upcoming', 'FY total']);
+    // The in-progress column is marked in every row (Food, Transport, Total, Balance).
+    expect(root().querySelectorAll('td.now').length).toBe(4);
 
     const food = cell('Food, Sep 2026');
-    expect(words(food)).toBe('SAR 1,199.99 of 1,500');
+    expect(words(food)).toBe('Spent 1,199.99 Available 1,500');
     expect(food.classList).toContain('ok');
-    expect(food.getAttribute('aria-label')).toBe(
-      'Food, Sep 2026: SAR 1,199.99 of SAR 1,500 available, Within plan. Open entries',
-    );
-    expect(food.getAttribute('href')).toBe(
-      '/entries?fyId=2026-01&periodKey=2026-09&categoryId=food',
-    );
-    expect(cell('Food, FY 2026').getAttribute('href')).toBe(
-      '/entries?fyId=2026-01&categoryId=food',
-    );
-    expect(cell('Total, Sep 2026').getAttribute('href')).toBe(
-      '/entries?fyId=2026-01&periodKey=2026-09',
-    );
-    expect(words(cell('Total, Sep 2026'))).toBe('SAR 1,299.99 of 1,900');
+    expect(food.getAttribute('aria-label')).toBe('Food, Sep 2026: SAR 1,199.99 of SAR 1,500 available, Within plan. Open entries');
+    expect(food.getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09&categoryId=food');
+    expect(cell('Food, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&categoryId=food');
+    expect(cell('Total, Sep 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09');
+    expect(words(cell('Total, Sep 2026'))).toBe('Spent 1,299.99 Available 1,900');
     expect(cell('Total, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01');
 
     // Spending without a plan is red, with "Over by" in the label.
@@ -678,31 +676,41 @@ describe('Months (PRD 5.6)', () => {
     toggle.click();
     await settle();
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(cell('Fuel, Sep 2026').getAttribute('href')).toBe(
-      '/entries?fyId=2026-01&periodKey=2026-09&subCategoryId=fuel',
-    );
-    expect(cell('Fuel, FY 2026').getAttribute('href')).toBe(
-      '/entries?fyId=2026-01&subCategoryId=fuel',
-    );
+    expect(cell('Fuel, Sep 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09&subCategoryId=fuel');
+    expect(cell('Fuel, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&subCategoryId=fuel');
     // Nothing planned and nothing spent: a dash, no color.
     const fuelAug = cell('Fuel, Aug 2026');
     expect(text(fuelAug)).toBe('–');
-    expect(fuelAug.getAttribute('aria-label')).toBe(
-      'Fuel, Aug 2026: nothing planned or spent. Open entries',
-    );
+    expect(fuelAug.getAttribute('aria-label')).toBe('Fuel, Aug 2026: nothing planned or spent. Open entries');
     expect(cell('Taxi (archived), Aug 2026').classList).toContain('danger');
     http.verify();
   });
 
-  // TBL-03, UX-04: the Entries dialog; afterwards the overview and the open months reload.
-  it('deletes an entry from a month card and reloads the overview and the open months', async () => {
+  // Owner note 9: the balance at each month's end, real for closed months, projected after; the FY
+  // column is the last month's.
+  it('shows the balance at the end of each month in the Year view', async () => {
+    await open('/months?view=year', overview(), balances);
+
+    const row = root().querySelector('tr.balance-row')!;
+    expect(words(row.querySelector('th'))).toBe('Balance End of month');
+    expect(lines(row, 'td')).toEqual(['18,450 Actual', '22,000 Projected', '-500 Projected', '-500 End of FY']);
+    expect(row.querySelectorAll('td .money.danger').length).toBe(2);
+    expect(row.querySelector('td .cell')!.getAttribute('aria-label')).toBe('Aug 2026: balance at the end SAR 18,450');
+  });
+
+  it('asks for the balances before it shows them', async () => {
+    await open('/months?view=year', overview(), { complete: false, months: [] });
+
+    const row = root().querySelector('tr.balance-row')!;
+    expect(words(row.querySelector('td'))).toBe("Set every account's balance and the income split on Banks to see it.");
+    expect(row.querySelector('td a')!.getAttribute('href')).toBe('/banks');
+  });
+
+  // TBL-03, UX-04: the Entries dialog; afterwards the overview and the month reload.
+  it('deletes an entry and reloads the overview and the month', async () => {
     await open();
-    button(card('2026-09'), 'Edit Groceries, SAR 799.99, 17 Oct 2026').click();
-    (
-      await vi.waitFor(() =>
-        http.expectOne('/api/indicator?subCategoryId=groceries&date=2026-10-17'),
-      )
-    ).flush({
+    button(section('latest'), 'Edit Groceries, SAR 799.99, 17 Oct 2026').click();
+    (await vi.waitFor(() => http.expectOne('/api/indicator?subCategoryId=groceries&date=2026-10-17'))).flush({
       period: sep,
       planned: 1500,
       spent: 1199.99,
@@ -722,16 +730,13 @@ describe('Months (PRD 5.6)', () => {
     const reloaded = overview();
     reloaded.months[1] = month(sep, 'inProgress', 17500.25, 1900, 500);
     (await overviewCall()).flush(reloaded);
-    (await entriesCall('2026-09')).flush(entries([]));
+    (await monthCall('2026-09')).flush(detail(sep, [fuelEntry]));
     await settle();
     await vi.waitFor(() => expect(document.querySelector('mat-dialog-container')).toBeNull());
     http.verify();
 
     expect(text(root().querySelector('.status'))).toBe('Entry deleted.');
-    expect(words(card('2026-09').querySelector('.kpi'))).toBe('Remaining SAR 1,400');
-    expect(card('2026-09').querySelector('mat-expansion-panel')!.classList).toContain(
-      'mat-expanded',
-    );
-    expect(card('2026-09').querySelector('.entry')).toBeNull();
+    expect(words(section('month').querySelector('.kpi'))).toBe('Remaining SAR 1,400');
+    expect(lines(section('latest'), '.entry .name')).toEqual(['Fuel']);
   });
 });

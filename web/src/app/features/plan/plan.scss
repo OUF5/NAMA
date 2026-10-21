@@ -21,6 +21,41 @@
   max-width: 420px;
 }
 
+// Owner note 9: Planning, Allocating and Categories, as links under the FY (docs/DESIGN.md "Tabs").
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 16px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--text-2);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--text);
+  }
+
+  &.active {
+    color: var(--primary-text);
+    border-bottom-color: var(--primary-text);
+    font-weight: 500;
+  }
+}
+
+.list-note {
+  margin: 12px 0 0;
+}
+
 .status {
   min-height: 24px;
   margin: 4px 0;
@@ -68,13 +103,6 @@
 
 .danger {
   color: var(--danger);
-}
-
-// PLN-03 sideways: sticky on desktop, so a saved change is seen while editing lower down.
-.totals-card {
-  position: sticky;
-  top: 0;
-  z-index: 1;
 }
 
 .scroll {
@@ -202,14 +230,6 @@
   }
 }
 
-.folded {
-  margin: 12px 0 0;
-}
-
-.fold {
-  display: none;
-}
-
 .list,
 .subs {
   margin: 0;
@@ -271,10 +291,6 @@
   transition: background 0.6s;
 }
 
-.add-sub {
-  margin: 4px 0 8px;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .chevron,
   .flash {
@@ -288,16 +304,11 @@
     padding: 16px;
   }
 
-  // Phones: not sticky (it would take a third of the screen); it can be folded instead.
-  .totals-card {
-    position: static;
-  }
-
-  .fold {
-    display: inline-flex;
-  }
-
   .subs {
     padding-left: 12px;
+  }
+
+  .card-head {
+    flex-wrap: wrap;
   }
 }

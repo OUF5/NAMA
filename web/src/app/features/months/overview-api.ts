@@ -87,6 +87,21 @@ export interface OverviewResponse {
   carryFromPeriodKey: string | null;
 }
 
+// Owner note 9: GET /api/fiscal-years/{fyId}/balances, the Year view's Balance row. Each month's
+// balance at its end: real for closed months, projected (R-PLN-07) for the month in progress and the
+// months yet to come. null when unknown (before an account's opening date, an FY not started, or until
+// the balance is complete).
+export interface MonthBalance {
+  periodKey: string;
+  balance: number | null;
+  projected: boolean;
+}
+
+export interface BalancesResponse {
+  complete: boolean;
+  months: MonthBalance[];
+}
+
 // Tracker's filter (owner's choice, 20 Oct 2026): rows, months and totals cover only this category
 // or sub-category. toDate always covers everything.
 export interface OverviewFilter {
@@ -107,5 +122,10 @@ export class OverviewApi {
       }
     }
     return firstValueFrom(this.http.get<OverviewResponse>(`/api/fiscal-years/${fyId}/overview`, { params }));
+  }
+
+  // Only the Year view asks: balances read every entry since the earliest opening date.
+  balances(fyId: string): Promise<BalancesResponse> {
+    return firstValueFrom(this.http.get<BalancesResponse>(`/api/fiscal-years/${fyId}/balances`));
   }
 }

@@ -1,0 +1,265 @@
+// docs/DESIGN.md "Tracker month" (owner note 9): the month card, then a grid of cards with the month's
+// 2px --primary-text border, like Dashboard. Tokens only.
+@use '../../shared/plan-status';
+
+@include plan-status.styles;
+
+.card {
+  box-sizing: border-box;
+  min-width: 0;
+  background: var(--surface);
+  border: 2px solid var(--primary-text);
+  border-radius: 12px;
+  padding: 20px 24px 24px;
+}
+
+// MON-01: a closed month's title is quieter; an upcoming one is dashed.
+.summary {
+  &.closed h2 {
+    color: var(--text-2);
+  }
+
+  &.yetToCome {
+    border-style: dashed;
+  }
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
+  gap: 16px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.wide {
+  grid-column: 1 / -1;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.summary .card-head {
+  margin-bottom: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.now-chip {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary-text);
+  background: var(--primary-soft);
+}
+
+.status-text {
+  flex: none;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.top-day {
+  text-align: right;
+}
+
+.note,
+.error {
+  margin: 0;
+}
+
+.note {
+  color: var(--text-2);
+}
+
+.error {
+  margin-top: 12px;
+  color: var(--danger);
+}
+
+.categories,
+.subs,
+.rows,
+.entry-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.categories > li {
+  border-bottom: 1px solid var(--divider);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.spend-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 0;
+
+  &.sub {
+    padding-left: 16px;
+  }
+}
+
+.line-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.line-name {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.sub .line-name {
+  font-weight: 400;
+}
+
+.line-amounts {
+  margin: 0;
+}
+
+// A name (with a caption under it) and an amount; 48px rows.
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--divider);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  .name {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .money {
+    flex: none;
+    font-weight: 500;
+  }
+}
+
+.block {
+  display: block;
+}
+
+// Spent more than last month: amber words (the words carry it, not the color).
+.warn-text {
+  color: var(--warn);
+}
+
+// A share is no status: a neutral bar, like Banks' income split.
+.share {
+  flex: 0 0 25%;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--track);
+
+  span {
+    display: block;
+    height: 100%;
+    border-radius: 4px;
+    background: var(--text-2);
+  }
+}
+
+.percent {
+  flex: none;
+  width: 40px;
+  text-align: right;
+}
+
+// One compact line per entry, 44px high for touch (UX-07).
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--divider);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+
+  .day {
+    flex: none;
+    width: 48px;
+  }
+
+  .name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .money {
+    flex: none;
+  }
+
+  button {
+    flex: none;
+    margin-left: -8px;
+  }
+}
+
+// docs/DESIGN.md links: --primary-text and underlined; 44px high for touch (UX-07).
+.see-all {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--primary-text);
+  text-decoration: underline;
+}
+
+@media (max-width: 767.98px) {
+  .grid {
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .card-head {
+    flex-wrap: wrap;
+  }
+
+  .top-day {
+    text-align: left;
+  }
+
+  .share {
+    display: none;
+  }
+}

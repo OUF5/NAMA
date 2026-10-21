@@ -1,0 +1,218 @@
+@if (month(); as m) {
+  <!-- MON-01, MON-02: the month's status and numbers. -->
+  <section class="card summary" [class]="m.status" aria-labelledby="month-title">
+    <div class="card-head">
+      <div class="title">
+        <h2 id="month-title">{{ m.period.label }}</h2>
+        <span class="caption">{{ dates() }}</span>
+      </div>
+      @if (m.status === 'inProgress') {
+        <span class="now-chip">{{ statusLabels.inProgress }}</span>
+      } @else {
+        <span class="status-text">{{ statusLabels[m.status] }}</span>
+      }
+    </div>
+    <app-month-summary [month]="m" [currency]="currency()" />
+  </section>
+
+  @let d = detail();
+  @if (d?.state === 'error') {
+    <p class="error" role="alert">
+      This month's details could not be loaded.
+      <button mat-button type="button" (click)="retry.emit()">Retry</button>
+    </p>
+  }
+
+  <div class="grid">
+    <!-- Spending by day. -->
+    <section class="card wide" aria-labelledby="days-title">
+      <div class="card-head">
+        <div class="title">
+          <h2 id="days-title">Spending by day</h2>
+          @if (data(); as data) {
+            <span class="caption"
+              >{{ money(data.total) }} in {{ data.count }}
+              {{ data.count === 1 ? 'entry' : 'entries' }}</span
+            >
+          }
+        </div>
+        @if (biggestDay(); as top) {
+          <span class="caption top-day">Biggest day: {{ top }}</span>
+        }
+      </div>
+      @if (data(); as data) {
+        <app-day-bars [days]="data.days" [today]="today()" [currency]="currency()" />
+      } @else {
+        <ng-container *ngTemplateOutlet="loading" />
+      }
+    </section>
+
+    <!-- R-PLN-05: plan vs spent, what carried in counted. -->
+    <section class="card" aria-labelledby="plan-title">
+      <div class="card-head">
+        <h2 id="plan-title">Plan vs spent</h2>
+      </div>
+      @if (categories().length === 0) {
+        <p class="note">
+          {{ overOnly() ? 'Nothing over plan' : 'Nothing planned or spent' }} in
+          {{ m.period.label }}.
+        </p>
+      } @else {
+        <ul class="categories">
+          @for (category of categories(); track category.id) {
+            <li>
+              <div class="spend-row">
+                <ng-container
+                  *ngTemplateOutlet="
+                    spendRow;
+                    context: { name: category.name, line: category.line }
+                  "
+                />
+              </div>
+              <ul class="subs">
+                @for (sub of category.subs; track sub.id) {
+                  <li class="spend-row sub">
+                    <ng-container
+                      *ngTemplateOutlet="spendRow; context: { name: sub.name, line: sub.line }"
+                    />
+                  </li>
+                }
+              </ul>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <!-- Each category against the month before. -->
+    <section class="card" aria-labelledby="change-title">
+      <div class="card-head">
+        <div class="title">
+          <h2 id="change-title">Compared with last month</h2>
+          @if (data()?.lastMonth; as last) {
+            <span class="caption">{{ last.label }}</span>
+          }
+        </div>
+      </div>
+      @if (!data()) {
+        <ng-container *ngTemplateOutlet="loading" />
+      } @else if (!data()!.lastMonth) {
+        <p class="note">This is the first month NAMA has.</p>
+      } @else if (changes().length === 0) {
+        <p class="note">Nothing spent in either month.</p>
+      } @else {
+        <ul class="rows">
+          @for (change of changes(); track change.id) {
+            <li class="row">
+              <span class="name">
+                {{ change.name }}
+                <span class="caption block" [class.warn-text]="change.more">{{
+                  change.words
+                }}</span>
+              </span>
+              <span class="money">{{ change.spent }}</span>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <!-- Which account paid. -->
+    <section class="card" aria-labelledby="accounts-title">
+      <div class="card-head">
+        <h2 id="accounts-title">By bank account</h2>
+      </div>
+      @if (!data()) {
+        <ng-container *ngTemplateOutlet="loading" />
+      } @else if (accounts().length === 0) {
+        <p class="note">Nothing spent in {{ m.period.label }}.</p>
+      } @else {
+        <ul class="rows">
+          @for (account of accounts(); track account.id) {
+            <li class="row account">
+              <span class="name">{{ account.name }}</span>
+              <span class="share" aria-hidden="true"
+                ><span [style.width.%]="account.share"></span
+              ></span>
+              <span class="caption percent">{{ account.percent }}</span>
+              <span class="money">{{ account.amount }}</span>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+
+    <!-- The biggest entries. -->
+    <section class="card" aria-labelledby="biggest-title">
+      <div class="card-head">
+        <h2 id="biggest-title">Biggest entries</h2>
+      </div>
+      <ng-container *ngTemplateOutlet="entryList; context: { rows: biggest() }" />
+    </section>
+
+    <!-- The newest entries (owner's choice, M7); Entries has the full list, filters and export. -->
+    <section class="card" aria-labelledby="latest-title">
+      <div class="card-head">
+        <h2 id="latest-title">Latest entries</h2>
+      </div>
+      <ng-container *ngTemplateOutlet="entryList; context: { rows: latest() }" />
+      @if (data(); as data) {
+        @if (data.count > data.latest.length) {
+          <a class="see-all" routerLink="/entries" [queryParams]="entriesQuery()">
+            See all {{ data.count }} entries in {{ m.period.label }}
+          </a>
+        }
+      }
+    </section>
+  </div>
+
+  <!-- docs/DESIGN.md "Category rows on phones": name and chip, progress bar, "SAR 1,240 of 2,000". -->
+  <ng-template #spendRow let-name="name" let-line="line">
+    <div class="line-head">
+      <span class="line-name">{{ name }}</span>
+      @if (line.status) {
+        <span class="chip" [class]="line.status">{{ line.chip }}</span>
+      }
+    </div>
+    @if (line.bar !== null) {
+      <mat-progress-bar
+        mode="determinate"
+        [class]="line.status"
+        [value]="line.bar"
+        [attr.aria-label]="name + ': ' + line.chip"
+      />
+    }
+    <p class="caption money line-amounts">{{ line.spent }} {{ line.of }}</p>
+  </ng-template>
+
+  <!-- One line per entry: day, sub-category, amount, edit (TBL-02 in a dialog). -->
+  <ng-template #entryList let-rows="rows">
+    @if (!data()) {
+      <ng-container *ngTemplateOutlet="loading" />
+    } @else if (rows.length === 0) {
+      <p class="note">No entries in {{ m.period.label }}.</p>
+    } @else {
+      <ul class="entry-list">
+        @for (row of rows; track row.entry.id) {
+          <li class="entry">
+            <span class="caption day">{{ row.day }}</span>
+            <span class="name">{{ row.sub }}</span>
+            <span class="money">{{ row.amount }}</span>
+            <button
+              mat-icon-button
+              type="button"
+              (click)="edit.emit(row.entry)"
+              [attr.aria-label]="row.editLabel"
+            >
+              <mat-icon>edit</mat-icon>
+            </button>
+          </li>
+        }
+      </ul>
+    }
+  </ng-template>
+
+  <ng-template #loading>
+    <p class="caption">Loading…</p>
+  </ng-template>
+}

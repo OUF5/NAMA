@@ -286,13 +286,13 @@ A 6-step wizard (Angular Material stepper) with Back and Next, visible progress 
 
 ### 5.3 Sub-category and plan setup (PLN)
 
-Page **Plan** (`/plan`). It opens right after the wizard and is always in the navigation.
+Page **Plan** (`/plan`). It opens right after the wizard and is always in the navigation. Three tabs, in the URL as `?tab=` (owner note 9, ✅ DECIDED 20 Oct 2026): **Planning** (default: each category and sub-category's planned amount in one month, picked with a month picker, and the editor, PLN-01, PLN-02, PLN-04, PLN-06), **Allocating** (the PLN-03 totals) and **Categories** (add, rename, archive and restore categories and sub-categories, STG-05, PLN-05; moved from Settings). Planning and Allocating share the selected month.
 
 - **PLN-01** Select a general category, add a sub-category (name), then enter the planned amount for each month of the FY. The 12 inputs are labeled with month labels and dates.
 - **PLN-02** Helpers: "Same amount for all months" and "Copy from previous month". 🆕 ADDED · Nice (benchmark: Actual Budget "copy last month's budget")
 - **PLN-03** A totals row per month: Income, Planned, Unallocated this month (Income − Planned, the month on its own), From last month (last month's accumulated) and Unallocated accumulated (this month + from last month, R-PLN-03); each computed row shows its formula under its name, and an FY column whose Unassigned is Planned saved (R-PLN-04), also shown in the card head. The editor's "Unassigned after" preview carries too. 🆕 ADDED · Nice. ✅ DECIDED (20 Oct 2026)
 - **PLN-04** Planned amounts can be edited at any time, for any month, including closed months.
-- **PLN-05** Categories and sub-categories can be added after setup, here or in Settings (your note).
+- **PLN-05** Categories and sub-categories can be added after setup, on the Categories tab (your note; in Settings before owner note 9). A new sub-category opens its planned amounts right away.
 - **PLN-06** After the wizard, an empty state guides you: "Add your first sub-category". 🆕 ADDED · Nice
 
 ### 5.4 Daily input: Add entry (ENT)
@@ -326,11 +326,11 @@ Page **Tracker** (`/tracker`), titled "Plan vs actual", with an "Edit plan" link
 
 - **MON-01** Shows every month of the selected FY with a status chip: Closed (gray), In progress (blue), Yet to come (outlined). Remaining carries from month to month (R-PLN-05): each month card shows Remaining, From last month, Planned, Spent and Income, and every line and Year cell shows spent "of" what was available.
 - **MON-02** Two views with a toggle at the top; the last choice is remembered:
-    - **Months (default, segregated):** one card per month with income, planned, spent, remaining and a progress bar. Expanding a card shows categories → sub-categories (planned vs spent) and that month's entries, which can be edited. The in-progress month opens expanded and scrolls into view. 🆕 ADDED · Nice (auto-expand)
-    - **Year (compact):** one grid. Rows are categories (expand to sub-categories), columns are the months plus an FY total, and each cell shows spent and planned with a color. The header shows each month's status. On phones the grid scrolls sideways with the first column fixed. 🆕 ADDED · Must (12 columns do not fit on a phone)
+    - **Months (default):** one month at a time (owner note 9, ✅ DECIDED 20 Oct 2026; every month as a card before), picked with a month picker (previous, next, or any month) and kept in the URL as `?month=`; it opens on the month in progress. The month shows its status, income, from last month, planned, spent, remaining and a progress bar, then: **spending by day** (a column per day, today marked, the biggest day in words), **plan vs spent** by category → sub-category, **compared with last month** per category ("SAR 200 more than Aug 2026"), **by bank account** (amount and share), the **biggest entries** and the **latest entries** (5 each, editable, with "See all" in Entries).
+    - **Year (compact):** one grid. Rows are categories (expand to sub-categories), columns are the months plus an FY total, and each cell shows "Spent" and "Available" with their labels (owner note 9) and a color. Under the Total row, a **Balance** row: each month's end balance, real for closed months (R-BAL-03 on its last day; unknown before an account's opening date) and projected for the month in progress and the months yet to come (R-PLN-07; the FY column is the projected balance). It asks for Banks' setup until the balance is complete (BNK-05). The header shows each month's status. On phones the grid scrolls sideways with the first column fixed. 🆕 ADDED · Must (12 columns do not fit on a phone)
 - **MON-03** An FY selector appears when more than one FY exists.
 - **MON-04** Tapping a cell in the Year view opens Entries filtered by that sub-category and month. 🆕 ADDED · Nice
-- **MON-05** Filters for the whole page, kept in the URL: **Category**, then **Sub-category** (both views and every month card show planned, spent and remaining for that scope only; income is hidden, because it belongs to the whole budget), and **Over plan only** (only the lines that went over what was available, R-PLN-05: in a month card, what went over that month; in the Year view, the sub-categories over plan in at least one month). Bank account, note search and month are not filters here: plans are not per account, notes are about single entries (Entries), and the page is already laid out by month. ✅ DECIDED (20 Oct 2026)
+- **MON-05** Filters for the whole page, kept in the URL: **Category**, then **Sub-category** (both views and the month show planned, spent and remaining for that scope only; income is hidden, because it belongs to the whole budget), and **Over plan only** (only the lines that went over what was available, R-PLN-05: in the month, what went over that month; in the Year view, the sub-categories over plan in at least one month). Bank account, note search and month are not filters here: plans are not per account, notes are about single entries (Entries), and the page is already laid out by month. ✅ DECIDED (20 Oct 2026)
 
 ### 5.7 Settings (STG)
 
@@ -340,7 +340,7 @@ Page **Settings** (`/settings`). One page with clear sections and no hidden menu
 - **STG-02 Fiscal year:** change the FY start month; the page shows when it takes effect, for example "Takes effect from the FY starting 27 Jan 2027" (your rule). Change the payday with the same rule (✅ DECIDED, R-CAL-07).
 - **STG-03 Income:** change the salary at any time with an "effective from" month (R-INC-02) and see the salary history. Add, edit and delete additional income items. The section shows **Total income** for the current month (salary + additional).
 - **STG-04 Bank accounts:** moved to Banks (BNK-02) on 20 Oct 2026; `/settings/bank-accounts` opens Banks.
-- **STG-05 Categories and sub-categories:** add and rename. No delete (your rule). Archive (🆕 ADDED · Nice). A link opens Plan for amounts.
+- **STG-05 Categories and sub-categories:** add and rename. No delete (your rule). Archive (🆕 ADDED · Nice). Moved to Plan's Categories tab (owner note 9, 20 Oct 2026); `/settings/categories` opens it.
 - **STG-06 Session:** sign out. The app version (git commit) is shown at the bottom to confirm deploys. 🆕 ADDED · Nice
 - **STG-07 People** (admins only): see AUTH-07.
 
@@ -365,7 +365,7 @@ Page **Dashboard** (`/`), the landing page. Under the FY-01 banner, in this orde
 
 ### 5.10 Navigation and UX rules (UX)
 
-- **UX-01** Always-visible navigation with 5 items: Dashboard, Entries, **Add** (prominent, in the middle; it adds an expense or a transfer, TRF-01), Plan, Tracker (the Months page, 5.6). Plan and Tracker sit side by side because Tracker compares the plan with actual spending. The desktop side bar adds Banks (BNK-01). ✅ DECIDED (20 Oct 2026; was Dashboard, Months, Add, Entries, Plan; "Add expense" for part of 20 Oct 2026). Settings is a gear icon that is always visible in the top bar. Bottom bar on phones (under 768 px wide), side bar on desktop. No "More" menu. 🆕 ADDED · Must (your "no hidden things")
+- **UX-01** Always-visible navigation with 5 items: Dashboard, Entries, **Add** (prominent, in the middle; it adds an expense or a transfer, TRF-01), Plan, Tracker (the Months page, 5.6). Plan and Tracker sit side by side because Tracker compares the plan with actual spending. The desktop side bar adds Banks (BNK-01). ✅ DECIDED (20 Oct 2026; was Dashboard, Months, Add, Entries, Plan; "Add expense" for part of 20 Oct 2026). Bottom bar on phones (under 768 px wide), side bar on desktop. Owner note 9 (✅ DECIDED 20 Oct 2026): there is no Settings gear in the top bar. On desktop the side bar holds every page and Settings, and it folds to its icons (remembered on the device). On phones a menu button in the top bar opens a drawer with every page, Settings and Sign out; the bottom bar keeps its 5 items. 🆕 ADDED · Must (your "no hidden things")
 - **UX-02** The top bar shows the NAMA name, your project name and the current month label.
 - **UX-08** The top bar also shows, on every page: "Left in Sep 2026 · 10 days left" with the month's remaining for the whole budget (R-PLN-05, in its plan status color), a link to Tracker; and "Balance" with the total of the active accounts (R-BAL-03), a link to Banks, or "Set up" until it is complete (BNK-05). Desktop: in the top bar, before the gear; phones: a strip under it. It loads once setup is complete and again after every change. ✅ DECIDED (20 Oct 2026)
 - **UX-03** Every page has a helpful empty state that says what to do next. 🆕 ADDED · Nice
@@ -500,6 +500,8 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 | `GET /api/fiscal-years` | List FYs |  |
 | `POST /api/fiscal-years/next` | Start the next FY; body has `copyPlans` | 409 before the last month of the current FY |
 | `GET /api/fiscal-years/{fyId}/overview` | Everything Dashboard and Months need: months with status, income, carried in, planned, spent and remaining (R-PLN-05) per sub-category per month, totals with planned saved, and FY to date with planned and planned saved | One call. Optional `categoryId` and `subCategoryId` (MON-05) narrow rows, months and totals and make income and planned saved null |
+| `GET /api/fiscal-years/{fyId}/months/{periodKey}` | Tracker's month (owner note 9): spending by day and by account, each category against the month before, the 5 newest and 5 biggest entries, the count and total, and the accounts for the edit dialog | Optional `categoryId` and `subCategoryId` (MON-05) narrow every part. 404 for an unknown FY or month |
+| `GET /api/fiscal-years/{fyId}/balances` | Tracker's Year view Balance row (owner note 9): each month's end balance, real or projected (R-BAL-03, R-PLN-07), and whether the balance is complete | Only the Year view calls it |
 | `GET /api/indicator?subCategoryId=&date=` | Carried in, planned, available, spent, remaining and percent for one sub-category in the month of that date (R-PLN-05) | Used by Add entry |
 | `GET /api/summary` | The top bar (UX-08): the month in progress (day, days, days left, income, carried in, planned, spent, remaining, unassigned), the balances, and the projection (R-PLN-07, R-PLN-08) for Dashboard | Loaded once setup is complete and after every change |
 | `GET /api/banks` | Banks (BNK-01 to BNK-05): accounts with opening balance, share, this month's income share and balance breakdown, the total, the split and its history, the FYs, income per month, transfers | One call |
@@ -533,7 +535,7 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 
 ### 7.7 Frontend structure
 
-- **Routes:** `/sign-in` (public), `/invite/:token` (public, AUTH-06), `/setup`, `/` (Dashboard), `/add` (`?type=transfer` for TRF-01), `/entries`, `/tracker` (and `/months`, a redirect to it), `/plan`, `/banks`, `/settings` (and `/settings/bank-accounts`, a redirect to `/banks`), `/no-access`.
+- **Routes:** `/sign-in` (public), `/invite/:token` (public, AUTH-06), `/setup`, `/` (Dashboard), `/add` (`?type=transfer` for TRF-01), `/entries`, `/tracker` (and `/months`, a redirect to it), `/plan` (`?tab=allocating` or `?tab=categories`), `/banks`, `/settings` (and `/settings/bank-accounts`, a redirect to `/banks`, and `/settings/categories`, a redirect to Plan's Categories tab), `/no-access`.
 - **Guards:** `authGuard` waits for the Firebase auth state; `setupGuard` sends you to `/setup` until setup is complete.
 - **State:** small services using signals. No NgRx. 🆕 ADDED · Tech
 - **UI kit:** Angular Material: stepper (wizard), form field, select, datepicker, table (desktop), cards (phone), expansion panel (months), button toggle (Months or Year), progress bar (indicator), snackbar (messages), chips (status). 🆕 ADDED · Tech

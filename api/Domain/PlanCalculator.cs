@@ -26,13 +26,32 @@ public sealed record CarriedMonth(long CarriedIn, long Planned, long Spent)
 // above 0 is still to spend. FutureMonths are the months yet to come, each with its income minus its
 // planned (ThisMonth). BalanceToday is null until the balance is complete (BNK-05).
 public sealed record Projection(
-    long StillToSpend, IReadOnlyList<UnassignedMonth> FutureMonths, long SavedToDate, long PlannedSaved, long? BalanceToday)
+    string CurrentPeriodKey,
+    long StillToSpend,
+    IReadOnlyList<UnassignedMonth> FutureMonths,
+    long SavedToDate,
+    long PlannedSaved,
+    long? BalanceToday)
 {
     public long FutureUnallocated => FutureMonths.Sum(month => month.ThisMonth);
 
     public long? ProjectedBalance => BalanceToday - StillToSpend + FutureUnallocated;
 
     public long ProjectedSaving => SavedToDate - StillToSpend + FutureUnallocated;
+
+    // Owner note 9 (Tracker's Year view): the projected balance at the end of this month and of each
+    // month yet to come, by month key. The last one is ProjectedBalance.
+    public IReadOnlyList<(string PeriodKey, long? Balance)> MonthEnds()
+    {
+        var end = BalanceToday - StillToSpend;
+        var ends = new List<(string, long?)> { (CurrentPeriodKey, end) };
+        foreach (var month in FutureMonths)
+        {
+            end += month.ThisMonth;
+            ends.Add((month.PeriodKey, end));
+        }
+        return ends;
+    }
 }
 
 // PRD 4.4. Amounts are long minor units (R-MON-01).
@@ -125,7 +144,12 @@ public static class PlanCalculator
             .Where(i => i >= carryStart)
             .Sum(i => Saved(months[i].Income, toToday[i].Spent));
         return new Projection(
-            Math.Max(0, toToday[current].Remaining), months.Skip(current + 1).ToList(), saved, PlannedSaved(months), balanceToday);
+            months[current].PeriodKey,
+            Math.Max(0, toToday[current].Remaining),
+            months.Skip(current + 1).ToList(),
+            saved,
+            PlannedSaved(months),
+            balanceToday);
     }
 
     // ENT-01: available minus spent; negative means over plan.

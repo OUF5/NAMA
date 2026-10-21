@@ -1,5 +1,18 @@
 import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
-import { Component, Injector, computed, effect, inject, untracked } from '@angular/core';
+import {
+  Component,
+  ComponentRef,
+  ElementRef,
+  Injector,
+  ViewContainerRef,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  viewChild,
+} from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { filter, firstValueFrom, map } from 'rxjs';
@@ -10,22 +23,43 @@ import { AuthService } from './core/auth';
 import { MeService } from './core/me';
 import { SummaryService } from './core/summary';
 import { visibleSections } from './features/settings/settings-sections';
+import type { NavItem } from './menu-drawer';
 import { dialogSize } from './shared/dialog';
 import { formatMoney, toMinor } from './shared/money';
 import { periodWithDates } from './shared/month-label';
 import { spendStatus } from './shared/plan-status';
 
-interface NavItem {
-  path: string;
-  label: string;
-  icon: string;
-  prominent?: boolean;
-  // Phones reach it from the top bar's Balance instead (the bottom bar holds 5 items).
-  desktopOnly?: boolean;
+// Owner note 9: the desktop side bar can fold to its icons. A display preference on this device; storage
+// can be missing or blocked, so every call is guarded and the bar starts open.
+const COLLAPSED_KEY = 'nama.nav.collapsed';
+
+function loadCollapsed(): boolean {
+  try {
+    return localStorage.getItem(COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
+function saveCollapsed(collapsed: boolean): void {
+  try {
+    localStorage.setItem(COLLAPSED_KEY, collapsed ? '1' : '0');
+  } catch {
+    // Without storage the toggle still works; only the memory is lost.
+  }
+}
+
+
 @Component({
-  imports: [NgTemplateOutlet, RouterOutlet, RouterLink, RouterLinkActive, MatToolbarModule, MatButtonModule, MatIconModule],
+  imports: [
+    NgTemplateOutlet,
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    MatToolbarModule,
+    MatButtonModule,
+    MatIconModule,
+  ],
   selector: 'app-root',
   styleUrl: './app.scss',
   templateUrl: './app.html',
@@ -94,7 +128,20 @@ export class App {
     };
   });
 
+  // Owner note 9: the folded side bar (desktop) and the drawer (phones).
+  protected readonly collapsed = signal(loadCollapsed());
+  protected readonly menuOpen = signal(false);
+  private readonly menuButton = viewChild('menuButton', { read: ElementRef });
+  private readonly drawerHost = viewChild('drawerHost', { read: ViewContainerRef });
+  private drawer: ComponentRef<unknown> | null = null;
+
   constructor() {
+    // A page that opens, or signing out, closes the drawer.
+    effect(() => {
+      this.url();
+      this.showNav();
+      untracked(() => this.closeMenu(false));
+    });
     // The top bar's numbers load once the navigation shows (setup done), and go on sign-out.
     effect(() => {
       if (this.showNav()) {
@@ -105,9 +152,48 @@ export class App {
     });
   }
 
+  protected toggleCollapsed(): void {
+    this.collapsed.update((collapsed) => !collapsed);
+    saveCollapsed(this.collapsed());
+  }
+
+  // The drawer's code is loaded the first time it opens, so it stays out of the initial bundle (like
+  // the sign-out dialog). It takes the focus (MenuDrawer) and gives it back to the menu button.
+  protected async openMenu(): Promise<void> {
+    if (this.menuOpen()) {
+      return;
+    }
+    this.menuOpen.set(true);
+    const { MenuDrawer } = await import('./menu-drawer');
+    const host = this.drawerHost();
+    if (!this.menuOpen() || !host) {
+      return;
+    }
+    const drawer = host.createComponent(MenuDrawer);
+    drawer.setInput('items', this.navItems);
+    drawer.instance.closed.subscribe(() => this.closeMenu());
+    drawer.instance.signOut.subscribe(() => {
+      this.closeMenu();
+      void this.signOut();
+    });
+    this.drawer = drawer;
+  }
+
+  protected closeMenu(giveFocusBack = true): void {
+    if (!this.menuOpen()) {
+      return;
+    }
+    this.menuOpen.set(false);
+    this.drawer?.destroy();
+    this.drawer = null;
+    if (giveFocusBack) {
+      afterNextRender(() => this.menuButton()?.nativeElement.focus(), { injector: this.injector });
+    }
+  }
+
   // Desktop side bar (owner's choice, M8): Settings opens its sections under it while you are in
-  // Settings. The gear in the top bar stays (UX-01); phones get the Settings list instead. People
-  // is listed for admins only (STG-07).
+  // Settings. There is no gear in the top bar (owner note 9): phones open Settings from the drawer.
+  // People is listed for admins only (STG-07).
   protected readonly settingsSections = computed(() => visibleSections(this.me.me()?.isAdmin === true));
   protected readonly inSettings = computed(() => this.url().startsWith('/settings'));
 
@@ -126,10 +212,10 @@ export class App {
     }
   }
 
-  // UX-01: five always-visible items, Add is prominent and in the middle. Settings lives in the
-  // top bar. Plan and Tracker (plan vs actual) sit side by side (owner's choice, 20 Oct 2026). Add
-  // adds an expense or a transfer (TRF-01), so it is "Add". Banks (BNK-01) is in the side bar; on
-  // phones the top bar's Balance opens it, so it is never hidden.
+  // UX-01: five always-visible items, Add is prominent and in the middle. Plan and Tracker (plan vs
+  // actual) sit side by side (owner's choice, 20 Oct 2026). Add adds an expense or a transfer
+  // (TRF-01), so it is "Add". Banks (BNK-01) is in the side bar; on phones the drawer and the top
+  // bar's Balance open it.
   protected readonly navItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: 'dashboard' },
     { path: '/entries', label: 'Entries', icon: 'receipt_long' },
