@@ -1,0 +1,390 @@
+// PRD 5.12 Loans, docs/DESIGN.md "Loans": section cards, tabs as Plan's, tables with 48px rows and
+// --divider lines (cards on phones, TBL-05), money right-aligned with .money, tokens only. Save on
+// New loan is the page's one filled button.
+@use '@angular/material' as mat;
+
+.page-head h1 {
+  margin: 0;
+}
+
+.info {
+  margin: 4px 0 0;
+}
+
+// As Plan's tabs (docs/DESIGN.md "Tabs").
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 16px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 16px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  color: var(--text-2);
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    color: var(--text);
+  }
+
+  &.active {
+    color: var(--primary-text);
+    border-bottom-color: var(--primary-text);
+    font-weight: 500;
+  }
+}
+
+.status {
+  min-height: 24px;
+  margin: 4px 0;
+  color: var(--text-2);
+}
+
+.card {
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.note,
+.error {
+  margin: 0;
+}
+
+.note {
+  color: var(--text-2);
+}
+
+.error {
+  margin-top: 8px;
+  color: var(--danger);
+}
+
+.danger {
+  color: var(--danger);
+}
+
+.empty h2 {
+  margin-bottom: 8px;
+}
+
+mat-form-field {
+  min-width: 0;
+}
+
+// LON-02: the fields, then (beside them on wide screens) the totals and the balance.
+.new-loan {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1000px;
+}
+
+.new-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+
+  p {
+    margin: 0;
+  }
+}
+
+.totals,
+.outlook {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.outlook {
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+}
+
+.kpi {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.33;
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 32px;
+}
+
+.amounts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+
+  mat-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    color: var(--text-muted);
+  }
+}
+
+// The total before, once an amount is typed.
+.struck {
+  color: var(--text-muted);
+}
+
+.after {
+  font-weight: 600;
+}
+
+@media (min-width: 1100px) {
+  .new-loan {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 24px;
+  }
+
+  .side {
+    padding: 0 0 0 24px;
+    border-top: 0;
+    border-left: 1px solid var(--divider);
+  }
+}
+
+// LON-03: the filters as Entries', with the shown loans' totals under them.
+.filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 24px;
+  margin: 16px 0 0;
+  font-weight: 500;
+
+  .caption {
+    margin-right: 4px;
+    font-weight: 400;
+  }
+}
+
+// Tables (By person and the loans): 48px rows with --divider lines, as Entries. They scroll inside
+// their card on narrow screens; the page never does.
+.table-card {
+  padding: 8px 16px;
+  overflow-x: auto;
+}
+
+.table-title {
+  margin: 12px 8px 4px;
+}
+
+.list {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    height: 48px;
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--divider);
+    text-align: left;
+    font-weight: 400;
+  }
+
+  thead th {
+    height: 40px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  tbody tr:hover {
+    background: var(--surface-2);
+  }
+
+  .num {
+    text-align: right;
+  }
+
+  .nowrap {
+    white-space: nowrap;
+  }
+
+  .name {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  .note-cell {
+    max-width: 240px;
+    overflow-wrap: anywhere;
+    color: var(--text-2);
+  }
+
+  .actions-cell {
+    width: 1%;
+    padding: 0 0 0 8px;
+  }
+}
+
+// By person: the amounts in fixed columns, so they line up.
+.people {
+  th.num,
+  td.num {
+    width: 140px;
+  }
+
+  th:last-child,
+  td:last-child {
+    width: 64px;
+  }
+}
+
+// Status: a pill (docs/DESIGN.md "Status chips"), neutral while open, ok once returned or paid.
+.chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--divider);
+
+  &.ok {
+    color: var(--ok);
+    background: var(--ok-bg);
+    border-color: transparent;
+  }
+}
+
+// The row's text button and Edit, centered on one line.
+.actions-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+// TBL-05: one card per loan on phones.
+.loan-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.loan-card {
+  margin-bottom: 0;
+  padding: 12px 8px 8px 16px;
+
+  p {
+    margin: 4px 0 0;
+  }
+}
+
+.loan-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+
+  .name {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+  }
+
+  .money {
+    flex: none;
+  }
+}
+
+.loan-note {
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@media (max-width: 767.98px) {
+  :host {
+    @include mat.form-field-overrides(
+      (
+        container-height: 44px,
+        container-vertical-padding: 10px,
+      )
+    );
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  // Two filters per row; search takes the full width (as Entries).
+  .filter-grid {
+    grid-template-columns: 1fr 1fr;
+
+    .search {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .summary {
+    gap: 4px 16px;
+  }
+
+  .actions button {
+    width: 100%;
+  }
+
+  .people {
+    th.num,
+    td.num {
+      width: auto;
+    }
+  }
+}

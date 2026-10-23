@@ -1,0 +1,32 @@
+@if (!confirming()) {
+  <h2 mat-dialog-title>Edit loan</h2>
+  <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+    <mat-dialog-content>
+      <app-loan-fields [form]="form" [accounts]="data.accounts" [currency]="data.currency" [keep]="data.loan.bankAccountId" />
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      }
+    </mat-dialog-content>
+    <!-- Save is the one filled button. -->
+    <mat-dialog-actions>
+      <button mat-stroked-button type="button" class="delete" (click)="confirm(true)">Delete</button>
+      <button mat-stroked-button type="button" mat-dialog-close>Cancel</button>
+      <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+    </mat-dialog-actions>
+  </form>
+} @else {
+  <!-- UX-04: the confirmation replaces the form, never a second dialog. -->
+  <h2 mat-dialog-title>Delete this loan?</h2>
+  <mat-dialog-content>
+    <p class="money">{{ summary.title }}</p>
+    <p>{{ summary.details }}</p>
+    <p class="caption">It is removed from Loans and Dashboard. This cannot be undone.</p>
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+  </mat-dialog-content>
+  <mat-dialog-actions>
+    <button mat-stroked-button type="button" (click)="confirm(false)">Cancel</button>
+    <button mat-flat-button type="button" [disabled]="busy()" (click)="remove()">Delete</button>
+  </mat-dialog-actions>
+}

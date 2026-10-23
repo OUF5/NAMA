@@ -246,7 +246,7 @@ export class App {
   // UX-01: five always-visible items, Add is prominent and in the middle. Plan and Tracker (plan vs
   // actual) sit side by side (owner's choice, 20 Oct 2026). Add adds an expense or a transfer
   // (TRF-01), so it is "Add". Banks (BNK-01) is in the side bar; on phones the drawer and the top
-  // bar's Balance open it.
+  // bar's Balance open it. Loans (LON-01) is in the side bar and the drawer.
   protected readonly navItems: NavItem[] = [
     { path: '/', label: 'Dashboard', icon: 'dashboard' },
     { path: '/entries', label: 'Entries', icon: 'receipt_long' },
@@ -254,5 +254,6 @@ export class App {
     { path: '/plan', label: 'Plan', icon: 'event_note' },
     { path: '/tracker', label: 'Tracker', icon: 'query_stats' },
     { path: '/banks', label: 'Banks', icon: 'account_balance', desktopOnly: true },
+    { path: '/loans', label: 'Loans', icon: 'handshake', desktopOnly: true },
   ];
 }

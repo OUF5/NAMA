@@ -1,0 +1,260 @@
+<div class="page-head">
+  <h1>Loans</h1>
+</div>
+<!-- R-LON-02 -->
+<p class="caption info">Information only: your balances, plan and Tracker stay the same.</p>
+
+<!-- LON-02, LON-03: in the URL (?tab=), as Plan's tabs. -->
+<nav class="tabs" aria-label="Loans sections">
+  @for (item of tabs; track item.id) {
+    <a
+      class="tab"
+      routerLink="/loans"
+      [queryParams]="{ tab: item.id === 'new' ? null : item.id }"
+      [class.active]="tab() === item.id"
+      [attr.aria-current]="tab() === item.id ? 'page' : null"
+    >
+      {{ item.label }}
+    </a>
+  }
+</nav>
+<p class="status" aria-live="polite">{{ status() }}</p>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+} @else if (data(); as d) {
+  @switch (tab()) {
+    @case ('new') {
+      <!-- LON-02: the fields, and beside them the totals and what NAMA knows about the balance. -->
+      <section class="card new-loan">
+        <form [formGroup]="form" (ngSubmit)="save()" novalidate class="new-form">
+          @if (d.accounts.length === 0) {
+            <p class="note">Add a bank account on <a routerLink="/banks">Banks</a> first.</p>
+          }
+          <app-loan-fields [form]="form" [accounts]="d.accounts" [currency]="currency()" />
+          @if (saveError()) {
+            <p class="error" role="alert">{{ saveError() }}</p>
+          }
+          <div class="actions">
+            <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+          </div>
+        </form>
+
+        <aside class="side" aria-live="polite">
+          @if (totals(); as t) {
+            <div class="totals">
+              <span class="caption">{{ t.label }} · open ({{ t.count }})</span>
+              <span class="money kpi amounts">
+                <span [class.struck]="t.after">{{ t.now }}</span>
+                @if (t.after) {
+                  <mat-icon aria-hidden="true">arrow_forward</mat-icon>
+                  <span class="after">{{ t.after }}</span>
+                }
+              </span>
+              <div class="line">
+                <span class="caption">{{ t.other.label }}</span>
+                <span class="money">{{ t.other.amount }}</span>
+              </div>
+              <div class="line">
+                <span class="caption">Lent − Borrowed</span>
+                <span class="money amounts">
+                  <span [class.struck]="t.netAfter">{{ t.net }}</span>
+                  @if (t.netAfter) {
+                    <mat-icon aria-hidden="true">arrow_forward</mat-icon>
+                    <span class="after">{{ t.netAfter }}</span>
+                  }
+                </span>
+              </div>
+            </div>
+          }
+
+          <div class="outlook">
+            @if (outlook(); as o) {
+              @if (o.kind === 'today') {
+                <span class="caption">{{ o.account }} today</span>
+                @if (o.balance !== null) {
+                  <span class="money">{{ o.balance }}</span>
+                  @if (o.share) {
+                    <p class="caption">{{ o.share }}</p>
+                  }
+                } @else {
+                  <p class="caption">No balance yet. Set it on <a routerLink="/banks">Banks</a>.</p>
+                }
+              } @else if (o.kind === 'projected') {
+                <span class="caption">Total balance projected at the end of {{ o.month }} ({{ o.endDate }})</span>
+                @if (o.balance !== null) {
+                  <span class="money">{{ o.balance }}</span>
+                } @else {
+                  <p class="caption">Finish setting up your balances on <a routerLink="/banks">Banks</a> to see it.</p>
+                }
+              } @else {
+                <p class="caption">No projection for that month yet.</p>
+              }
+            } @else {
+              <p class="caption">Choose an account and a date to see its balance.</p>
+            }
+            <p class="caption">
+              NAMA's balances do not change. If the money really left or reached the account, set its balance today on
+              <a routerLink="/banks">Banks</a> to match the bank.
+            </p>
+          </div>
+        </aside>
+      </section>
+    }
+    @case ('all') {
+      <!-- LON-03: the filters, and the shown loans' totals under them (as Entries' summary). -->
+      <section class="card filters" aria-label="Filters">
+        <div class="filter-grid">
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>Type</mat-label>
+            <mat-select [value]="typeFilter()" (selectionChange)="typeFilter.set($event.value)">
+              <mat-option value="all">Lent and borrowed</mat-option>
+              <mat-option value="lent">Lent</mat-option>
+              <mat-option value="borrowed">Borrowed</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field subscriptSizing="dynamic">
+            <mat-label>Status</mat-label>
+            <mat-select [value]="statusFilter()" (selectionChange)="statusFilter.set($event.value)">
+              <mat-option value="open">Open</mat-option>
+              <mat-option value="settled">Returned or paid</mat-option>
+              <mat-option value="all">All</mat-option>
+            </mat-select>
+          </mat-form-field>
+          <mat-form-field subscriptSizing="dynamic" class="search">
+            <mat-label>Search names</mat-label>
+            <input matInput [value]="search()" (input)="search.set($any($event.target).value)" autocomplete="off" />
+          </mat-form-field>
+        </div>
+        @if (d.loans.length) {
+          <p class="summary" aria-live="polite">
+            <span>{{ summary().count }}</span>
+            <span><span class="caption">Lent</span> <span class="money">{{ summary().lent }}</span></span>
+            <span><span class="caption">Borrowed</span> <span class="money">{{ summary().borrowed }}</span></span>
+            <span>
+              <span class="caption">Lent − Borrowed</span>
+              <span class="money" [class.danger]="summary().negative">{{ summary().net }}</span>
+            </span>
+          </p>
+        }
+      </section>
+
+      @if (d.loans.length === 0) {
+        <!-- UX-03 -->
+        <section class="card empty">
+          <h2>No loans yet</h2>
+          <p class="note">Add one on <a routerLink="/loans">New loan</a>.</p>
+        </section>
+      } @else {
+        <!-- LON-03 By person: open loans only, names ignoring case. -->
+        @if (people().length) {
+          <section class="card table-card" aria-labelledby="people-title">
+            <h2 id="people-title" class="table-title">By person</h2>
+            <table class="list people">
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col" class="num">Lent</th>
+                  <th scope="col" class="num">Borrowed</th>
+                  <th scope="col" class="num">Open</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (person of people(); track person.name) {
+                  <tr>
+                    <td class="name">{{ person.name }}</td>
+                    <td class="num money nowrap">{{ person.lent }}</td>
+                    <td class="num money nowrap">{{ person.borrowed }}</td>
+                    <td class="num">{{ person.open }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </section>
+        }
+
+        @if (rows().length === 0) {
+          <section class="card empty">
+            <h2>No loans match these filters</h2>
+            <p class="note">Change the filters above.</p>
+          </section>
+        } @else if (phone()) {
+          <!-- TBL-05: one card per loan on phones. -->
+          <ul class="loan-cards">
+            @for (row of rows(); track row.loan.id) {
+              <li class="card loan-card">
+                <div class="loan-line">
+                  <span class="name">{{ row.loan.name }}</span>
+                  <span class="money">{{ row.amount }}</span>
+                </div>
+                <p class="caption">{{ row.type }} · {{ row.date }} · {{ row.account }}</p>
+                @if (row.loan.note) {
+                  <p class="loan-note">{{ row.loan.note }}</p>
+                }
+                <div class="row-actions">
+                  <span class="chip" [class.ok]="!row.open">{{ row.status }}</span>
+                  <span class="actions-wrap">
+                    @if (row.open) {
+                      <button mat-button type="button" (click)="settle(row.loan)">{{ row.settleLabel }}</button>
+                    } @else {
+                      <button mat-button type="button" (click)="reopen(row.loan)">Mark open</button>
+                    }
+                    <button mat-icon-button type="button" (click)="edit(row.loan)" [attr.aria-label]="'Edit ' + row.loan.name">
+                      <mat-icon>edit</mat-icon>
+                    </button>
+                  </span>
+                </div>
+              </li>
+            }
+          </ul>
+        } @else {
+          <section class="card table-card">
+            <table class="list loans">
+              <thead>
+                <tr>
+                  <th scope="col">Date</th>
+                  <th scope="col">Name</th>
+                  <th scope="col">Type</th>
+                  <th scope="col" class="num">Amount</th>
+                  <th scope="col">Bank account</th>
+                  <th scope="col">Status</th>
+                  @if (hasNotes()) {
+                    <th scope="col">Note</th>
+                  }
+                  <th scope="col" aria-label="Actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of rows(); track row.loan.id) {
+                  <tr>
+                    <td class="nowrap">{{ row.date }}</td>
+                    <td class="name">{{ row.loan.name }}</td>
+                    <td>{{ row.type }}</td>
+                    <td class="num money nowrap">{{ row.amount }}</td>
+                    <td>{{ row.account }}</td>
+                    <td><span class="chip" [class.ok]="!row.open">{{ row.status }}</span></td>
+                    @if (hasNotes()) {
+                      <td class="note-cell">{{ row.loan.note }}</td>
+                    }
+                    <td class="actions-cell">
+                      <span class="actions-wrap">
+                        @if (row.open) {
+                          <button mat-button type="button" (click)="settle(row.loan)">{{ row.settleLabel }}</button>
+                        } @else {
+                          <button mat-button type="button" (click)="reopen(row.loan)">Mark open</button>
+                        }
+                        <button mat-icon-button type="button" (click)="edit(row.loan)" [attr.aria-label]="'Edit ' + row.loan.name">
+                          <mat-icon>edit</mat-icon>
+                        </button>
+                      </span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </section>
+        }
+      }
+    }
+  }
+}

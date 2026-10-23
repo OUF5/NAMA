@@ -29,23 +29,31 @@ public static class BalancesEndpoint
             {
                 return Results.NotFound();
             }
-            var balance = data.Complete && data.Total is { } total ? total : (long?)null;
-            var current = FiscalCalendar.FindPeriod(data.FiscalYears, data.Today);
-            var projected = current is { } found && found.FiscalYear.Id == fyId
-                ? (await SummaryEndpoint.CurrentMonthAsync(uid, store, data, found, balance)).Projection.MonthEnds()
-                    .ToDictionary(end => end.PeriodKey, end => end.Balance)
-                : [];
-
             return Results.Ok(new BalancesResponse(
                 data.Complete,
-                fiscalYear.Periods.Select(period => period.EndDate < data.Today
-                        ? new MonthBalanceDto(period.Key, data.TotalOn(period.EndDate) is { } end ? Money.FromMinor(end) : null, false)
-                        : new MonthBalanceDto(
-                            period.Key,
-                            projected.GetValueOrDefault(period.Key) is { } ahead ? Money.FromMinor(ahead) : null,
-                            true))
+                (await MonthEndsAsync(uid, store, data, fiscalYear))
+                    .Select(end => new MonthBalanceDto(end.Period.Key, end.Balance is { } amount ? Money.FromMinor(amount) : null, end.Projected))
                     .ToList()));
         });
         return api;
+    }
+
+    // Each month's end balance of one FY: real for a closed month, projected otherwise (null when
+    // unknown). The data must hold the FY's entries (BanksEndpoint.LoadAsync from its start). Loans
+    // shows the same numbers (LON-02).
+    public static async Task<IReadOnlyList<(Period Period, long? Balance, bool Projected)>> MonthEndsAsync(
+        string uid, IUserStore store, BalanceData data, FiscalYear fiscalYear)
+    {
+        var balance = data.Complete && data.Total is { } total ? total : (long?)null;
+        var current = FiscalCalendar.FindPeriod(data.FiscalYears, data.Today);
+        var projected = current is { } found && found.FiscalYear.Id == fiscalYear.Id
+            ? (await SummaryEndpoint.CurrentMonthAsync(uid, store, data, found, balance)).Projection.MonthEnds()
+                .ToDictionary(end => end.PeriodKey, end => end.Balance)
+            : [];
+        return fiscalYear.Periods
+            .Select(period => period.EndDate < data.Today
+                ? (period, data.TotalOn(period.EndDate), false)
+                : (period, projected.TryGetValue(period.Key, out var ahead) ? ahead : (long?)null, true))
+            .ToList();
     }
 }

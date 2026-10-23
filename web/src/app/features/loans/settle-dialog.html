@@ -1,0 +1,22 @@
+<h2 mat-dialog-title>{{ title }}</h2>
+<form [formGroup]="form" (ngSubmit)="save()" novalidate>
+  <mat-dialog-content>
+    <!-- R-LON-03: in full, on or after the loan's date. -->
+    <p>{{ question }}</p>
+    <mat-form-field>
+      <mat-label>Date</mat-label>
+      <input matInput formControlName="date" [matDatepicker]="picker" [min]="minDate" />
+      <mat-datepicker-toggle matIconSuffix [for]="picker" />
+      <mat-datepicker #picker />
+      <mat-error>Pick a date from {{ loanDate }} on.</mat-error>
+    </mat-form-field>
+    <p class="note">Information only: your balances stay the same. It can be marked open again.</p>
+    @if (error()) {
+      <p class="error" role="alert">{{ error() }}</p>
+    }
+  </mat-dialog-content>
+  <mat-dialog-actions>
+    <button mat-stroked-button type="button" mat-dialog-close>Cancel</button>
+    <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+  </mat-dialog-actions>
+</form>

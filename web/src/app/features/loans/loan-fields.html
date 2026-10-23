@@ -1,0 +1,71 @@
+<div class="inputs" [formGroup]="form()">
+  <!-- R-LON-01 -->
+  <mat-button-toggle-group class="type" formControlName="type" aria-label="Loan type" hideSingleSelectionIndicator>
+    <mat-button-toggle value="lent">Lent</mat-button-toggle>
+    <mat-button-toggle value="borrowed">Borrowed</mat-button-toggle>
+  </mat-button-toggle-group>
+  <p class="caption type-hint">
+    {{ form().controls.type.value === 'lent' ? 'You gave the money: they owe you.' : 'You received the money: you owe it.' }}
+  </p>
+
+  <div class="row">
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-label>Name</mat-label>
+      <input matInput formControlName="name" [maxlength]="nameMax" autocomplete="off" />
+      @if (form().controls.name.hasError('server')) {
+        <mat-error>{{ form().controls.name.getError('server') }}</mat-error>
+      } @else {
+        <mat-error>1 to {{ nameMax }} characters.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-label>Amount ({{ currency() }})</mat-label>
+      <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
+      @if (form().controls.amount.hasError('server')) {
+        <mat-error>{{ form().controls.amount.getError('server') }}</mat-error>
+      } @else {
+        <mat-error>More than 0, at most 10,000,000, with up to 2 decimals.</mat-error>
+      }
+    </mat-form-field>
+  </div>
+
+  <div class="row">
+    <!-- R-LON-01: any date counts, before NAMA and in the future too. -->
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-label>Date</mat-label>
+      <input matInput formControlName="date" [matDatepicker]="picker" />
+      <mat-datepicker-toggle matIconSuffix [for]="picker" />
+      <mat-datepicker #picker />
+      @if (form().controls.date.hasError('server')) {
+        <mat-error>{{ form().controls.date.getError('server') }}</mat-error>
+      } @else {
+        <mat-error>Pick a date.</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field subscriptSizing="dynamic">
+      <mat-label>{{ form().controls.type.value === 'lent' ? 'From account' : 'Into account' }}</mat-label>
+      <mat-select formControlName="bankAccountId">
+        @for (account of options(); track account.id) {
+          <mat-option [value]="account.id">{{ account.name }}@if (account.archived) { (archived)}</mat-option>
+        }
+      </mat-select>
+      @if (form().controls.bankAccountId.hasError('server')) {
+        <mat-error>{{ form().controls.bankAccountId.getError('server') }}</mat-error>
+      } @else {
+        <mat-error>Choose an account.</mat-error>
+      }
+    </mat-form-field>
+  </div>
+
+  <mat-form-field subscriptSizing="dynamic">
+    <mat-label>Note (optional)</mat-label>
+    <input matInput formControlName="note" [maxlength]="noteMax" autocomplete="off" />
+    @if (form().controls.note.hasError('server')) {
+      <mat-error>{{ form().controls.note.getError('server') }}</mat-error>
+    } @else {
+      <mat-error>At most {{ noteMax }} characters.</mat-error>
+    }
+  </mat-form-field>
+</div>

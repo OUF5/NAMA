@@ -13,6 +13,7 @@ import { provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { Me, MeService } from '../../core/me';
 import { Summary, SummaryService } from '../../core/summary';
+import { LoanTotals } from '../loans/loans-api';
 import { Cell, MonthOverview, OverviewResponse } from '../months/overview-api';
 import { Category, FiscalYear } from '../plan/plan-api';
 import { Dashboard } from './dashboard';
@@ -251,12 +252,25 @@ describe('Dashboard (PRD 5.9)', () => {
     return vi.waitFor(() => http.expectOne(`/api/fiscal-years/${fyId}/overview`));
   }
 
-  // NFR-01: one call, the overview (/api/me is cached by setupGuard; the summary is the shell's).
-  async function open(data = overview(), withSummary: Summary | null = summary()): Promise<void> {
+  // DSH-07's own call: the loan totals, no names.
+  const noLoans: LoanTotals = {
+    lent: { open: 0, openCount: 0, settled: 0, settledCount: 0 },
+    borrowed: { open: 0, openCount: 0, settled: 0, settledCount: 0 },
+    net: 0,
+  };
+
+  async function loansCall(): Promise<TestRequest> {
+    return vi.waitFor(() => http.expectOne('/api/loans/totals'));
+  }
+
+  // NFR-01: the overview (/api/me is cached by setupGuard; the summary is the shell's), and the loan
+  // totals for DSH-07.
+  async function open(data = overview(), withSummary: Summary | null = summary(), loans: LoanTotals = noLoans): Promise<void> {
     TestBed.inject(SummaryService).summary.set(withSummary);
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/');
     (await overviewCall(data.fyId)).flush(data);
+    (await loansCall()).flush(loans);
     await settle();
     http.verify();
   }
@@ -305,8 +319,9 @@ describe('Dashboard (PRD 5.9)', () => {
       'to-date-title',
       'saving-title',
       'banks-title',
+      'loans-title',
     ]);
-    expect(root().querySelectorAll('.cards > section.card').length).toBe(6);
+    expect(root().querySelectorAll('.cards > section.card').length).toBe(7);
     expect(root().querySelector('app-rollover-banner')).toBeNull();
   });
 
@@ -693,6 +708,37 @@ describe('Dashboard (PRD 5.9)', () => {
     expect(banks.querySelector('app-bank-bar')).toBeNull();
   });
 
+  // DSH-07 (owner note 20): the open totals and Lent − Borrowed, no names, information only.
+  it('shows the loan totals without names', async () => {
+    await open(overview(), summary(), {
+      lent: { open: 1500.25, openCount: 2, settled: 700, settledCount: 1 },
+      borrowed: { open: 3000, openCount: 1, settled: 0, settledCount: 0 },
+      net: -1499.75,
+    });
+
+    const loans = card('loans');
+    expect(text(loans)).toBe(
+      'Loans Information only · not in your balance Open Loans Lent SAR 1,500.25 2 open Borrowed SAR 3,000 1 open Lent − Borrowed SAR -1,499.75',
+    );
+    expect(loans.querySelector('.kpi:last-child .value')!.classList).toContain('danger');
+    expect(loans.querySelector('a')!.getAttribute('href')).toBe('/loans?tab=all');
+  });
+
+  it('says how to add a loan when there is none', async () => {
+    await open();
+    expect(card('loans').querySelector('.note')!.textContent?.trim()).toBe('No loans. Add one on Loans.');
+  });
+
+  it('hides the loans card when the totals fail', async () => {
+    TestBed.inject(SummaryService).summary.set(summary());
+    harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/');
+    (await overviewCall()).flush(overview());
+    (await loansCall()).flush('down', { status: 500, statusText: 'Server Error' });
+    await settle();
+    expect(card('loans')).toBeNull();
+  });
+
   // FY-01 after the latest FY ended: the latest FY (GET /api/fiscal-years), no month in progress,
   // the banner; Start reloads the overview of the new FY once.
   it('shows the banner when no FY contains today and starts the next FY', async () => {
@@ -704,6 +750,7 @@ describe('Dashboard (PRD 5.9)', () => {
     await harness.navigateByUrl('/');
     (await vi.waitFor(() => http.expectOne('/api/fiscal-years'))).flush([fy2026]);
     (await overviewCall()).flush(ended);
+    (await loansCall()).flush(noLoans);
     await settle();
     http.verify();
 

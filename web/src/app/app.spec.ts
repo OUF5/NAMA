@@ -74,14 +74,22 @@ describe('App', () => {
     expect(compiled.querySelector('.month')?.textContent).toBe('Sep 2026 · 27 Sep to 26 Oct');
   });
 
-  // UX-01: five items on phones; Banks (BNK-01) joins them in the side bar.
-  it('should show the five navigation items and Banks on desktop (UX-01, BNK-01)', async () => {
+  // UX-01: five items on phones; Banks (BNK-01) and Loans (LON-01) join them in the side bar.
+  it('should show the five navigation items, Banks and Loans on desktop (UX-01, BNK-01, LON-01)', async () => {
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;
     const items = Array.from(compiled.querySelectorAll('.nav > a.nav-item'));
-    expect(items.map((el) => el.querySelector('span')?.textContent?.trim())).toEqual(['Dashboard', 'Entries', 'Add', 'Plan', 'Tracker', 'Banks']);
-    expect(items.filter((el) => el.classList.contains('desktop-only')).map((el) => el.getAttribute('href'))).toEqual(['/banks']);
+    expect(items.map((el) => el.querySelector('span')?.textContent?.trim())).toEqual([
+      'Dashboard',
+      'Entries',
+      'Add',
+      'Plan',
+      'Tracker',
+      'Banks',
+      'Loans',
+    ]);
+    expect(items.filter((el) => el.classList.contains('desktop-only')).map((el) => el.getAttribute('href'))).toEqual(['/banks', '/loans']);
   });
 
   // UX-08: Left this month (in its plan status color) and the balance, each a link, on every page.
@@ -299,6 +307,7 @@ describe('App', () => {
       'Plan',
       'Tracker',
       'Banks',
+      'Loans',
       'Settings',
       'Sign out',
     ]);

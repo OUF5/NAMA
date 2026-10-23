@@ -162,6 +162,19 @@ public interface IUserStore
 
     Task<bool> DeleteTransferAsync(string uid, string id);
 
+    // R-LON-01 to R-LON-03 (owner note 20). Newest first: date descending, then the one added later
+    // first. Update replaces every field (the settled date too); update and delete return false when
+    // the loan no longer exists.
+    Task<IReadOnlyList<Loan>> GetLoansAsync(string uid);
+
+    Task<Loan?> GetLoanAsync(string uid, string id);
+
+    Task AddLoanAsync(string uid, Loan loan);
+
+    Task<bool> UpdateLoanAsync(string uid, Loan loan);
+
+    Task<bool> DeleteLoanAsync(string uid, string id);
+
     Task<bool> UpdateCategoryAsync(string uid, Category category);
 
     Task<bool> UpdateSubCategoryAsync(string uid, SubCategory subCategory);

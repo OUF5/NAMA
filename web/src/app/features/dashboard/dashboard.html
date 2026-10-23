@@ -244,6 +244,39 @@
         }
       </section>
     }
+
+    <!-- DSH-07: the open loan totals, no names, information only (R-LON-02, R-LON-04). -->
+    @if (loans(); as l) {
+      <section class="card wide" aria-labelledby="loans-title">
+        <div class="card-head">
+          <div class="title">
+            <h2 id="loans-title">Loans</h2>
+            <span class="caption">Information only · not in your balance</span>
+          </div>
+          <a routerLink="/loans" [queryParams]="l.empty ? null : { tab: 'all' }">Open Loans</a>
+        </div>
+        @if (l.empty) {
+          <p class="note">No loans. Add one on <a routerLink="/loans">Loans</a>.</p>
+        } @else {
+          <div class="kpis three">
+            <div class="kpi">
+              <span class="caption">Lent</span>
+              <span class="money value">{{ l.lent }}</span>
+              <span class="caption">{{ l.lentCount }}</span>
+            </div>
+            <div class="kpi">
+              <span class="caption">Borrowed</span>
+              <span class="money value">{{ l.borrowed }}</span>
+              <span class="caption">{{ l.borrowedCount }}</span>
+            </div>
+            <div class="kpi">
+              <span class="caption">Lent − Borrowed</span>
+              <span class="money value" [class.danger]="l.netNegative">{{ l.net }}</span>
+            </div>
+          </div>
+        }
+      </section>
+    }
   </div>
 } @else {
   <p class="caption">Loading…</p>

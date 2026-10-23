@@ -386,6 +386,44 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
 
     public Task<bool> DeleteTransferAsync(string uid, string id) => DeleteAsync(User(uid).Collection("transfers").Document(id));
 
+    // Loans are few, so all of them are read at once, as transfers.
+    public async Task<IReadOnlyList<Loan>> GetLoansAsync(string uid)
+    {
+        var snapshot = await User(uid).Collection("loans").GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => (document.Id, Document: document.ConvertTo<LoanDocument>()))
+            .OrderByDescending(item => item.Document.Date, StringComparer.Ordinal)
+            .ThenByDescending(item => item.Document.CreatedAt)
+            .Select(item => FirestoreDocuments.ToLoan(item.Id, item.Document))
+            .ToList();
+    }
+
+    public async Task<Loan?> GetLoanAsync(string uid, string id)
+    {
+        var snapshot = await User(uid).Collection("loans").Document(id).GetSnapshotAsync();
+        return snapshot.Exists ? FirestoreDocuments.ToLoan(snapshot.Id, snapshot.ConvertTo<LoanDocument>()) : null;
+    }
+
+    public Task AddLoanAsync(string uid, Loan loan) =>
+        User(uid).Collection("loans").Document(loan.Id).CreateAsync(FirestoreDocuments.ToDocument(loan));
+
+    public Task<bool> UpdateLoanAsync(string uid, Loan loan)
+    {
+        var document = FirestoreDocuments.ToDocument(loan);
+        return UpdateAsync(User(uid).Collection("loans").Document(loan.Id), new Dictionary<string, object>
+        {
+            ["name"] = document.Name,
+            ["type"] = document.Type,
+            ["amountMinor"] = document.AmountMinor,
+            ["date"] = document.Date,
+            ["bankAccountId"] = document.BankAccountId,
+            ["note"] = document.Note,
+            ["settledOn"] = document.SettledOn!,
+        });
+    }
+
+    public Task<bool> DeleteLoanAsync(string uid, string id) => DeleteAsync(User(uid).Collection("loans").Document(id));
+
     public Task<bool> UpdateCategoryAsync(string uid, Category category) =>
         UpdateAsync(User(uid).Collection("categories").Document(category.Id), NameFields(category.Name, category.Archived));
 
@@ -574,6 +612,21 @@ public sealed class TransferDocument
     [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
 }
 
+// PRD 7.4 users/{uid}/loans/{id} (R-LON-01 to R-LON-03). SettledOn is null while open.
+[FirestoreData]
+public sealed class LoanDocument
+{
+    [FirestoreProperty("name")] public string Name { get; set; } = "";
+    [FirestoreProperty("type")] public string Type { get; set; } = "";
+    [FirestoreProperty("amountMinor")] public long AmountMinor { get; set; }
+    [FirestoreProperty("date")] public string Date { get; set; } = "";
+    [FirestoreProperty("bankAccountId")] public string BankAccountId { get; set; } = "";
+    [FirestoreProperty("note")] public string Note { get; set; } = "";
+    [FirestoreProperty("settledOn")] public string? SettledOn { get; set; }
+    [FirestoreProperty("createdAt"), ServerTimestamp] public Timestamp CreatedAt { get; set; }
+    [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
+}
+
 // Domain ↔ document. Dates become YYYY-MM-DD strings only here (PRD 7.4).
 public static class FirestoreDocuments
 {
@@ -701,6 +754,25 @@ public static class FirestoreDocuments
     public static Transfer ToTransfer(string id, TransferDocument document) => new(
         id, ToDate(document.Date), document.PeriodKey, document.FyId, document.FromBankAccountId,
         document.ToBankAccountId, document.AmountMinor, document.Note);
+
+    public static LoanDocument ToDocument(Loan loan) => new()
+    {
+        Name = loan.Name,
+        Type = ToLoanTypeName(loan.Type),
+        AmountMinor = loan.AmountMinor,
+        Date = ToDateString(loan.Date),
+        BankAccountId = loan.BankAccountId,
+        Note = loan.Note,
+        SettledOn = loan.SettledOn is { } settled ? ToDateString(settled) : null,
+    };
+
+    public static Loan ToLoan(string id, LoanDocument document) => new(
+        id, document.Name, ToLoanType(document.Type), document.AmountMinor, ToDate(document.Date), document.BankAccountId,
+        document.Note, string.IsNullOrEmpty(document.SettledOn) ? null : ToDate(document.SettledOn));
+
+    public static string ToLoanTypeName(LoanType type) => type == LoanType.Borrowed ? "borrowed" : "lent";
+
+    public static LoanType ToLoanType(string? name) => name == "borrowed" ? LoanType.Borrowed : LoanType.Lent;
 
     public static EntryDocument ToDocument(Entry entry) => new()
     {

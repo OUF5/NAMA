@@ -32,6 +32,20 @@ public class FirestoreMappingTests
         Assert.Equal(profile, FirestoreDocuments.ToProfile(FirestoreDocuments.ToDocument(profile)));
     }
 
+    // R-LON-01 to R-LON-03: lent or borrowed, minor units, and a settled date or none.
+    [Fact]
+    public void Loan_comes_back_unchanged()
+    {
+        var open = new Loan("l1", "Ahmed", LoanType.Borrowed, 123_456, new DateOnly(2025, 6, 1), "bank", "Car");
+        var settled = open with { Type = LoanType.Lent, SettledOn = new DateOnly(2026, 10, 23) };
+
+        Assert.Equal(("borrowed", "2025-06-01", (string?)null), (FirestoreDocuments.ToDocument(open).Type,
+            FirestoreDocuments.ToDocument(open).Date, FirestoreDocuments.ToDocument(open).SettledOn));
+        Assert.Equal(open, FirestoreDocuments.ToLoan("l1", FirestoreDocuments.ToDocument(open)));
+        Assert.Equal(("lent", "2026-10-23"), (FirestoreDocuments.ToDocument(settled).Type, FirestoreDocuments.ToDocument(settled).SettledOn));
+        Assert.Equal(settled, FirestoreDocuments.ToLoan("l1", FirestoreDocuments.ToDocument(settled)));
+    }
+
     // R-CAL-11: stored as "end" or "payday"; a profile saved before 23 Oct 2026 has none and is named
     // by the month each month ends in.
     [Fact]

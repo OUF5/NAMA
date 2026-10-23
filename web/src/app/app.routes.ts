@@ -68,6 +68,13 @@ export const routes: Routes = [
     canActivate: [authGuard, setupGuard],
     loadComponent: () => import('./features/banks/banks').then((m) => m.Banks),
   },
+  // PRD 5.12 Loans (LON-01 to LON-03, owner note 20).
+  {
+    path: 'loans',
+    title: 'NAMA · Loans',
+    canActivate: [authGuard, setupGuard],
+    loadComponent: () => import('./features/loans/loans').then((m) => m.Loans),
+  },
   // Bank accounts moved from Settings to Banks (20 Oct 2026); old links still work.
   { path: 'settings/bank-accounts', redirectTo: 'banks' },
   // Categories moved from Settings to Plan's Categories tab (owner note 9); old links still work.

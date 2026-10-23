@@ -25,6 +25,7 @@ public sealed class InMemoryUserStore : IUserStore
         public Dictionary<string, IncomeSplit> IncomeSplits { get; } = new() { [setup.IncomeSplit.FromPeriodKey] = setup.IncomeSplit };
         // In the order added, which stands in for createdAt.
         public List<Transfer> Transfers { get; } = [];
+        public List<Loan> Loans { get; } = [];
     }
 
     private readonly ConcurrentDictionary<string, UserData> _users = new();
@@ -198,6 +199,25 @@ public sealed class InMemoryUserStore : IUserStore
 
     public Task<bool> DeleteTransferAsync(string uid, string id) =>
         Change(uid, data => data.Transfers.RemoveAll(transfer => transfer.Id == id) > 0);
+
+    // Newest first, as transfers.
+    public Task<IReadOnlyList<Loan>> GetLoansAsync(string uid) =>
+        Read<Loan>(uid, data => data.Loans
+            .Select((loan, added) => (loan, added))
+            .OrderByDescending(item => item.loan.Date)
+            .ThenByDescending(item => item.added)
+            .Select(item => item.loan));
+
+    public async Task<Loan?> GetLoanAsync(string uid, string id) =>
+        (await Read<Loan>(uid, data => data.Loans.Where(loan => loan.Id == id))).SingleOrDefault();
+
+    public Task AddLoanAsync(string uid, Loan loan) => Write(uid, data => data.Loans.Add(loan));
+
+    public Task<bool> UpdateLoanAsync(string uid, Loan loan) =>
+        Change(uid, data => Replace(data.Loans, loan, item => item.Id == loan.Id));
+
+    public Task<bool> DeleteLoanAsync(string uid, string id) =>
+        Change(uid, data => data.Loans.RemoveAll(loan => loan.Id == id) > 0);
 
     public Task<bool> UpdateCategoryAsync(string uid, Category category) =>
         Change(uid, data => Replace(data.Categories, category, item => item.Id == category.Id));

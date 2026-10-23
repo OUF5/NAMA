@@ -228,6 +228,13 @@
   gap: 16px;
 }
 
+// DSH-07: Lent, Borrowed and Lent − Borrowed in one row on wide screens.
+@media (min-width: 768px) {
+  .kpis.three {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 .kpi {
   display: flex;
   flex-direction: column;

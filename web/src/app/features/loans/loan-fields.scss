@@ -1,0 +1,25 @@
+// The loan fields (R-LON-01): docs/DESIGN.md "Add form", tokens only. The shared layout is in
+// add-entry/entry-fields.scss.
+
+.type {
+  align-self: flex-start;
+}
+
+.type-hint {
+  margin: -4px 0 0;
+}
+
+// Phones: one field per row and a full-width toggle with 44px targets (UX-07).
+@media (max-width: 767.98px) {
+  .row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .type {
+    align-self: stretch;
+
+    mat-button-toggle {
+      flex: 1;
+    }
+  }
+}

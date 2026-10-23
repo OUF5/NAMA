@@ -12,6 +12,7 @@ import { formatDate, formatDay } from '../../shared/month-label';
 import { RolloverBanner } from '../../shared/rollover-banner';
 import { STATUS_LABELS, availableMinor, nameMaps, spendLine } from '../months/month-lines';
 import { MonthOverview, OverviewApi, OverviewResponse } from '../months/overview-api';
+import { LoanTotals, LoansApi } from '../loans/loans-api';
 import { PlanApi } from '../plan/plan-api';
 import { BankBar } from './bank-bar';
 import { MonthBars } from './month-bars';
@@ -44,6 +45,7 @@ export class Dashboard {
   private readonly planApi = inject(PlanApi);
   private readonly meService = inject(MeService);
   private readonly summaryService = inject(SummaryService);
+  private readonly loansApi = inject(LoansApi);
 
   protected readonly formatDate = formatDate;
   protected readonly inProgressLabel = STATUS_LABELS.inProgress;
@@ -305,8 +307,29 @@ export class Dashboard {
     };
   });
 
+  // DSH-07 (owner note 20): the loan totals, no names. Its own small call, made only here; the card
+  // stays hidden when it fails.
+  private readonly loanTotals = signal<LoanTotals | null>(null);
+  protected readonly loans = computed(() => {
+    const totals = this.loanTotals();
+    if (!totals) {
+      return null;
+    }
+    const count = (n: number) => `${n} open`;
+    return {
+      empty: totals.lent.openCount + totals.borrowed.openCount + totals.lent.settledCount + totals.borrowed.settledCount === 0,
+      lent: this.money(totals.lent.open),
+      lentCount: count(totals.lent.openCount),
+      borrowed: this.money(totals.borrowed.open),
+      borrowedCount: count(totals.borrowed.openCount),
+      net: this.money(totals.net),
+      netNegative: totals.net < 0,
+    };
+  });
+
   constructor() {
     void this.load();
+    void this.loadLoans();
   }
 
   // FY-01, FY-02: the banner already set the new /api/me. The page shows the FY that now contains
@@ -329,6 +352,14 @@ export class Dashboard {
       this.loadError.set('');
     } catch {
       this.loadError.set('The dashboard could not be loaded. Please reload the page.');
+    }
+  }
+
+  private async loadLoans(): Promise<void> {
+    try {
+      this.loanTotals.set(await this.loansApi.totals());
+    } catch {
+      this.loanTotals.set(null);
     }
   }
 
