@@ -13,7 +13,7 @@ import {
   Validators,
 } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import { MatChipsModule } from '@angular/material/chips';
+import { MatChipListboxChange, MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -310,8 +310,14 @@ export class Setup {
     }
   }
 
-  protected addSuggestion(name: string): void {
-    this.categories.push(this.fb.control(name));
+  // A suggestion is a one-tap add, not a choice. The listbox keeps the tapped name as its value and
+  // selects its chip again when it comes back (after its X), which added it again; so the value is cleared.
+  protected addSuggestion(event: MatChipListboxChange): void {
+    const name = event.value as string | undefined;
+    if (name) {
+      this.categories.push(this.fb.control(name));
+    }
+    event.source.value = undefined;
   }
 
   protected removeAt(list: FormArray<FormControl<string>>, index: number): void {

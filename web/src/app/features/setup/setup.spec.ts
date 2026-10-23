@@ -85,6 +85,37 @@ describe('Setup wizard (PRD 5.2)', () => {
     )!;
     expect(input.value).toBe('Owner');
   });
+
+  // Owner's report (23 Oct 2026): a suggestion added with a tap came straight back when removed,
+  // because the chip listbox kept it as its value and selected its chip again when it reappeared.
+  it('removes a suggested category with its X, and offers it again', async () => {
+    const fixture = TestBed.createComponent(Setup);
+    await fixture.whenStable();
+    const root = fixture.nativeElement as HTMLElement;
+    const chip = (name: string) =>
+      Array.from(root.querySelectorAll<HTMLElement>('mat-chip-option')).find((el) => el.textContent?.includes(name));
+    const added = () => Array.from(root.querySelectorAll('.names li > span')).map((el) => el.textContent);
+    const settle = async () => {
+      await fixture.whenStable();
+      await new Promise((resolve) => setTimeout(resolve));
+      await fixture.whenStable();
+    };
+
+    chip('Education')!.querySelector<HTMLElement>('button')!.click();
+    await settle();
+    expect(added()).toEqual(['Education']);
+    expect(chip('Education')).toBeUndefined();
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Remove Education"]')!.click();
+    await settle();
+    expect(added()).toEqual([]);
+    expect(chip('Education')!.getAttribute('aria-selected')).not.toBe('true');
+
+    // A second tap adds it again, once.
+    chip('Education')!.querySelector<HTMLElement>('button')!.click();
+    await settle();
+    expect(added()).toEqual(['Education']);
+  });
 });
 
 // R-INC-03 in the wizard (PRD 5.2 step 3): additional income goes in the months you pick.

@@ -238,9 +238,9 @@
       <div class="step">
         <p class="note">Add your general categories. Sub-categories and amounts come next, on Plan.</p>
         @if (unusedSuggestions().length) {
-          <mat-chip-listbox aria-label="Suggested categories, tap to add">
+          <mat-chip-listbox aria-label="Suggested categories, tap to add" (change)="addSuggestion($event)">
             @for (name of unusedSuggestions(); track name) {
-              <mat-chip-option (selectionChange)="$event.selected && addSuggestion(name)">
+              <mat-chip-option [value]="name">
                 <mat-icon matChipAvatar>add</mat-icon>
                 {{ name }}
               </mat-chip-option>
