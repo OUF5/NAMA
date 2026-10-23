@@ -105,6 +105,32 @@
           </p>
         </div>
       }
+
+      <!-- Owner note 22: the chosen account's balance, and after this expense (R-BAL-03). -->
+      @if (account(); as a) {
+        <div class="account" aria-live="polite">
+          <div class="account-line">
+            <span class="who">
+              <span class="caption">Bank balance</span>
+              <span class="name">{{ a.name }}</span>
+            </span>
+            @if (a.now === null) {
+              <span class="caption">No balance yet · <a routerLink="/banks">Set it on Banks</a></span>
+            } @else {
+              <span class="money amounts">
+                <span [class.struck]="a.after">{{ a.now }}</span>
+                @if (a.after) {
+                  <mat-icon aria-hidden="true">arrow_forward</mat-icon>
+                  <span class="after" [class.danger]="a.negative">{{ a.after }}</span>
+                }
+              </span>
+            }
+          </div>
+          @if (a.note) {
+            <p class="caption">{{ a.note }}</p>
+          }
+        </div>
+      }
     </div>
   }
 </div>

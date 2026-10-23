@@ -41,15 +41,11 @@ form {
   gap: 16px;
 }
 
-// Wide screens: room for the indicator panel beside the fields (entry-fields.scss). Income has no
-// panel, so it keeps the dialog's width.
+// Wide screens: room for the panel beside the fields (entry-fields.scss; income-item-fields.scss for
+// Income, owner note 21).
 @media (min-width: 1100px) {
   form.card {
     max-width: 1000px;
-  }
-
-  form.card.income {
-    max-width: 640px;
   }
 }
 

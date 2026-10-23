@@ -118,9 +118,11 @@ interface ItemShape {
 // balance today and after (R-BAL-03: only the paydays that started from its opening date count), for
 // Planned or Both Plan's income in the From month. A preview only; the saved numbers come from the API.
 // The dialog and Add own the form and its Save. The month pickers offer the stored months (R-CAL-09).
+// On Add (split, owner note 21) the preview sits beside the fields on desktop, as the expense panel.
 @Component({
   selector: 'app-income-item-fields',
   imports: [ReactiveFormsModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule],
+  host: { '[class.split]': 'split()' },
   providers: [OUTLINE_FORM_FIELDS],
   templateUrl: './income-item-fields.html',
   styleUrl: './income-item-fields.scss',
@@ -131,6 +133,7 @@ export class IncomeItemFields implements OnInit {
   readonly form = input.required<IncomeItemForm>();
   readonly context = input.required<IncomeItemContext>();
   readonly currency = input.required<string>();
+  readonly split = input(false);
 
   protected readonly nameMax = NAME_MAX_LENGTH;
   protected readonly countsOptions = INCOME_COUNTS;

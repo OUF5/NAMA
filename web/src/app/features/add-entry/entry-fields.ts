@@ -8,9 +8,10 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { RouterLink } from '@angular/router';
 import { merge } from 'rxjs';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
-import { amountValidator, parseAmount, toMinor } from '../../shared/money';
+import { amountValidator, formatMoney, parseAmount, toMinor } from '../../shared/money';
 import { formatDate, fromDateString, toDateString } from '../../shared/month-label';
 import { PlannedIndicator } from '../../shared/planned-indicator';
 import { Category } from '../plan/plan-api';
@@ -106,6 +107,7 @@ export function applyServerErrors(form: EntryForm, error: unknown): boolean {
     MatIconModule,
     MatInputModule,
     MatSelectModule,
+    RouterLink,
     PlannedIndicator,
   ],
   host: { '[class.split]': 'split()' },
@@ -135,6 +137,10 @@ export class EntryFields implements OnInit {
   // panel (beside the fields on wide screens) with a placeholder until a sub-category is chosen.
   // The edit dialog keeps the compact layout.
   readonly split = input(false);
+  // Owner note 22, Add only: R-BAL-03 balances today in minor units (null without an opening
+  // balance) with their opening dates (the top bar's summary), and today (YYYY-MM-DD).
+  readonly balances = input<Record<string, { balance: number | null; openingDate: string | null }> | null>(null);
+  readonly today = input<string | null>(null);
 
   protected readonly noteMax = NOTE_MAX_LENGTH;
   protected readonly toMinor = toMinor;
@@ -162,6 +168,39 @@ export class EntryFields implements OnInit {
   private readonly noteText = signal('');
   protected readonly noteLength = computed(() => this.noteText().length);
 
+  private readonly accountId = signal('');
+  private readonly dateText = signal<string | null>(null);
+
+  // Owner note 22: the chosen account's balance today and after this expense, a preview only (exact
+  // minor units); the saved balance comes from the API. R-BAL-03 counts an expense from its date, and
+  // not before the account's opening date (that money is already in the opening balance).
+  protected readonly account = computed(() => {
+    const balances = this.balances();
+    const account = this.accounts().find((item) => item.id === this.accountId());
+    if (!balances || !account) {
+      return null;
+    }
+    const { balance, openingDate } = balances[account.id] ?? { balance: null, openingDate: null };
+    const date = this.dateText();
+    const amount = parseAmount(this.amountText()) ?? 0;
+    const counts = balance !== null && amount > 0 && !!date && !!openingDate && date >= openingDate;
+    const today = this.today();
+    return {
+      name: account.name,
+      now: balance === null ? null : this.money(balance),
+      after: counts ? this.money(balance! - amount) : null,
+      negative: counts && balance! - amount < 0,
+      note:
+        balance === null
+          ? null
+          : date && openingDate && date < openingDate
+            ? `Before ${account.name}'s opening balance on ${formatDate(openingDate)}: its balance stays the same.`
+            : counts && today && date! > today
+              ? `Counted from ${formatDate(date!)}.`
+              : null,
+    };
+  });
+
   private indicatorRequest = 0;
 
   ngOnInit(): void {
@@ -176,6 +215,12 @@ export class EntryFields implements OnInit {
     });
     controls.amount.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((amount) => this.amountText.set(amount));
     controls.note.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((note) => this.noteText.set(note));
+    this.accountId.set(controls.bankAccountId.value);
+    this.dateText.set(this.dateString(controls.date.value));
+    controls.bankAccountId.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((id) => this.accountId.set(id));
+    controls.date.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((date) => this.dateText.set(this.dateString(date)));
     // ENT-01: as soon as a sub-category is chosen, and again when the date moves to another month.
     merge(controls.subCategoryId.valueChanges, controls.date.valueChanges)
       .pipe(takeUntilDestroyed(this.destroyRef))
@@ -206,5 +251,13 @@ export class EntryFields implements OnInit {
 
   private toDate(date: string | null): Date | null {
     return date ? fromDateString(date) : null;
+  }
+
+  private dateString(date: Date | null): string | null {
+    return date instanceof Date && !isNaN(date.getTime()) ? toDateString(date) : null;
+  }
+
+  private money(minor: number): string {
+    return formatMoney(minor, this.currency());
   }
 }

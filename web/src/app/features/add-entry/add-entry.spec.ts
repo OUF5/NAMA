@@ -379,6 +379,58 @@ describe('Add transfer and income (PRD 5.4, TRF-01, INC-01)', () => {
     return parts.join(' ').replace(/\s+/g, ' ').trim();
   }
 
+  // Owner note 22: the expense panel shows the chosen account's balance, and after this expense.
+  // R-BAL-03 counts an expense from its date, never before the account's opening date.
+  it('shows the bank balance before and after an expense', async () => {
+    const fixture = await open('/');
+    const root = fixture.nativeElement as HTMLElement;
+    const form = (fixture.componentInstance as unknown as { form: { patchValue(value: object): void } }).form;
+    const account = () => words(root.querySelector('.side .account'));
+
+    expect(account()).toBe('Bank balance Al Rajhi SAR 4,100');
+
+    type(fixture, 'Amount (SAR)', '100');
+    await settle(fixture);
+    expect(account()).toBe('Bank balance Al Rajhi SAR 4,100 arrow_forward SAR 4,000');
+
+    form.patchValue({ date: new Date(2026, 10, 5) });
+    await settle(fixture);
+    expect(account()).toBe('Bank balance Al Rajhi SAR 4,100 arrow_forward SAR 4,000 Counted from 5 Nov 2026.');
+
+    form.patchValue({ date: new Date(2026, 9, 17) });
+    type(fixture, 'Amount (SAR)', '5000');
+    await settle(fixture);
+    expect(root.querySelector('.side .account .after')!.classList).toContain('danger');
+    expect(account()).toBe('Bank balance Al Rajhi SAR 4,100 arrow_forward SAR -900');
+
+    await (await select(fixture, 'Bank account')).clickOptions({ text: 'SNB' });
+    await settle(fixture);
+    expect(account()).toBe('Bank balance SNB SAR 23,900 arrow_forward SAR 18,900');
+  });
+
+  it('says when an expense is before the opening balance, or the account has none', async () => {
+    const fixture = await open('/');
+    const root = fixture.nativeElement as HTMLElement;
+    const form = (fixture.componentInstance as unknown as { form: { patchValue(value: object): void } }).form;
+    TestBed.inject(SummaryService).summary.set({
+      ...summary,
+      accounts: [
+        { id: 'rajhi', name: 'Al Rajhi', balance: 4100, openingDate: '2026-10-01' },
+        { id: 'snb', name: 'SNB', balance: null, openingDate: null },
+      ],
+    });
+    type(fixture, 'Amount (SAR)', '100');
+    form.patchValue({ date: new Date(2026, 8, 30) });
+    await settle(fixture);
+    expect(words(root.querySelector('.side .account'))).toBe(
+      "Bank balance Al Rajhi SAR 4,100 Before Al Rajhi's opening balance on 1 Oct 2026: its balance stays the same.",
+    );
+
+    await (await select(fixture, 'Bank account')).clickOptions({ text: 'SNB' });
+    await settle(fixture);
+    expect(words(root.querySelector('.side .account'))).toBe('Bank balance SNB No balance yet · Set it on Banks');
+  });
+
   it('moves money between two accounts, with both balances before and after', async () => {
     const fixture = await open();
     const root = fixture.nativeElement as HTMLElement;
@@ -490,6 +542,8 @@ describe('Add transfer and income (PRD 5.4, TRF-01, INC-01)', () => {
     const root = fixture.nativeElement as HTMLElement;
 
     expect(words(root.querySelector('h1'))).toBe('Add income');
+    // Owner note 21: the preview sits beside the fields on desktop, as the expense panel.
+    expect(root.querySelector('app-income-item-fields')!.classList).toContain('split');
     expect(labels(root)).toEqual(['Label', 'Amount (SAR)', 'Type', 'From', 'Until (optional)', 'Counts in', 'Bank account']);
     expect(await (await select(fixture, 'From')).getValueText()).toBe('Sep 2026 · 27 Sep to 26 Oct');
     expect(await (await select(fixture, 'Counts in')).getValueText()).toBe('Both');

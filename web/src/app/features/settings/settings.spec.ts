@@ -403,6 +403,8 @@ describe('Income item dialog (STG-03)', () => {
     const root = fixture.nativeElement as HTMLElement;
     const dialog = fixture.componentInstance as unknown as Dialog;
 
+    // The dialog keeps the preview under the fields (owner note 21 is Add's).
+    expect(root.querySelector('app-income-item-fields')!.classList).not.toContain('split');
     expect(labels(root)).toEqual(['Label', 'Amount (SAR)', 'Type', 'From', 'Until (optional)', 'Counts in', 'Bank account']);
     dialog.form.patchValue({ label: 'Gift', amount: '500', type: 'once', from: '2026-09' });
     fixture.detectChanges();

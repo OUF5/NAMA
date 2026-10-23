@@ -1,42 +1,28 @@
 <div class="fields" [formGroup]="form()">
-  <mat-form-field>
-    <mat-label>Label</mat-label>
-    <input matInput formControlName="label" [maxlength]="nameMax" autocomplete="off" />
-    <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
-  </mat-form-field>
-  <div class="row">
+  <div class="inputs">
     <mat-form-field>
-      <mat-label>Amount ({{ currency() }})</mat-label>
-      <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
-      <mat-error>Enter more than 0, up to 10,000,000, with at most 2 decimals.</mat-error>
+      <mat-label>Label</mat-label>
+      <input matInput formControlName="label" [maxlength]="nameMax" autocomplete="off" />
+      <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
     </mat-form-field>
-    <mat-form-field>
-      <mat-label>Type</mat-label>
-      <mat-select formControlName="type">
-        <mat-option value="monthly">Monthly</mat-option>
-        <mat-option value="once">Once</mat-option>
-      </mat-select>
-    </mat-form-field>
-  </div>
-  <div class="row">
-    <mat-form-field>
-      <mat-label>{{ type() === 'once' ? 'Month' : 'From' }}</mat-label>
-      <mat-select formControlName="from">
-        @for (group of context().groups; track group.label) {
-          <mat-optgroup [label]="group.label">
-            @for (month of group.months; track month.key) {
-              <mat-option [value]="month.key">{{ month.text }}</mat-option>
-            }
-          </mat-optgroup>
-        }
-      </mat-select>
-      <mat-error>Pick a month.</mat-error>
-    </mat-form-field>
-    @if (type() === 'monthly') {
+    <div class="row">
       <mat-form-field>
-        <mat-label>Until (optional)</mat-label>
-        <mat-select formControlName="to">
-          <mat-option value="">No end</mat-option>
+        <mat-label>Amount ({{ currency() }})</mat-label>
+        <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
+        <mat-error>Enter more than 0, up to 10,000,000, with at most 2 decimals.</mat-error>
+      </mat-form-field>
+      <mat-form-field>
+        <mat-label>Type</mat-label>
+        <mat-select formControlName="type">
+          <mat-option value="monthly">Monthly</mat-option>
+          <mat-option value="once">Once</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+    <div class="row">
+      <mat-form-field>
+        <mat-label>{{ type() === 'once' ? 'Month' : 'From' }}</mat-label>
+        <mat-select formControlName="from">
           @for (group of context().groups; track group.label) {
             <mat-optgroup [label]="group.label">
               @for (month of group.months; track month.key) {
@@ -45,37 +31,53 @@
             </mat-optgroup>
           }
         </mat-select>
+        <mat-error>Pick a month.</mat-error>
       </mat-form-field>
-    }
-  </div>
-  <!-- R-INC-04 (owner note 17). -->
-  <mat-form-field>
-    <mat-label>Counts in</mat-label>
-    <mat-select formControlName="counts">
-      @for (option of countsOptions; track option.value) {
-        <mat-option [value]="option.value">{{ option.label }}</mat-option>
+      @if (type() === 'monthly') {
+        <mat-form-field>
+          <mat-label>Until (optional)</mat-label>
+          <mat-select formControlName="to">
+            <mat-option value="">No end</mat-option>
+            @for (group of context().groups; track group.label) {
+              <mat-optgroup [label]="group.label">
+                @for (month of group.months; track month.key) {
+                  <mat-option [value]="month.key">{{ month.text }}</mat-option>
+                }
+              </mat-optgroup>
+            }
+          </mat-select>
+        </mat-form-field>
       }
-    </mat-select>
-    <mat-hint>{{ hint() }}</mat-hint>
-  </mat-form-field>
-  <!-- R-INC-05: Actual or Both goes into one account on payday; Planned reaches no account. -->
-  @if (counts() !== 'planned') {
+    </div>
+    <!-- R-INC-04 (owner note 17). -->
     <mat-form-field>
-      <mat-label>Bank account</mat-label>
-      <mat-select formControlName="bankAccountId">
-        @if (offersSplit()) {
-          <mat-option value="">By the income split</mat-option>
-        }
-        @for (account of accountOptions(); track account.id) {
-          <mat-option [value]="account.id">{{ account.name }}@if (account.archived) { (archived)}</mat-option>
+      <mat-label>Counts in</mat-label>
+      <mat-select formControlName="counts">
+        @for (option of countsOptions; track option.value) {
+          <mat-option [value]="option.value">{{ option.label }}</mat-option>
         }
       </mat-select>
-      <mat-error>Choose the account the money goes into.</mat-error>
+      <mat-hint>{{ hint() }}</mat-hint>
     </mat-form-field>
-  }
-  @if (form().hasError('untilBeforeFrom') && form().touched) {
-    <p class="error" role="alert">Until is the same month as From or later.</p>
-  }
+    <!-- R-INC-05: Actual or Both goes into one account on payday; Planned reaches no account. -->
+    @if (counts() !== 'planned') {
+      <mat-form-field>
+        <mat-label>Bank account</mat-label>
+        <mat-select formControlName="bankAccountId">
+          @if (offersSplit()) {
+            <mat-option value="">By the income split</mat-option>
+          }
+          @for (account of accountOptions(); track account.id) {
+            <mat-option [value]="account.id">{{ account.name }}@if (account.archived) { (archived)}</mat-option>
+          }
+        </mat-select>
+        <mat-error>Choose the account the money goes into.</mat-error>
+      </mat-form-field>
+    }
+    @if (form().hasError('untilBeforeFrom') && form().touched) {
+      <p class="error" role="alert">Until is the same month as From or later.</p>
+    }
+  </div>
 
   <!-- Owner note 17: what the item changes, as the transfer panel does. -->
   @if (bankPreview() || planPreview()) {
@@ -126,6 +128,13 @@
           <p class="caption">{{ plan.note }}</p>
         }
       }
+    </div>
+  } @else if (split()) {
+    <!-- Add: a placeholder beside the fields until there is something to show, as the expense panel. -->
+    <div class="preview placeholder">
+      <mat-icon aria-hidden="true">payments</mat-icon>
+      <p class="placeholder-title">What this income changes</p>
+      <p class="caption">Choose its months and account to see your balance and Plan's income before and after.</p>
     </div>
   }
 </div>

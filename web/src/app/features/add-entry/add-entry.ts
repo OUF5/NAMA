@@ -112,6 +112,20 @@ export class AddEntry {
     ),
   );
 
+  // Owner note 22: the expense panel's balance line, with each account's opening date (R-BAL-03 counts
+  // an expense from it). Null until the summary is loaded.
+  protected readonly accountBalances = computed(() => {
+    const summary = this.summaryService.summary();
+    return summary
+      ? Object.fromEntries(
+          summary.accounts.map((account) => [
+            account.id,
+            { balance: account.balance === null ? null : toMinor(account.balance), openingDate: account.openingDate },
+          ]),
+        )
+      : null;
+  });
+
   constructor() {
     // The "Saved" line stays until the next entry starts.
     merge(

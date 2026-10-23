@@ -1,9 +1,15 @@
 // The additional income fields (R-INC-03, R-INC-04) of the Settings dialog and of Add: docs/DESIGN.md
 // "Dialogs", tokens only.
-.fields {
+.fields,
+.inputs {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+// A hint (Counts in's) needs room before the next field's label (owner note 21).
+mat-form-field:has(mat-hint) {
+  margin-bottom: 8px;
 }
 
 mat-form-field {
@@ -87,6 +93,50 @@ mat-form-field {
 
   &.danger {
     color: var(--danger);
+  }
+}
+
+// Add, until there is something to show (owner note 21), as the expense panel's placeholder.
+.placeholder {
+  align-items: center;
+  padding: 16px;
+  text-align: center;
+
+  mat-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 32px;
+    color: var(--text-muted);
+  }
+
+  p {
+    max-width: 280px;
+  }
+}
+
+.placeholder-title {
+  font-weight: 600;
+}
+
+// Add on desktop (owner note 21): the preview beside the fields, behind a --divider line, as the
+// expense panel (entry-fields.scss). The Settings dialog keeps it under the fields.
+@media (min-width: 1100px) {
+  :host(.split) {
+    .fields {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 24px;
+    }
+
+    .preview {
+      justify-content: center;
+      margin-top: 0;
+      padding: 0 0 0 24px;
+      border: 0;
+      border-left: 1px solid var(--divider);
+      border-radius: 0;
+      background: none;
+    }
   }
 }
 
