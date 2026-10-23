@@ -2,58 +2,7 @@
   <h2 mat-dialog-title>{{ data.item ? 'Edit income' : 'Add income' }}</h2>
   <form [formGroup]="form" (ngSubmit)="save()" novalidate>
     <mat-dialog-content>
-      <mat-form-field>
-        <mat-label>Label</mat-label>
-        <input matInput formControlName="label" [maxlength]="nameMax" autocomplete="off" />
-        <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
-      </mat-form-field>
-      <div class="row">
-        <mat-form-field>
-          <mat-label>Amount ({{ data.currency }})</mat-label>
-          <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
-          <mat-error>Enter more than 0, up to 10,000,000, with at most 2 decimals.</mat-error>
-        </mat-form-field>
-        <mat-form-field>
-          <mat-label>Type</mat-label>
-          <mat-select formControlName="type">
-            <mat-option value="monthly">Monthly</mat-option>
-            <mat-option value="once">Once</mat-option>
-          </mat-select>
-        </mat-form-field>
-      </div>
-      <div class="row">
-        <mat-form-field>
-          <mat-label>{{ type() === 'once' ? 'Month' : 'From' }}</mat-label>
-          <mat-select formControlName="from">
-            @for (group of data.groups; track group.label) {
-              <mat-optgroup [label]="group.label">
-                @for (month of group.months; track month.key) {
-                  <mat-option [value]="month.key">{{ month.text }}</mat-option>
-                }
-              </mat-optgroup>
-            }
-          </mat-select>
-          <mat-error>Pick a month.</mat-error>
-        </mat-form-field>
-        @if (type() === 'monthly') {
-          <mat-form-field>
-            <mat-label>Until (optional)</mat-label>
-            <mat-select formControlName="to">
-              <mat-option value="">No end</mat-option>
-              @for (group of data.groups; track group.label) {
-                <mat-optgroup [label]="group.label">
-                  @for (month of group.months; track month.key) {
-                    <mat-option [value]="month.key">{{ month.text }}</mat-option>
-                  }
-                </mat-optgroup>
-              }
-            </mat-select>
-          </mat-form-field>
-        }
-      </div>
-      @if (form.hasError('untilBeforeFrom') && form.touched) {
-        <p class="error" role="alert">Until is the same month as From or later.</p>
-      }
+      <app-income-item-fields [form]="form" [context]="data.context" [currency]="data.currency" />
       @if (error()) {
         <p class="error" role="alert">{{ error() }}</p>
       }

@@ -24,7 +24,7 @@ import { catchError, debounceTime, firstValueFrom, map, merge, of, startWith, sw
 import { AuthService } from '../../core/auth';
 import { Me, MeService } from '../../core/me';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
-import { incomeMonths, untilNotBeforeFrom } from '../../shared/income-months';
+import { INCOME_COUNTS, IncomeCounts, countsHint, countsLabel, incomeMonths, untilNotBeforeFrom } from '../../shared/income-months';
 import {
   CURRENCIES,
   amountValidator,
@@ -201,20 +201,22 @@ export class Setup {
   private readonly incomeItems = computed(() => (this.incomeValue().additional ?? []) as IncomeItemValue[]);
 
   // R-INC-01 for the current month, as Settings shows it (STG-03): the salary plus every item
-  // active in that month. A preview only; the saved totals come from IncomeCalculator.
-  protected readonly currentIncomeMinor = computed(() => {
-    const key = this.preview()?.currentPeriod.key;
-    return this.incomeItems()
-      .filter((item) => key && this.isActiveIn(item, key))
-      .reduce((sum, item) => sum + (parseAmount(item.amount) ?? 0), parseAmount(this.incomeValue().salary, true) ?? 0);
-  });
+  // active in that month that counts in the actuals; and Plan's, with the items that count in the
+  // plan (R-INC-04). A preview only; the saved totals come from IncomeCalculator.
+  protected readonly currentIncomeMinor = computed(() => this.currentIncome((counts) => counts !== 'planned'));
+  protected readonly currentPlannedMinor = computed(() => this.currentIncome((counts) => counts !== 'actual'));
 
-  // Step 6: "Bonus · SAR 500.25 · Mar 2026".
+  // R-INC-04 (owner note 17): the same choice as Settings.
+  protected readonly countsOptions = INCOME_COUNTS;
+
+  // Step 6: "Bonus · SAR 500.25 · Mar 2026 · Planned".
   protected readonly incomeLines = computed(() =>
     this.incomeItems().map((item) => {
       const amount = parseAmount(item.amount);
       const months = item.from ? incomeMonths({ fromPeriodKey: item.from, toPeriodKey: item.type === 'once' ? item.from : item.to || null }) : '';
-      return [item.label.trim(), amount === null ? '' : this.money(amount), months].filter(Boolean).join(' · ');
+      return [item.label.trim(), amount === null ? '' : this.money(amount), months, countsLabel(item.counts ?? 'both')]
+        .filter(Boolean)
+        .join(' · ');
     }),
   );
 
@@ -270,11 +272,15 @@ export class Setup {
   }
 
   protected addIncomeItem(): void {
-    this.additional.push(this.incomeItem('', '', 'monthly', this.defaultFrom('monthly'), ''));
+    this.additional.push(this.incomeItem('', '', 'monthly', this.defaultFrom('monthly'), '', 'both'));
   }
 
   protected itemType(index: number): IncomeType | undefined {
     return this.incomeItems()[index]?.type;
+  }
+
+  protected countsHint(index: number): string {
+    return countsHint(this.incomeItems()[index]?.counts ?? 'both');
   }
 
   protected removeIncomeItem(index: number): void {
@@ -377,6 +383,7 @@ export class Setup {
         type: item.type,
         fromPeriodKey: item.from,
         toPeriodKey: item.type === 'monthly' && item.to ? item.to : null,
+        counts: item.counts ?? 'both',
       })),
       bankAccounts: (this.bankAccounts.getRawValue() as AccountValue[]).map((account) => ({
         name: account.name,
@@ -415,8 +422,9 @@ export class Setup {
     return true;
   }
 
-  // R-INC-03: Once is one month; Monthly runs from a month, optionally until a month.
-  private incomeItem(label: string, amount: string, type: IncomeType, from: string, to: string): FormGroup {
+  // R-INC-03: Once is one month; Monthly runs from a month, optionally until a month. R-INC-04: what
+  // it counts in, Both by default.
+  private incomeItem(label: string, amount: string, type: IncomeType, from: string, to: string, counts: IncomeCounts): FormGroup {
     const group = this.fb.group(
       {
         label: [label, nameValidator()],
@@ -424,6 +432,7 @@ export class Setup {
         type: [type, Validators.required],
         from: [from, Validators.required],
         to: [to],
+        counts: [counts],
       },
       { validators: untilNotBeforeFrom },
     );
@@ -444,6 +453,13 @@ export class Setup {
       return '';
     }
     return type === 'once' ? preview.currentPeriod.key : preview.fiscalYear.periods[0].key;
+  }
+
+  private currentIncome(counted: (counts: IncomeCounts) => boolean): number {
+    const key = this.preview()?.currentPeriod.key;
+    return this.incomeItems()
+      .filter((item) => key && counted(item.counts ?? 'both') && this.isActiveIn(item, key))
+      .reduce((sum, item) => sum + (parseAmount(item.amount) ?? 0), parseAmount(this.incomeValue().salary, true) ?? 0);
   }
 
   private isActiveIn(item: IncomeItemValue, key: string): boolean {
@@ -482,7 +498,14 @@ export class Setup {
     this.income.controls.salary.setValue(draft.salary ?? '');
     for (const item of draft.additional ?? []) {
       this.additional.push(
-        this.incomeItem(item.label ?? '', item.amount ?? '', item.type === 'once' ? 'once' : 'monthly', item.from ?? '', item.to ?? ''),
+        this.incomeItem(
+          item.label ?? '',
+          item.amount ?? '',
+          item.type === 'once' ? 'once' : 'monthly',
+          item.from ?? '',
+          item.to ?? '',
+          item.counts === 'planned' || item.counts === 'actual' ? item.counts : 'both',
+        ),
       );
     }
     // An older draft holds names only: the first gets all income, as when it is added.

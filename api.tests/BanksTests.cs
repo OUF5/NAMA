@@ -106,6 +106,25 @@ public class BanksTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(28_000m + 17_000m, Dec(banks["total"]));
     }
 
+    // R-BAL-03, R-INC-05 (owner note 17): a Both item of 600 into Savings in Feb 2026 arrives on 27 Feb,
+    // that month's payday, with the salary; the split's amounts stay the salary's.
+    [Fact]
+    public async Task Income_into_one_account_arrives_there_on_payday()
+    {
+        var sub = await SetUpExample();
+        await factory.Store.AddIncomeAsync(sub, new IncomeItem("refund", IncomeKind.Additional, "Refund", 60_000, "2026-02", "2026-02", BankAccountId: "savings"));
+        await factory.Store.AddIncomeAsync(sub, new IncomeItem("bonus", IncomeKind.Additional, "Bonus", 100_000, "2026-02", "2026-02", IncomeCounts.Planned));
+
+        var january = await GetOk("/api/banks", sub);
+        Assert.Equal(28_000m, Dec(january["total"]));
+
+        var banks = await GetOk("/api/banks", sub, new DateTimeOffset(2026, 2, 27, 9, 0, 0, TimeSpan.Zero));
+        Assert.Equal(23_900m + 3_400m + 600m, Dec(Account(banks, "savings")["balance"]!["balance"]));
+        Assert.Equal(4_100m + 13_600m, Dec(Account(banks, "main")["balance"]!["balance"]));
+        Assert.Equal((13_600m, 3_400m), (Dec(Account(banks, "main")["monthIncome"]), Dec(Account(banks, "savings")["monthIncome"])));
+        Assert.Equal(17_000m, Dec(banks["income"]!["2026-02"]));
+    }
+
     // The plan layer and the cash layer agree: on the last day of Jan 2026, the total balance is the
     // opening balances plus Unassigned (17,000 - 15,000 planned = 2,000) plus Remaining (15,000 - 14,000
     // spent = 1,000): 25,000 + 2,000 + 1,000 = 28,000. Transfers move money and change neither side.

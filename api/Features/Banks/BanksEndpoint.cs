@@ -16,7 +16,7 @@ public sealed record BalanceData(
     IReadOnlyList<BankAccount> Accounts,
     IReadOnlyList<IncomeSplit> Splits,
     IReadOnlyList<Transfer> Transfers,
-    IReadOnlyDictionary<string, long> Income,
+    IncomeTotals Income,
     IReadOnlyList<Entry> Entries,
     IReadOnlyDictionary<string, AccountBalance> Balances)
 {
@@ -48,12 +48,13 @@ public sealed record BalanceData(
         account.Id,
         account.Opening!,
         FiscalYears.SelectMany(fiscalYear => fiscalYear.Periods),
-        Income,
+        Income.Split,
         Splits,
         Entries.Where(entry => entry.BankAccountId == account.Id).Select(entry => new DatedAmount(entry.Date, entry.AmountMinor)),
         Transfers.Where(transfer => transfer.ToBankAccountId == account.Id).Select(transfer => new DatedAmount(transfer.Date, transfer.AmountMinor)),
         Transfers.Where(transfer => transfer.FromBankAccountId == account.Id).Select(transfer => new DatedAmount(transfer.Date, transfer.AmountMinor)),
-        date);
+        date,
+        Income.Direct.GetValueOrDefault(account.Id));
 
     // Owner note 9: the active accounts' total at the end of a past day. Null until the balance is
     // complete, and before an active account's opening date (nothing is known then).
@@ -94,7 +95,8 @@ public static class BanksEndpoint
 
     // Accounts are sorted by name, archived ones included. Total is null when no active account has a
     // balance. Split is the one of the shown month (today's, else the latest stored month); the
-    // history is newest first. Income (month key → total income) gives the split's amounts.
+    // history is newest first. Income (month key → what the split shares out: the actual income
+    // without the items that go into one account, R-BAL-02, R-INC-05) gives the split's amounts.
     public record BanksResponse(
         DateOnly Today,
         string? CurrentPeriodKey,
@@ -151,7 +153,7 @@ public static class BanksEndpoint
         var splits = await store.GetIncomeSplitsAsync(uid);
         var transfers = await store.GetTransfersAsync(uid);
         var periods = fiscalYears.SelectMany(fiscalYear => fiscalYear.Periods).ToList();
-        var income = IncomeCalculator.TotalsForPeriods(await store.GetIncomesAsync(uid), periods);
+        var income = IncomeCalculator.Totals(await store.GetIncomesAsync(uid), periods);
 
         // Only what a balance can count: entries from the earliest opening date on.
         var dates = accounts.Where(account => account.Opening is not null).Select(account => account.Opening!.Date).ToList();
@@ -184,7 +186,7 @@ public static class BanksEndpoint
     {
         var split = data.ShownSplit;
         var monthIncome = split is not null && data.ShownPeriodKey is { } key
-            ? BalanceCalculator.Distribute(data.Income.GetValueOrDefault(key), split.Shares)
+            ? BalanceCalculator.Distribute(data.Income.Split.GetValueOrDefault(key), split.Shares)
             : null;
         return new BanksResponse(
             data.Today,
@@ -206,7 +208,7 @@ public static class BanksEndpoint
             split is null ? null : SplitDto.From(split),
             data.Splits.OrderByDescending(item => item.FromPeriodKey, StringComparer.Ordinal).Select(SplitDto.From).ToList(),
             data.FiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
-            data.Income.ToDictionary(pair => pair.Key, pair => Money.FromMinor(pair.Value)),
+            data.Income.Split.ToDictionary(pair => pair.Key, pair => Money.FromMinor(pair.Value)),
             data.Transfers.Select(TransfersEndpoint.TransferDto.From).ToList());
     }
 

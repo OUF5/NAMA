@@ -1,3 +1,5 @@
+import { IncomeCounts } from '../../shared/income-months';
+
 // SET-03: typed wizard values survive a page refresh. One draft per Google account, removed on
 // Finish and on sign-out. Storage can be missing or blocked, so every call is guarded.
 export interface SetupDraft {
@@ -8,7 +10,8 @@ export interface SetupDraft {
   paydayDay: number | null;
   salary: string;
   // from and to are month keys of the first FY; to is '' for Once and for no end (R-INC-03).
-  additional: { label: string; amount: string; type: 'once' | 'monthly'; from: string; to: string }[];
+  // counts is R-INC-04 (owner note 17); drafts saved before it have none (both).
+  additional: { label: string; amount: string; type: 'once' | 'monthly'; from: string; to: string; counts?: IncomeCounts }[];
   // R-BAL-01, R-BAL-02: the balance today and the share of income, as typed. Drafts saved before
   // 20 Oct 2026 hold names only.
   bankAccounts: { name: string; balance: string; share: string }[];

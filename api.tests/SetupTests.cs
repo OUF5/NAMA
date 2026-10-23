@@ -122,6 +122,36 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
             factory.Store.Saved(sub)!.Incomes.Skip(1).Select(i => (i.Label, i.FromPeriodKey, i.ToPeriodKey)));
     }
 
+    // R-INC-04 (owner note 17): the wizard offers what Settings offers; missing is both.
+    [Fact]
+    public async Task Additional_income_counts_in_what_was_picked()
+    {
+        var body = ValidRequest();
+        body["additionalIncome"] = new JsonArray(
+            new JsonObject { ["label"] = "Bonus", ["amount"] = 5000, ["type"] = "once", ["fromPeriodKey"] = "2026-12", ["counts"] = "planned" },
+            new JsonObject { ["label"] = "Gift", ["amount"] = 500, ["type"] = "once", ["fromPeriodKey"] = "2026-09", ["counts"] = "actual" },
+            new JsonObject { ["label"] = "Rent", ["amount"] = 2000, ["type"] = "monthly", ["fromPeriodKey"] = "2026-01", ["counts"] = "both" },
+            new JsonObject { ["label"] = "Old", ["amount"] = 100, ["type"] = "monthly", ["fromPeriodKey"] = "2026-01" });
+        var sub = NewSub();
+
+        Assert.Equal(HttpStatusCode.Created, (await PostSetup(sub, body)).StatusCode);
+        Assert.Equal(
+            [IncomeCounts.Planned, IncomeCounts.Actual, IncomeCounts.Both, IncomeCounts.Both],
+            factory.Store.Saved(sub)!.Incomes.Skip(1).Select(i => i.Counts));
+    }
+
+    [Fact]
+    public async Task Additional_income_with_unknown_counts_returns_400()
+    {
+        var body = ValidRequest();
+        body["additionalIncome"] = new JsonArray(
+            new JsonObject { ["label"] = "Bonus", ["amount"] = 5000, ["type"] = "once", ["fromPeriodKey"] = "2026-12", ["counts"] = "later" });
+        var response = await PostSetup(NewSub(), body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("AdditionalIncome[0].Counts", (await response.Content.ReadAsStringAsync()));
+    }
+
     [Fact]
     public async Task Salary_of_zero_is_allowed()
     {

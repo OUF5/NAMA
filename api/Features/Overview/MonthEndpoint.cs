@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Api.Domain;
 using Api.Features.BankAccounts;
 using Api.Features.Entries;
+using Api.Features.Income;
 using Api.Features.Profile;
 using Api.Infrastructure;
 
@@ -20,6 +21,8 @@ public static class MonthEndpoint
     public record CategoryDto(string CategoryId, decimal Spent, decimal LastSpent);
 
     // LastMonth is null for the first stored month (its categories' LastSpent are then 0).
+    // AdditionalIncome is the month's additional income items, whatever they count in (R-INC-04, owner
+    // note 17), biggest first; empty with a filter, because income belongs to the whole budget.
     public record MonthResponse(
         MeEndpoint.PeriodDto Period,
         MeEndpoint.PeriodDto? LastMonth,
@@ -30,7 +33,8 @@ public static class MonthEndpoint
         IReadOnlyList<CategoryDto> Categories,
         IReadOnlyList<EntriesEndpoint.EntryDto> Latest,
         IReadOnlyList<EntriesEndpoint.EntryDto> Biggest,
-        IReadOnlyList<BankAccountsEndpoint.BankAccountDto> BankAccounts);
+        IReadOnlyList<BankAccountsEndpoint.BankAccountDto> BankAccounts,
+        IReadOnlyList<IncomeEndpoint.IncomeItemDto> AdditionalIncome);
 
     public static IEndpointRouteBuilder MapMonth(this IEndpointRouteBuilder api)
     {
@@ -71,7 +75,15 @@ public static class MonthEndpoint
                     .ToList(),
                 breakdown.Latest.Select(EntriesEndpoint.EntryDto.From).ToList(),
                 breakdown.Biggest.Select(EntriesEndpoint.EntryDto.From).ToList(),
-                BankAccountsEndpoint.Sorted(await store.GetBankAccountsAsync(uid))));
+                BankAccountsEndpoint.Sorted(await store.GetBankAccountsAsync(uid)),
+                string.IsNullOrEmpty(categoryId) && string.IsNullOrEmpty(subCategoryId)
+                    ? (await store.GetIncomesAsync(uid))
+                        .Where(item => item.Kind == IncomeKind.Additional && IncomeCalculator.IsActive(item, periodKey))
+                        .OrderByDescending(item => item.AmountMinor)
+                        .ThenBy(item => item.Label, StringComparer.OrdinalIgnoreCase)
+                        .Select(IncomeEndpoint.IncomeItemDto.From)
+                        .ToList()
+                    : []));
         });
         return api;
     }

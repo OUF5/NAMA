@@ -1,6 +1,7 @@
-<!-- TRF-01: one Add page for an expense (the default) or a transfer between your accounts. -->
+<!-- TRF-01, INC-01: one Add page for an expense (the default), a transfer between your accounts or
+     additional income. -->
 <div class="head">
-  <h1>{{ mode() === 'transfer' ? 'Add transfer' : 'Add expense' }}</h1>
+  <h1>{{ title() }}</h1>
   <mat-button-toggle-group
     class="mode"
     aria-label="What to add"
@@ -10,14 +11,39 @@
   >
     <mat-button-toggle value="expense">Expense</mat-button-toggle>
     <mat-button-toggle value="transfer">Transfer</mat-button-toggle>
+    <mat-button-toggle value="income">Income</mat-button-toggle>
   </mat-button-toggle-group>
 </div>
-
 
 @if (loadError()) {
   <p class="error" role="alert">{{ loadError() }}</p>
 } @else if (loaded()) {
-  @if (!hasCategories()) {
+  @if (mode() === 'income') {
+    <!-- INC-01: the same fields as Settings' "Add income" (owner's request); no category needed. -->
+    @if (incomeLoadError()) {
+      <p class="error" role="alert">{{ incomeLoadError() }}</p>
+    } @else if (incomeContext(); as context) {
+      <form class="card income" [formGroup]="incomeForm" (ngSubmit)="saveIncome()" novalidate>
+        <app-income-item-fields [form]="incomeForm" [context]="context" [currency]="currency()" />
+
+        @if (saveError()) {
+          <p class="error" role="alert">{{ saveError() }}</p>
+        }
+
+        <div class="actions">
+          <p class="saved" role="status" [class.empty]="!saved()">
+            @if (saved()) {
+              <mat-icon aria-hidden="true">check_circle</mat-icon>
+              <span>{{ saved() }}</span>
+            }
+          </p>
+          <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+        </div>
+      </form>
+    } @else {
+      <p class="caption">Loading…</p>
+    }
+  } @else if (!hasCategories()) {
     <!-- UX-03 -->
     <section class="card empty">
       <h2>Add a sub-category first</h2>

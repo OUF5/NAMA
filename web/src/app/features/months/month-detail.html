@@ -142,6 +142,26 @@
       }
     </section>
 
+    <!-- Owner note 17: the month's additional income by name, with what each counts in. -->
+    @if (extraIncome().length > 0) {
+      <section class="card" aria-labelledby="income-title">
+        <div class="card-head">
+          <h2 id="income-title">Additional income</h2>
+        </div>
+        <ul class="rows">
+          @for (item of extraIncome(); track item.id) {
+            <li class="row">
+              <span class="name">
+                {{ item.label }}
+                <span class="caption block">{{ item.caption }}</span>
+              </span>
+              <span class="money">{{ item.amount }}</span>
+            </li>
+          }
+        </ul>
+      </section>
+    }
+
     <!-- The biggest entries. -->
     <section class="card" aria-labelledby="biggest-title">
       <div class="card-head">

@@ -12,11 +12,13 @@ import { Category, FiscalYear } from '../plan/plan-api';
 // R-STA-01, worked out by the API with today in the profile time zone.
 export type MonthStatus = 'closed' | 'inProgress' | 'yetToCome';
 
-// income is null when Tracker is filtered to a category: income belongs to the whole budget.
+// income is the actual income and plannedIncome Plan's (R-INC-01, owner note 17); both null when
+// Tracker is filtered to a category: income belongs to the whole budget.
 export interface MonthOverview {
   period: PeriodInfo;
   status: MonthStatus;
   income: number | null;
+  plannedIncome: number | null;
   carriedIn: number;
   planned: number;
   spent: number;
@@ -51,6 +53,7 @@ export interface CategoryRow {
 // null with a filter.
 export interface Totals {
   income: number | null;
+  plannedIncome: number | null;
   planned: number;
   spent: number;
   remaining: number;

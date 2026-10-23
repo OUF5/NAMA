@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { PeriodInfo } from '../../shared/month-label';
 import { BankAccount, Entry } from '../add-entry/entry-api';
+import { IncomeItem } from '../settings/settings-api';
 import { OverviewFilter } from './overview-api';
 
 // Owner note 9: GET /api/fiscal-years/{fyId}/months/{periodKey}, Tracker's one month in detail.
@@ -26,7 +27,9 @@ export interface CategoryChange {
 
 // days has every day of the month; accounts and categories are largest first; latest (newest first)
 // and biggest hold at most 5 entries; count and total cover the whole month. lastMonth is null for
-// the first stored month. bankAccounts feed the edit dialog.
+// the first stored month. bankAccounts feed the edit dialog. additionalIncome is the month's
+// additional income, whatever it counts in (R-INC-04, owner note 17), biggest first; empty with a
+// filter.
 export interface MonthDetail {
   period: PeriodInfo;
   lastMonth: PeriodInfo | null;
@@ -38,6 +41,7 @@ export interface MonthDetail {
   latest: Entry[];
   biggest: Entry[];
   bankAccounts: BankAccount[];
+  additionalIncome: IncomeItem[];
 }
 
 @Injectable({ providedIn: 'root' })

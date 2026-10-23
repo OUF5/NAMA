@@ -81,7 +81,8 @@ public static class PlansEndpoint
     private static async Task<PlansResponse> LoadAsync(string uid, IReadOnlyList<FiscalYear> fiscalYears, FiscalYear fiscalYear, IUserStore store)
     {
         var plans = await store.GetPlansAsync(uid, fiscalYear.Id);
-        var income = IncomeCalculator.TotalsForPeriods(await store.GetIncomesAsync(uid), fiscalYear.Periods);
+        // R-INC-01: Plan uses the planned income (owner note 17).
+        var income = IncomeCalculator.PlannedTotals(await store.GetIncomesAsync(uid), fiscalYear.Periods);
 
         var categoryIds = plans.Select(plan => plan.CategoryId).Distinct().ToList();
         var categoryTotals = categoryIds.ToDictionary(

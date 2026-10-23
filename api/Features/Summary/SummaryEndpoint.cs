@@ -11,12 +11,14 @@ namespace Api.Features.Summary;
 // serves both the balances and the month (BanksEndpoint.LoadAsync).
 public static class SummaryEndpoint
 {
-    // Balance is null when the account has no opening balance yet (R-BAL-01).
-    public record AccountDto(string Id, string Name, decimal? Balance);
+    // Balance and OpeningDate are null when the account has no opening balance yet (R-BAL-01). The
+    // income preview (INC-01) counts the paydays from OpeningDate on, as R-BAL-03 does.
+    public record AccountDto(string Id, string Name, decimal? Balance, DateOnly? OpeningDate);
 
     // The month in progress, for the whole budget. Day is today's day of the month (1 on payday), Days
-    // the month's length, and DaysLeft counts today (DSH-01's marker). Remaining carries (R-PLN-05)
-    // and Unassigned carries (R-PLN-03), from the FY's first month.
+    // the month's length, and DaysLeft counts today (DSH-01's marker). Income is the actual income
+    // (R-INC-01). Remaining carries (R-PLN-05) and Unassigned carries (R-PLN-03, planned income), from
+    // the FY's first month.
     public record MonthDto(
         MeEndpoint.PeriodDto Period,
         int Day,
@@ -29,7 +31,7 @@ public static class SummaryEndpoint
         decimal Remaining,
         decimal Unassigned);
 
-    // A month yet to come with its income minus its planned (R-PLN-07).
+    // A month yet to come with its planned income minus its planned (R-PLN-07).
     public record FutureMonthDto(MeEndpoint.PeriodDto Period, decimal Unallocated);
 
     // Dashboard's Projection and Planned saving vs projection (DSH-05, DSH-06, R-PLN-07, R-PLN-08) for
@@ -70,8 +72,8 @@ public static class SummaryEndpoint
         var toToday = PlanCalculator.Carry(periods.Select(period => (
             PlanCalculator.MonthPlanned(plans, period.Key),
             entries.Where(entry => entry.PeriodKey == period.Key).Sum(entry => entry.AmountMinor))), carryStart);
-        var wholeYear = PlanCalculator.RunningUnassigned(found.FiscalYear.Periods, data.Income, plans, carryStart);
-        return (toToday[^1], wholeYear[periods.Count - 1], PlanCalculator.Project(wholeYear, toToday, carryStart, balance));
+        var wholeYear = PlanCalculator.RunningUnassigned(found.FiscalYear.Periods, data.Income.Planned, plans, carryStart);
+        return (toToday[^1], wholeYear[periods.Count - 1], PlanCalculator.Project(wholeYear, toToday, carryStart, balance, data.Income.Actual));
     }
 
     public static IEndpointRouteBuilder MapSummary(this IEndpointRouteBuilder api)
@@ -98,7 +100,7 @@ public static class SummaryEndpoint
                     data.Today.DayNumber - found.Period.StartDate.DayNumber + 1,
                     found.Period.EndDate.DayNumber - found.Period.StartDate.DayNumber + 1,
                     found.Period.EndDate.DayNumber - data.Today.DayNumber + 1,
-                    Money.FromMinor(unassigned.Income),
+                    Money.FromMinor(data.Income.Actual.GetValueOrDefault(found.Period.Key)),
                     Money.FromMinor(remaining.CarriedIn),
                     Money.FromMinor(remaining.Planned),
                     Money.FromMinor(remaining.Spent),
@@ -134,7 +136,8 @@ public static class SummaryEndpoint
                     .Select(account => new AccountDto(
                         account.Id,
                         account.Name,
-                        data.Balances.TryGetValue(account.Id, out var balance) ? Money.FromMinor(balance.Balance) : null))
+                        data.Balances.TryGetValue(account.Id, out var balance) ? Money.FromMinor(balance.Balance) : null,
+                        account.Opening?.Date))
                     .ToList(),
                 month,
                 projection));

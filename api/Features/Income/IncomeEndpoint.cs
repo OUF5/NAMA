@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Api.Domain;
+using Api.Features.BankAccounts;
 using Api.Features.FiscalYears;
 using Api.Infrastructure;
 
@@ -11,7 +12,8 @@ namespace Api.Features.Income;
 public static class IncomeEndpoint
 {
     // Kind is "salary" or "additional". Type is "once" (ToPeriodKey equals FromPeriodKey) or
-    // "monthly" (ToPeriodKey empty = open ended), R-INC-03.
+    // "monthly" (ToPeriodKey empty = open ended), R-INC-03. Counts is "planned", "actual" or "both"
+    // (R-INC-04). BankAccountId is the account it goes into, null through the split (R-INC-05).
     public record IncomeItemDto(
         string Id,
         string Kind,
@@ -19,12 +21,28 @@ public static class IncomeEndpoint
         decimal Amount,
         string Type,
         string FromPeriodKey,
-        string? ToPeriodKey);
+        string? ToPeriodKey,
+        string Counts,
+        string? BankAccountId)
+    {
+        public static IncomeItemDto From(IncomeItem item) => new(
+            item.Id,
+            item.Kind == IncomeKind.Salary ? "salary" : "additional",
+            item.Label,
+            Money.FromMinor(item.AmountMinor),
+            item.ToPeriodKey == item.FromPeriodKey ? AdditionalIncomeItemRequest.Once : AdditionalIncomeItemRequest.Monthly,
+            item.FromPeriodKey,
+            item.ToPeriodKey,
+            FirestoreDocuments.ToCountsName(item.Counts),
+            item.BankAccountId);
+    }
 
-    public record MonthIncomeDto(string PeriodKey, decimal Total);
+    // R-INC-01: Plan's income and the actual income of one month (owner note 17).
+    public record MonthIncomeDto(string PeriodKey, decimal Planned, decimal Actual);
 
     // FiscalYears (oldest first) give the month pickers; Totals are R-INC-01 for each month of FyId.
-    // CurrentTotal is the month that contains today (STG-03), null when no FY contains today.
+    // CurrentTotal (actual) and CurrentPlanned are the month that contains today (STG-03), null when no
+    // FY contains today. BankAccounts (archived ones flagged) feed the account picker (R-INC-05).
     public record IncomeResponse(
         IReadOnlyList<FiscalYearsEndpoint.FiscalYearDto> FiscalYears,
         string FyId,
@@ -32,7 +50,9 @@ public static class IncomeEndpoint
         IReadOnlyList<IncomeItemDto> Additional,
         IReadOnlyList<MonthIncomeDto> Totals,
         string? CurrentPeriodKey,
-        decimal? CurrentTotal);
+        decimal? CurrentTotal,
+        decimal? CurrentPlanned,
+        IReadOnlyList<BankAccountsEndpoint.BankAccountDto> BankAccounts);
 
     public static IEndpointRouteBuilder MapIncome(this IEndpointRouteBuilder api)
     {
@@ -66,7 +86,7 @@ public static class IncomeEndpoint
         api.MapPost("/income/additional", async (AdditionalIncomeItemRequest request, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
         {
             var uid = user.FindFirstValue("sub")!;
-            if (await CheckMonthsAsync(uid, request, store) is { } error)
+            if (await CheckAsync(uid, request, null, store) is { } error)
             {
                 return error;
             }
@@ -80,11 +100,11 @@ public static class IncomeEndpoint
         api.MapPut("/income/additional/{id}", async (string id, AdditionalIncomeItemRequest request, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
         {
             var uid = user.FindFirstValue("sub")!;
-            if (!await IsAdditionalAsync(uid, id, store))
+            if ((await store.GetIncomesAsync(uid)).FirstOrDefault(item => item.Id == id && item.Kind == IncomeKind.Additional) is not { } current)
             {
                 return Results.NotFound();
             }
-            if (await CheckMonthsAsync(uid, request, store) is { } error)
+            if (await CheckAsync(uid, request, current, store) is { } error)
             {
                 return error;
             }
@@ -129,32 +149,37 @@ public static class IncomeEndpoint
             .OrderByDescending(item => item.FromPeriodKey, StringComparer.Ordinal)
             .ThenBy(item => item.Label, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        var totals = IncomeCalculator.TotalsForPeriods(items, chosen.Periods);
+        var planned = IncomeCalculator.PlannedTotals(items, chosen.Periods);
+        var actual = IncomeCalculator.ActualTotals(items, chosen.Periods);
         return new IncomeResponse(
             fiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
             chosen.Id,
-            ordered.Where(item => item.Kind == IncomeKind.Salary).Select(ToDto).ToList(),
-            ordered.Where(item => item.Kind == IncomeKind.Additional).Select(ToDto).ToList(),
-            chosen.Periods.Select(period => new MonthIncomeDto(period.Key, Money.FromMinor(totals[period.Key]))).ToList(),
+            ordered.Where(item => item.Kind == IncomeKind.Salary).Select(IncomeItemDto.From).ToList(),
+            ordered.Where(item => item.Kind == IncomeKind.Additional).Select(IncomeItemDto.From).ToList(),
+            chosen.Periods
+                .Select(period => new MonthIncomeDto(period.Key, Money.FromMinor(planned[period.Key]), Money.FromMinor(actual[period.Key])))
+                .ToList(),
             current?.Period.Key,
-            current is { } found ? Money.FromMinor(IncomeCalculator.TotalForPeriod(items, found.Period.Key)) : null);
+            current is { } found ? Money.FromMinor(IncomeCalculator.ActualForPeriod(items, found.Period.Key)) : null,
+            current is { } again ? Money.FromMinor(IncomeCalculator.PlannedForPeriod(items, again.Period.Key)) : null,
+            BankAccountsEndpoint.Sorted(await store.GetBankAccountsAsync(uid)));
     }
-
-    private static IncomeItemDto ToDto(IncomeItem item) => new(
-        item.Id,
-        item.Kind == IncomeKind.Salary ? "salary" : "additional",
-        item.Label,
-        Money.FromMinor(item.AmountMinor),
-        item.ToPeriodKey == item.FromPeriodKey ? AdditionalIncomeItemRequest.Once : AdditionalIncomeItemRequest.Monthly,
-        item.FromPeriodKey,
-        item.ToPeriodKey);
 
     // The pickers offer the months of the stored FYs (R-CAL-09).
     private static async Task<HashSet<string>> StoredMonthsAsync(string uid, IUserStore store) =>
         (await store.GetFiscalYearsAsync(uid)).SelectMany(fiscalYear => fiscalYear.Periods).Select(period => period.Key).ToHashSet(StringComparer.Ordinal);
 
-    private static async Task<IResult?> CheckMonthsAsync(string uid, AdditionalIncomeItemRequest request, IUserStore store)
+    // R-INC-05: the account is an active one (as entries and transfers: an edited item may keep the
+    // archived account it has).
+    private static async Task<IResult?> CheckAsync(string uid, AdditionalIncomeItemRequest request, IncomeItem? current, IUserStore store)
     {
+        if (request.AccountId is { } accountId
+            && !(await store.GetBankAccountsAsync(uid)).Any(account => account.Id == accountId
+                && (!account.Archived || accountId == current?.BankAccountId)))
+        {
+            return Invalid(nameof(AdditionalIncomeItemRequest.BankAccountId), "Bank account is unknown.");
+        }
+
         var months = await StoredMonthsAsync(uid, store);
         if (!months.Contains(request.FromPeriodKey!))
         {
@@ -193,7 +218,8 @@ public sealed class SalaryRequest : IValidatableObject
 }
 
 // R-INC-03: Once is one month (ToPeriodKey is ignored and stored equal to FromPeriodKey); Monthly
-// runs from a month, optionally until a month.
+// runs from a month, optionally until a month. Counts is R-INC-04 (missing is both). BankAccountId is
+// R-INC-05: ignored for a Planned item (it reaches no account); empty goes through the split.
 public sealed class AdditionalIncomeItemRequest : IValidatableObject
 {
     public const string Once = "once";
@@ -211,13 +237,24 @@ public sealed class AdditionalIncomeItemRequest : IValidatableObject
 
     public string? ToPeriodKey { get; init; }
 
+    public string? Counts { get; init; }
+
+    public string? BankAccountId { get; init; }
+
+    // The account the item goes into, null for a Planned item or the income split.
+    public string? AccountId => Counts == "planned" || string.IsNullOrEmpty(BankAccountId) ? null : BankAccountId;
+
+    public static bool IsCounts(string? counts) => counts is null or "planned" or "actual" or "both";
+
     public IncomeItem ToItem(string id) => new(
         id,
         IncomeKind.Additional,
         Names.Normalize(Label),
         Money.ToMinor(Amount!.Value),
         FromPeriodKey!,
-        Type == Once ? FromPeriodKey : string.IsNullOrEmpty(ToPeriodKey) ? null : ToPeriodKey);
+        Type == Once ? FromPeriodKey : string.IsNullOrEmpty(ToPeriodKey) ? null : ToPeriodKey,
+        FirestoreDocuments.ToCounts(Counts),
+        AccountId);
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
@@ -233,6 +270,10 @@ public sealed class AdditionalIncomeItemRequest : IValidatableObject
         if (Type is not (Once or Monthly))
         {
             yield return new ValidationResult("Type is once or monthly.", [nameof(Type)]);
+        }
+        if (!IsCounts(Counts))
+        {
+            yield return new ValidationResult("Counts in is planned, actual or both.", [nameof(Counts)]);
         }
         // Month keys are YYYY-MM, so ordinal order is calendar order.
         if (Type == Monthly && !string.IsNullOrEmpty(ToPeriodKey) && FromPeriodKey is not null

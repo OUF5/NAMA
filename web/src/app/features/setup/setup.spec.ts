@@ -30,6 +30,7 @@ interface Wizard {
   additional: FormArray<FormGroup>;
   months(): unknown[];
   currentIncomeMinor(): number;
+  currentPlannedMinor(): number;
   incomeLines(): string[];
   addIncomeItem(): void;
   finish(): Promise<void>;
@@ -154,7 +155,7 @@ describe('Setup wizard income months', () => {
 
     wizard.addIncomeItem();
     await fixture.whenStable();
-    expect(item(wizard, 0).getRawValue()).toEqual({ label: '', amount: '', type: 'monthly', from: '2026-01', to: '' });
+    expect(item(wizard, 0).getRawValue()).toEqual({ label: '', amount: '', type: 'monthly', from: '2026-01', to: '', counts: 'both' });
     const labels = () =>
       Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.income-months mat-label')).map((el) => el.textContent?.trim());
     expect(labels()).toEqual(['From', 'Until (optional)']);
@@ -188,10 +189,10 @@ describe('Setup wizard income months', () => {
     const { wizard } = await wizardWithPreview();
     wizard.income.controls['salary'].setValue('15000');
     for (const value of [
-      { label: 'Annual bonus', amount: '5000', type: 'once', from: '2026-03', to: '' },
-      { label: 'Eid bonus', amount: '1000', type: 'once', from: '2026-09', to: '' },
-      { label: 'Freelance', amount: '1500', type: 'monthly', from: '2026-06', to: '2026-08' },
-      { label: 'Rent', amount: '2000', type: 'monthly', from: '2026-01', to: '' },
+      { label: 'Annual bonus', amount: '5000', type: 'once', from: '2026-03', to: '', counts: 'both' },
+      { label: 'Eid bonus', amount: '1000', type: 'once', from: '2026-09', to: '', counts: 'both' },
+      { label: 'Freelance', amount: '1500', type: 'monthly', from: '2026-06', to: '2026-08', counts: 'both' },
+      { label: 'Rent', amount: '2000', type: 'monthly', from: '2026-01', to: '', counts: 'both' },
     ]) {
       wizard.addIncomeItem();
       wizard.additional.at(-1).setValue(value);
@@ -201,11 +202,29 @@ describe('Setup wizard income months', () => {
     // freelance work that ended in Aug do not count.
     expect(wizard.currentIncomeMinor()).toBe(1_800_000);
     expect(wizard.incomeLines()).toEqual([
-      'Annual bonus · SAR 5,000 · Mar 2026',
-      'Eid bonus · SAR 1,000 · Sep 2026',
-      'Freelance · SAR 1,500 · Jun 2026 to Aug 2026',
-      'Rent · SAR 2,000 · From Jan 2026',
+      'Annual bonus · SAR 5,000 · Mar 2026 · Planned and actual',
+      'Eid bonus · SAR 1,000 · Sep 2026 · Planned and actual',
+      'Freelance · SAR 1,500 · Jun 2026 to Aug 2026 · Planned and actual',
+      'Rent · SAR 2,000 · From Jan 2026 · Planned and actual',
     ]);
+  });
+
+  // R-INC-04 (owner note 17): the same choice as Settings. A Planned item is in Plan's income, not
+  // the actual one; an Actual item the other way round.
+  it('counts each item in what it was given', async () => {
+    const { wizard } = await wizardWithPreview();
+    wizard.income.controls['salary'].setValue('15000');
+    for (const value of [
+      { label: 'Eid bonus', amount: '1000', type: 'once', from: '2026-09', to: '', counts: 'planned' },
+      { label: 'Gift', amount: '500', type: 'once', from: '2026-09', to: '', counts: 'actual' },
+    ]) {
+      wizard.addIncomeItem();
+      wizard.additional.at(-1).setValue(value);
+    }
+
+    expect(wizard.currentIncomeMinor()).toBe(1_550_000);
+    expect(wizard.currentPlannedMinor()).toBe(1_600_000);
+    expect(wizard.incomeLines()).toEqual(['Eid bonus · SAR 1,000 · Sep 2026 · Planned', 'Gift · SAR 500 · Sep 2026 · Actual']);
   });
 
   it('sends the chosen months on Finish', async () => {
@@ -213,17 +232,17 @@ describe('Setup wizard income months', () => {
     wizard.project.patchValue({ projectName: 'Home budget' });
     wizard.income.controls['salary'].setValue('15000');
     wizard.addIncomeItem();
-    wizard.additional.at(0).setValue({ label: 'Annual bonus', amount: '5000', type: 'once', from: '2026-03', to: '2026-05' });
+    wizard.additional.at(0).setValue({ label: 'Annual bonus', amount: '5000', type: 'once', from: '2026-03', to: '2026-05', counts: 'planned' });
     wizard.addIncomeItem();
-    wizard.additional.at(1).setValue({ label: 'Rent', amount: '2000', type: 'monthly', from: '2026-10', to: '' });
+    wizard.additional.at(1).setValue({ label: 'Rent', amount: '2000', type: 'monthly', from: '2026-10', to: '', counts: 'both' });
     wizard.bankAccounts.push(new FormControl('SNB'));
     wizard.categories.push(new FormControl('Food'));
 
     void wizard.finish();
     const request = http.expectOne('/api/setup');
     expect(request.request.body.additionalIncome).toEqual([
-      { label: 'Annual bonus', amount: 5000, type: 'once', fromPeriodKey: '2026-03', toPeriodKey: null },
-      { label: 'Rent', amount: 2000, type: 'monthly', fromPeriodKey: '2026-10', toPeriodKey: null },
+      { label: 'Annual bonus', amount: 5000, type: 'once', fromPeriodKey: '2026-03', toPeriodKey: null, counts: 'planned' },
+      { label: 'Rent', amount: 2000, type: 'monthly', fromPeriodKey: '2026-10', toPeriodKey: null, counts: 'both' },
     ]);
   });
 

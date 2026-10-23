@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ReactiveFormsModule } from '@angular/forms';
@@ -8,6 +9,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { merge } from 'rxjs';
 import { MeService } from '../../core/me';
 import { SummaryService } from '../../core/summary';
+import { incomeMonths } from '../../shared/income-months';
 import { formatMoney, parseAmount, toMinor } from '../../shared/money';
 import { fromDateString, toDateString } from '../../shared/month-label';
 import { BanksApi } from '../banks/banks-api';
@@ -18,6 +20,8 @@ import {
   showAllTransferErrors,
 } from '../banks/transfer-fields';
 import { Category, PlanApi } from '../plan/plan-api';
+import { IncomeItemFields, createIncomeItemForm, incomeItemChange, incomeItemContext } from '../settings/income-item-fields';
+import { Income, SettingsApi } from '../settings/settings-api';
 import { BankAccount, EntryApi } from './entry-api';
 import {
   EntryFields,
@@ -28,15 +32,28 @@ import {
   showAllErrors,
 } from './entry-fields';
 
-// PRD 5.4 Add (ENT-01 to ENT-03, TRF-01): an expense, or a transfer between two of your accounts
-// (?type=transfer). Expense is the default, so logging a spend stays one tap away. Page load is 2
-// calls (NFR-01): categories and bank accounts. /api/me is already loaded by setupGuard and brings the
+type Mode = 'expense' | 'transfer' | 'income';
+
+// PRD 5.4 Add (ENT-01 to ENT-03, TRF-01, INC-01): an expense, a transfer between two of your accounts
+// (?type=transfer) or additional income (?type=income, owner note 17). Expense is the default, so
+// logging a spend stays one tap away. Page load is 2 calls (NFR-01): categories and bank accounts;
+// Income loads its month pickers (GET /api/income) the first time it is shown. /api/me is already loaded by setupGuard and brings the
 // last used account, today and the FY range; the transfer's balance preview uses the top bar's
 // summary (no extra call). The API assigns the month and FY from the date (R-CAL-09). The expense
-// fields are shared with the Entries edit dialog (TBL-02), the transfer fields with the Banks one.
+// fields are shared with the Entries edit dialog (TBL-02), the transfer fields with the Banks one, and
+// the income fields are the Settings dialog's (the same box, owner's request).
 @Component({
   selector: 'app-add-entry',
-  imports: [ReactiveFormsModule, RouterLink, MatButtonModule, MatButtonToggleModule, MatIconModule, EntryFields, TransferFields],
+  imports: [
+    ReactiveFormsModule,
+    RouterLink,
+    MatButtonModule,
+    MatButtonToggleModule,
+    MatIconModule,
+    EntryFields,
+    TransferFields,
+    IncomeItemFields,
+  ],
   templateUrl: './add-entry.html',
   styleUrl: './add-entry.scss',
 })
@@ -44,6 +61,7 @@ export class AddEntry {
   private readonly planApi = inject(PlanApi);
   private readonly entryApi = inject(EntryApi);
   private readonly banksApi = inject(BanksApi);
+  private readonly settingsApi = inject(SettingsApi);
   private readonly meService = inject(MeService);
   private readonly summaryService = inject(SummaryService);
   private readonly route = inject(ActivatedRoute);
@@ -59,11 +77,23 @@ export class AddEntry {
   // ENT-02 "Saved": shown in the Save bar until the next amount is typed.
   protected readonly saved = signal('');
 
-  // TRF-01: what this page adds, from the URL.
-  protected readonly mode = signal<'expense' | 'transfer'>('expense');
+  // TRF-01, INC-01: what this page adds, from the URL.
+  protected readonly mode = signal<Mode>('expense');
+  protected readonly title = computed(() =>
+    this.mode() === 'transfer' ? 'Add transfer' : this.mode() === 'income' ? 'Add income' : 'Add expense',
+  );
 
   protected readonly form = createEntryForm();
   protected readonly transferForm = createTransferForm();
+  protected readonly incomeForm = createIncomeItemForm(null, null, null);
+  // INC-01: GET /api/income (the month pickers, Plan's income, the accounts), null until loaded.
+  private readonly income = signal<Income | null>(null);
+  // The preview's balances are the top bar's, so they follow every save.
+  protected readonly incomeContext = computed(() => {
+    const income = this.income();
+    return income ? incomeItemContext(income, this.summaryService.summary(), this.me()?.today ?? null, null) : null;
+  });
+  protected readonly incomeLoadError = signal('');
 
   protected readonly me = this.meService.me;
   protected readonly currency = computed(() => this.me()?.profile?.currency ?? 'SAR');
@@ -84,7 +114,11 @@ export class AddEntry {
 
   constructor() {
     // The "Saved" line stays until the next entry starts.
-    merge(this.form.controls.amount.valueChanges, this.transferForm.controls.amount.valueChanges)
+    merge(
+      this.form.controls.amount.valueChanges,
+      this.transferForm.controls.amount.valueChanges,
+      this.incomeForm.controls.amount.valueChanges,
+    )
       .pipe(takeUntilDestroyed())
       .subscribe((amount) => {
         if (amount) {
@@ -92,23 +126,80 @@ export class AddEntry {
         }
       });
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      const mode = params.get('type') === 'transfer' ? 'transfer' : 'expense';
+      const type = params.get('type');
+      const mode: Mode = type === 'transfer' || type === 'income' ? type : 'expense';
       if (mode !== this.mode()) {
         this.saved.set('');
         this.saveError.set('');
       }
       this.mode.set(mode);
+      if (mode === 'income') {
+        void this.loadIncomeMonths();
+      }
     });
     void this.load();
   }
 
-  // Expense or Transfer; the URL keeps it, so Banks can link to a transfer.
-  protected setMode(mode: 'expense' | 'transfer'): void {
+  // Expense, Transfer or Income; the URL keeps it, so Banks can link to a transfer.
+  protected setMode(mode: Mode): void {
     void this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { type: mode === 'transfer' ? 'transfer' : null },
+      queryParams: { type: mode === 'expense' ? null : mode },
       replaceUrl: true,
     });
+  }
+
+  // INC-01: the same item as Settings' "Add income" (R-INC-03 to R-INC-05), listed there afterwards.
+  // Label and amount clear; the type, the months, what it counts in and the account stay. Plan's
+  // income in the preview comes from GET /api/income again.
+  protected async saveIncome(): Promise<void> {
+    const change = incomeItemChange(this.incomeForm);
+    if (!change) {
+      return;
+    }
+    this.busy.set(true);
+    this.saveError.set('');
+    this.saved.set('');
+    try {
+      this.income.set(await this.settingsApi.addIncome(change));
+      this.incomeForm.controls.label.reset('');
+      this.incomeForm.controls.amount.reset('');
+      const account = this.accounts().find((option) => option.id === change.bankAccountId)?.name;
+      const months = incomeMonths({
+        fromPeriodKey: change.fromPeriodKey,
+        toPeriodKey: change.type === 'once' ? change.fromPeriodKey : change.toPeriodKey,
+      });
+      this.saved.set(
+        [`Added ${change.label}`, formatMoney(toMinor(change.amount), this.currency()), months, account ? `into ${account}` : '']
+          .filter(Boolean)
+          .join(' · '),
+      );
+    } catch (error: unknown) {
+      this.saveError.set(
+        error instanceof HttpErrorResponse && error.status === 400
+          ? 'Some values were not accepted. Please check them.'
+          : 'The income could not be saved. Please try again.',
+      );
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  // Once: a new item starts in the current month, as in Settings (else the first stored month).
+  private async loadIncomeMonths(): Promise<void> {
+    if (this.income()) {
+      return;
+    }
+    this.incomeLoadError.set('');
+    try {
+      const income = await this.settingsApi.income();
+      if (!this.incomeForm.controls.from.value) {
+        this.incomeForm.controls.from.setValue(income.currentPeriodKey ?? income.fiscalYears[0]?.periods[0]?.key ?? '');
+      }
+      this.income.set(income);
+    } catch {
+      this.incomeLoadError.set('The income months could not be loaded. Please reload the page.');
+    }
   }
 
   // TRF-01: amount and note clear; the accounts and the date stay, as for an expense (ENT-02).
@@ -191,6 +282,7 @@ export class AddEntry {
       const last = active.find((account) => account.id === me.profile?.lastBankAccountId);
       const from = (last ?? active[0])?.id ?? '';
       this.form.controls.bankAccountId.setValue(from);
+      this.incomeForm.controls.bankAccountId.setValue(from);
       // A transfer starts from the same account, to the next active one.
       this.transferForm.controls.fromBankAccountId.setValue(from);
       this.transferForm.controls.toBankAccountId.setValue(active.find((account) => account.id !== from)?.id ?? '');

@@ -19,3 +19,30 @@ export function incomeMonths(item: { fromPeriodKey: string; toPeriodKey: string 
     ? `${monthKeyLabel(item.fromPeriodKey)} to ${monthKeyLabel(item.toPeriodKey)}`
     : `From ${monthKeyLabel(item.fromPeriodKey)}`;
 }
+
+// R-INC-04 (owner note 17): what an additional income item counts in.
+export type IncomeCounts = 'planned' | 'actual' | 'both';
+
+// The pickers' options, in the PRD's order.
+export const INCOME_COUNTS: { value: IncomeCounts; label: string }[] = [
+  { value: 'planned', label: 'Planned' },
+  { value: 'actual', label: 'Actual' },
+  { value: 'both', label: 'Both' },
+];
+
+// Under the picker: what the choice does.
+export function countsHint(counts: IncomeCounts): string {
+  switch (counts) {
+    case 'planned':
+      return 'Only your plan counts it, not Tracker or your balance. When the money comes, add it as Actual.';
+    case 'actual':
+      return 'Tracker and your balance count it. Your plan stays the same.';
+    default:
+      return 'Your plan, Tracker and your balance all count it.';
+  }
+}
+
+// In lists: "Planned", "Actual", "Planned and actual".
+export function countsLabel(counts: IncomeCounts): string {
+  return counts === 'both' ? 'Planned and actual' : counts === 'planned' ? 'Planned' : 'Actual';
+}

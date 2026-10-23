@@ -88,6 +88,10 @@
             @if (currentMonth(); as month) {
               <span class="caption">Total income in {{ month }}</span>
               <span class="money kpi">{{ money(d.income.currentTotal) }}</span>
+              <!-- R-INC-01 (owner note 17): the actual income; Plan's when it differs. -->
+              @if (d.income.currentPlanned !== null && d.income.currentPlanned !== d.income.currentTotal) {
+                <span class="caption">Planned {{ money(d.income.currentPlanned) }}</span>
+              }
             } @else {
               <p class="note">
                 No fiscal year contains today. Start the next fiscal year on the
@@ -132,7 +136,7 @@
                 <li class="item">
                   <span class="name">
                     {{ item.label }}
-                    <span class="caption">{{ incomeMonths(item) }}</span>
+                    <span class="caption">{{ incomeCaption(item) }}</span>
                   </span>
                   <span class="money">{{ money(item.amount) }}</span>
                   <button mat-icon-button type="button" (click)="editIncome(item)" [attr.aria-label]="'Edit ' + item.label">

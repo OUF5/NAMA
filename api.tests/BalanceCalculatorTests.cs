@@ -144,4 +144,20 @@ public class BalanceCalculatorTests
         Assert.Equal(0, BalanceCalculator.Balance("other", opening, Fy.Periods, income, [new("2026-01", MainAndSavings)], [], [], [], D(2026, 12, 31)).Income);
         Assert.Equal(0, BalanceCalculator.Balance("main", opening, Fy.Periods, income, [], [], [], [], D(2026, 12, 31)).Income);
     }
+
+    // R-BAL-03, R-INC-05 (owner note 17): income that goes into one account arrives on payday, like
+    // the account's share of the split.
+    [Fact]
+    public void Income_into_one_account_arrives_on_payday()
+    {
+        var opening = new OpeningBalance(100_000, D(2026, 3, 1));
+        var direct = new Dictionary<string, long> { ["2026-03"] = 50_000 };
+
+        long On(DateOnly today) => BalanceCalculator.Balance("main", opening, Fy.Periods, new Dictionary<string, long>(), [],
+            [], [], [], today, direct).Balance;
+
+        // Mar 2026 starts on 27 Mar.
+        Assert.Equal(100_000, On(D(2026, 3, 26)));
+        Assert.Equal(150_000, On(D(2026, 3, 27)));
+    }
 }

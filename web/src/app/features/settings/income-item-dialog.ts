@@ -1,34 +1,31 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { ReactiveFormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
-import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
-import { incomeMonths, untilNotBeforeFrom } from '../../shared/income-months';
-import { amountValidator, formatMoney, minorToInput, parseAmount, toMinor } from '../../shared/money';
-import { NAME_MAX_LENGTH, nameValidator } from '../../shared/names';
+import { incomeMonths } from '../../shared/income-months';
+import { formatMoney, toMinor } from '../../shared/money';
+import { IncomeItemContext, IncomeItemFields, createIncomeItemForm, incomeItemChange } from './income-item-fields';
 import { Income, IncomeItem, SettingsApi } from './settings-api';
-import { MonthGroup } from './settings-lines';
 
 export interface IncomeItemDialogData {
   // null adds a new item.
   item: IncomeItem | null;
-  groups: MonthGroup[];
+  // The pickers and the preview (owner note 17); its item is the same item.
+  context: IncomeItemContext;
   defaultKey: string | null;
+  // R-INC-05: a new item goes into the last used account.
+  defaultAccountId: string | null;
   currency: string;
 }
 
 // R-INC-03: an additional income item, Once (one month) or Monthly (from a month, optionally until a
-// month). Edit and delete fix mistakes; the delete confirmation replaces the form, never a second
-// dialog (UX-04). Closes with the new income.
+// month), with what it counts in (R-INC-04). The fields are Add's Income fields too (INC-01). Edit and
+// delete fix mistakes; the delete confirmation replaces the form, never a second dialog (UX-04).
+// Closes with the new income.
 @Component({
   selector: 'app-income-item-dialog',
-  imports: [ReactiveFormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule],
-  providers: [OUTLINE_FORM_FIELDS],
+  imports: [ReactiveFormsModule, MatButtonModule, MatDialogModule, IncomeItemFields],
   templateUrl: './income-item-dialog.html',
   styleUrl: './dialog.scss',
 })
@@ -37,21 +34,9 @@ export class IncomeItemDialog {
   private readonly dialogRef = inject<MatDialogRef<IncomeItemDialog, Income>>(MatDialogRef);
   protected readonly data = inject<IncomeItemDialogData>(MAT_DIALOG_DATA);
 
-  protected readonly nameMax = NAME_MAX_LENGTH;
   private readonly item = this.data.item;
 
-  protected readonly form = inject(NonNullableFormBuilder).group(
-    {
-      label: [this.item?.label ?? '', nameValidator()],
-      amount: [this.item ? minorToInput(toMinor(this.item.amount)) : '', amountValidator()],
-      type: [this.item?.type ?? ('monthly' as 'once' | 'monthly'), Validators.required],
-      from: [this.item?.fromPeriodKey ?? this.data.defaultKey ?? '', Validators.required],
-      to: [this.item?.type === 'monthly' ? (this.item.toPeriodKey ?? '') : ''],
-    },
-    { validators: untilNotBeforeFrom },
-  );
-
-  protected readonly type = toSignal(this.form.controls.type.valueChanges, { initialValue: this.form.controls.type.value });
+  protected readonly form = createIncomeItemForm(this.item, this.data.defaultKey, this.data.defaultAccountId);
 
   protected readonly confirming = signal(false);
   protected readonly busy = signal(false);
@@ -64,18 +49,10 @@ export class IncomeItemDialog {
   }
 
   protected async save(): Promise<void> {
-    if (this.form.invalid) {
-      this.form.markAllAsTouched();
+    const change = incomeItemChange(this.form);
+    if (!change) {
       return;
     }
-    const value = this.form.getRawValue();
-    const change = {
-      label: value.label.trim(),
-      amount: parseAmount(value.amount)! / 100,
-      type: value.type,
-      fromPeriodKey: value.from,
-      toPeriodKey: value.type === 'monthly' && value.to ? value.to : null,
-    };
     await this.run(
       () => (this.item ? this.api.updateIncome(this.item.id, change) : this.api.addIncome(change)),
       'The income could not be saved. Please try again.',

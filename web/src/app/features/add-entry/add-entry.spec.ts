@@ -312,15 +312,15 @@ describe('Add entry (PRD 5.4)', () => {
 });
 
 // TRF-01: the same page adds a transfer between two of your accounts (?type=transfer).
-describe('Add transfer (PRD 5.4, TRF-01)', () => {
+describe('Add transfer and income (PRD 5.4, TRF-01, INC-01)', () => {
   let http: HttpTestingController;
   // R-BAL-03 balances from the top bar's summary.
   const summary: Summary = {
     balance: 28000,
     complete: true,
     accounts: [
-      { id: 'rajhi', name: 'Al Rajhi', balance: 4100 },
-      { id: 'snb', name: 'SNB', balance: 23900 },
+      { id: 'rajhi', name: 'Al Rajhi', balance: 4100, openingDate: '2026-01-27' },
+      { id: 'snb', name: 'SNB', balance: 23900, openingDate: '2026-01-27' },
     ],
     month: null,
     projection: null,
@@ -451,11 +451,95 @@ describe('Add transfer (PRD 5.4, TRF-01)', () => {
     expect(words(root.querySelector('h1'))).toBe('Add expense');
 
     const toggles = Array.from(root.querySelectorAll<HTMLButtonElement>('mat-button-toggle button'));
-    expect(toggles.map(words)).toEqual(['Expense', 'Transfer']);
+    expect(toggles.map(words)).toEqual(['Expense', 'Transfer', 'Income']);
     toggles[1].click();
     await settle(fixture);
 
     expect(TestBed.inject(Router).url).toBe('/?type=transfer');
     expect(words(root.querySelector('h1'))).toBe('Add transfer');
+  });
+
+  // GET /api/income for the month pickers, the first time Income is shown.
+  async function flushIncome(fixture: ComponentFixture<AddEntry>): Promise<void> {
+    (await vi.waitFor(() => http.expectOne('/api/income'))).flush({
+      fiscalYears: [
+        { id: '2026-01', label: 'FY 2026', startDate: '2026-01-27', endDate: '2027-01-26', isTransition: false, periods: [sep] },
+      ],
+      fyId: '2026-01',
+      salaries: [],
+      additional: [],
+      totals: [],
+      currentPeriodKey: '2026-09',
+      currentTotal: 17000,
+      currentPlanned: 17000,
+      bankAccounts: accounts,
+    });
+    await settle(fixture);
+  }
+
+  function labels(root: HTMLElement): string[] {
+    return Array.from(root.querySelectorAll('form mat-label')).map((label) => label.textContent?.trim() ?? '');
+  }
+
+  // INC-01 (owner note 17): the same box as Settings' "Add income": Monthly from the current month,
+  // counted in both, until changed.
+  it('adds income with the same fields as Settings', async () => {
+    const fixture = await open('/?type=income');
+    await flushIncome(fixture);
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(words(root.querySelector('h1'))).toBe('Add income');
+    expect(labels(root)).toEqual(['Label', 'Amount (SAR)', 'Type', 'From', 'Until (optional)', 'Counts in', 'Bank account']);
+    expect(await (await select(fixture, 'From')).getValueText()).toBe('Sep 2026 · 27 Sep to 26 Oct');
+    expect(await (await select(fixture, 'Counts in')).getValueText()).toBe('Both');
+    // R-INC-05: the last used account, as for an expense (the first by name before any entry).
+    expect(await (await select(fixture, 'Bank account')).getValueText()).toBe('Al Rajhi');
+
+    type(fixture, 'Label', ' Gift ');
+    type(fixture, 'Amount (SAR)', '500');
+    await (await select(fixture, 'Type')).clickOptions({ text: 'Once' });
+    await (await select(fixture, 'Counts in')).clickOptions({ text: 'Actual' });
+    await settle(fixture);
+    expect(words(root.querySelector('mat-hint'))).toBe('Tracker and your balance count it. Your plan stays the same.');
+    // The top bar's balance today (opened 27 Jan 2026): Sep's payday has come.
+    expect(Array.from(root.querySelectorAll('.preview-line')).map(words)).toEqual(['Into Al Rajhi SAR 4,100 arrow_forward SAR 4,600']);
+
+    (root.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    const post = await vi.waitFor(() => http.expectOne('/api/income/additional'));
+    expect(post.request.method).toBe('POST');
+    expect(post.request.body).toEqual({
+      label: 'Gift', amount: 500, counts: 'actual', type: 'once', fromPeriodKey: '2026-09', toPeriodKey: null, bankAccountId: 'rajhi',
+    });
+    post.flush({
+      fiscalYears: [
+        { id: '2026-01', label: 'FY 2026', startDate: '2026-01-27', endDate: '2027-01-26', isTransition: false, periods: [sep] },
+      ],
+      fyId: '2026-01', salaries: [], additional: [], totals: [], currentPeriodKey: '2026-09', currentTotal: 17500, currentPlanned: 17000,
+      bankAccounts: accounts,
+    });
+    await settle(fixture);
+
+    expect(words(root.querySelector('.saved'))).toBe('check_circle Added Gift · SAR 500 · Sep 2026 · into Al Rajhi');
+    // Label and amount clear; the type, the month and the choice stay.
+    expect(await (await select(fixture, 'Counts in')).getValueText()).toBe('Actual');
+    http.verify();
+  });
+
+  it('switches to income and loads its months once', async () => {
+    const fixture = await open('/');
+    const root = fixture.nativeElement as HTMLElement;
+    const toggle = (i: number) => Array.from(root.querySelectorAll<HTMLButtonElement>('mat-button-toggle button'))[i];
+
+    toggle(2).click();
+    await settle(fixture);
+    await flushIncome(fixture);
+    expect(TestBed.inject(Router).url).toBe('/?type=income');
+    expect(words(root.querySelector('h1'))).toBe('Add income');
+
+    toggle(0).click();
+    await settle(fixture);
+    toggle(2).click();
+    await settle(fixture);
+    http.verify();
   });
 });

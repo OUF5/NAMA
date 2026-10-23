@@ -67,6 +67,7 @@ public class SummaryTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(1_000m - 1_199.99m + 500m, Dec(summary["balance"]));
         Assert.Equal([("rajhi", 500m), ("bank", -199.99m)],
             summary["accounts"]!.AsArray().Select(account => (account!["id"]!.GetValue<string>(), Dec(account["balance"]))));
+        Assert.Equal("2026-10-01", summary["accounts"]![0]!["openingDate"]!.GetValue<string>());
     }
 
     // Until every active account has an opening balance, the top bar asks for it instead of a total.
@@ -160,5 +161,72 @@ public class SummaryTests(ApiFactory factory) : IClassFixture<ApiFactory>
     public async Task Without_a_token_gets_401()
     {
         Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync("/api/summary")).StatusCode);
+    }
+
+    // Owner note 17 (R-INC-01, R-INC-04, R-PLN-07, R-PLN-08): a Planned bonus of 3,000 in Dec, an Actual
+    // gift of 500 in Sep 2026, and an Actual 1,000 in Nov. The gift is in this month's income and saved
+    // to date, not in Unassigned. The bonus is in the future months' unallocated and planned saved. The
+    // Nov item is in neither until it comes.
+    private static readonly IncomeItem[] Extras =
+    [
+        new("bonus", IncomeKind.Additional, "Bonus", 300_000, "2026-12", "2026-12", IncomeCounts.Planned),
+        new("gift", IncomeKind.Additional, "Gift", 50_000, "2026-09", "2026-09", IncomeCounts.Actual),
+        new("side", IncomeKind.Additional, "Side job", 100_000, "2026-11", "2026-11", IncomeCounts.Actual),
+    ];
+
+    [Fact]
+    public async Task Planned_income_is_projected_and_actual_income_is_counted()
+    {
+        // Opened on 27 Sep, Sep's payday, so Sep's income (the gift too) is in the balance.
+        var sub = await SetUp([
+            new BankAccount("bank", "SNB", Opening: new OpeningBalance(100_000, new DateOnly(2026, 9, 27))),
+            new BankAccount("rajhi", "Al Rajhi", Opening: new OpeningBalance(50_000, new DateOnly(2026, 9, 27))),
+        ]);
+        var before = await Get(sub);
+        foreach (var item in Extras)
+        {
+            await factory.Store.AddIncomeAsync(sub, item);
+        }
+
+        var after = await Get(sub);
+
+        decimal Change(string block, string field) => Dec(after[block]![field]) - Dec(before[block]![field]);
+        Assert.Equal(500m, Dec(after["balance"]) - Dec(before["balance"]));
+        Assert.Equal((500m, 0m), (Change("month", "income"), Change("month", "unassigned")));
+        Assert.Equal((3_000m, 500m, 3_000m), (Change("projection", "futureUnallocated"), Change("projection", "savedToDate"), Change("projection", "plannedSaved")));
+        Assert.Equal((3_500m, 3_500m), (Change("projection", "projectedBalance"), Change("projection", "projectedSaving")));
+    }
+
+    // Owner note 17: Plan shows the planned income; Tracker's months the actual income, with the planned
+    // income next to it, and the month lists its additional income by name.
+    [Fact]
+    public async Task Plan_uses_planned_income_and_tracker_shows_actual_income()
+    {
+        var sub = await SetUp();
+        foreach (var item in Extras)
+        {
+            await factory.Store.AddIncomeAsync(sub, item);
+        }
+        factory.Time.UtcNow = TestTime.Default;
+
+        var plans = await Json(await Send(factory, HttpMethod.Get, $"/api/fiscal-years/{Fy}/plans", sub));
+        decimal PlanIncome(string key) => Dec(plans["totals"]!.AsArray().Single(month => month!["periodKey"]!.GetValue<string>() == key)!["income"]);
+        Assert.Equal((17_000m, 17_000m, 20_000m), (PlanIncome("2026-09"), PlanIncome("2026-11"), PlanIncome("2026-12")));
+
+        var overview = await Json(await Send(factory, HttpMethod.Get, $"/api/fiscal-years/{Fy}/overview", sub));
+        (decimal, decimal) Income(string key)
+        {
+            var month = overview["months"]!.AsArray().Single(month => month!["period"]!["key"]!.GetValue<string>() == key)!;
+            return (Dec(month["income"]), Dec(month["plannedIncome"]));
+        }
+        Assert.Equal([(17_500m, 17_000m), (18_000m, 17_000m), (17_000m, 20_000m)], new[] { Income("2026-09"), Income("2026-11"), Income("2026-12") });
+        Assert.Equal((205_500m, 207_000m), (Dec(overview["totals"]!["income"]), Dec(overview["totals"]!["plannedIncome"])));
+        Assert.Equal(9 * 17_000m + 500m, Dec(overview["toDate"]!["income"]));
+
+        var month = await Json(await Send(factory, HttpMethod.Get, $"/api/fiscal-years/{Fy}/months/2026-09", sub));
+        var gift = Assert.Single(month["additionalIncome"]!.AsArray())!;
+        Assert.Equal(("Gift", 500m, "actual"), (gift["label"]!.GetValue<string>(), Dec(gift["amount"]), gift["counts"]!.GetValue<string>()));
+        var filtered = await Json(await Send(factory, HttpMethod.Get, $"/api/fiscal-years/{Fy}/months/2026-09?categoryId=food", sub));
+        Assert.Empty(filtered["additionalIncome"]!.AsArray());
     }
 }

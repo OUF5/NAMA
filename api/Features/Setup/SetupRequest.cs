@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Api.Domain;
+using Api.Features.Income;
 
 namespace Api.Features.Setup;
 
@@ -67,6 +68,11 @@ public sealed class SetupRequest : IValidatableObject
             if (item.Type is not (AdditionalIncomeRequest.Once or AdditionalIncomeRequest.Monthly))
             {
                 yield return Error($"{nameof(AdditionalIncome)}[{i}].{nameof(item.Type)}", "Type is once or monthly.");
+            }
+            // R-INC-04 (owner note 17): as in Settings; missing is both.
+            if (!AdditionalIncomeItemRequest.IsCounts(item.Counts))
+            {
+                yield return Error($"{nameof(AdditionalIncome)}[{i}].{nameof(item.Counts)}", "Counts in is planned, actual or both.");
             }
             // The months must also be months of the first FY; the endpoint checks that, because it
             // needs today. Month keys are YYYY-MM, so ordinal order is calendar order.
@@ -154,4 +160,5 @@ public sealed class AdditionalIncomeRequest
     public string? Type { get; init; }
     public string? FromPeriodKey { get; init; }
     public string? ToPeriodKey { get; init; }
+    public string? Counts { get; init; }
 }

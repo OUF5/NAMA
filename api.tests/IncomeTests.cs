@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json.Nodes;
 using Api.Domain;
+using Api.Infrastructure;
 using static Api.Tests.ApiCalls;
 
 namespace Api.Tests;
@@ -46,8 +47,19 @@ public class IncomeTests(ApiFactory factory) : IClassFixture<ApiFactory>
             .Select(item => (item!["label"]!.GetValue<string>(), Dec(item["amount"]), item["fromPeriodKey"]!.GetValue<string>(), item["toPeriodKey"]?.GetValue<string>()))
             .ToArray();
 
-    private static decimal Total(JsonNode income, string periodKey) =>
-        Dec(income["totals"]!.AsArray().Single(row => row!["periodKey"]!.GetValue<string>() == periodKey)!["total"]);
+    private static JsonNode Month(JsonNode income, string periodKey) =>
+        income["totals"]!.AsArray().Single(row => row!["periodKey"]!.GetValue<string>() == periodKey)!;
+
+    // Items without counts are both (R-INC-04), so planned and actual income agree.
+    private static decimal Total(JsonNode income, string periodKey)
+    {
+        var (planned, actual) = Totals(income, periodKey);
+        Assert.Equal(planned, actual);
+        return actual;
+    }
+
+    private static (decimal Planned, decimal Actual) Totals(JsonNode income, string periodKey) =>
+        (Dec(Month(income, periodKey)["planned"]), Dec(Month(income, periodKey)["actual"]));
 
     private static void AssertError(JsonNode problem, string field) =>
         Assert.True(problem["errors"]!.AsObject().ContainsKey(field), problem.ToJsonString());
@@ -195,7 +207,22 @@ public class IncomeTests(ApiFactory factory) : IClassFixture<ApiFactory>
         { Item("Gift", 100m, "monthly", "2026-05", "2026-04"), "ToPeriodKey" },
         { Item("Gift", 100m, "monthly", "2027-01"), "FromPeriodKey" },
         { Item("Gift", 100m, "monthly", "2026-01", "2027-03"), "ToPeriodKey" },
+        { WithCounts(Item("Gift", 100m, "once", "2026-01"), "sometimes"), "Counts" },
+        { WithAccount(Item("Gift", 100m, "once", "2026-01"), "missing"), "BankAccountId" },
     };
+
+    private static JsonObject WithCounts(JsonObject item, string counts)
+    {
+        item["counts"] = counts;
+        return item;
+    }
+
+    private static JsonObject WithAccount(JsonObject item, string account, string counts = "both")
+    {
+        item["bankAccountId"] = account;
+        item["counts"] = counts;
+        return item;
+    }
 
     [Theory]
     [MemberData(nameof(InvalidItems))]
@@ -222,5 +249,51 @@ public class IncomeTests(ApiFactory factory) : IClassFixture<ApiFactory>
             Assert.Equal(HttpStatusCode.NotFound, (await Send(factory, HttpMethod.Delete, $"/api/income/additional/{id}", user)).StatusCode);
         }
         Assert.Equal(Incomes, await factory.Store.GetIncomesAsync(sub));
+    }
+
+    // R-INC-04 example (owner note 17): a Planned bonus of 3,000 in Dec and an Actual gift of 500 in
+    // Oct. Plan's income has the bonus, the actual income has the gift.
+    [Fact]
+    public async Task Planned_and_actual_items_count_only_where_they_belong()
+    {
+        var sub = await SetUpUser(factory, Incomes);
+
+        await Ok(await Send(factory, HttpMethod.Post, "/api/income/additional", sub,
+            WithCounts(Item("Year bonus", 3_000m, "once", "2026-12"), "planned")), HttpStatusCode.Created);
+        var income = await Ok(await Send(factory, HttpMethod.Post, "/api/income/additional", sub,
+            WithCounts(Item("Gift", 500m, "once", "2026-10"), "actual")), HttpStatusCode.Created);
+
+        Assert.Equal((20_000m, 17_000m), Totals(income, "2026-12"));
+        Assert.Equal((17_000m, 17_500m), Totals(income, "2026-10"));
+        Assert.Equal(["planned", "actual"],
+            income["additional"]!.AsArray().Where(item => item!["label"]!.GetValue<string>() is "Year bonus" or "Gift")
+                .Select(item => item!["counts"]!.GetValue<string>()));
+        // The old items, saved without counts, are both.
+        Assert.All(Incomes, item => Assert.Equal(IncomeCounts.Both, item.Counts));
+        Assert.Equal("both", income["additional"]!.AsArray().Single(item => item!["id"]!.GetValue<string>() == "r")!["counts"]!.GetValue<string>());
+    }
+
+    // R-INC-05 (owner note 17): an Actual or Both item can name its account; a Planned one never does.
+    // An archived account is refused, except the one an edited item already has.
+    [Fact]
+    public async Task An_item_names_the_account_it_goes_into()
+    {
+        var sub = await SetUpUser(factory, Incomes, accounts: [new BankAccount("bank", "SNB"), new BankAccount("old", "Old", Archived: true)]);
+
+        var income = await Ok(await Send(factory, HttpMethod.Post, "/api/income/additional", sub,
+            WithAccount(Item("Gift", 500m, "once", "2026-09"), "bank", "actual")), HttpStatusCode.Created);
+        var gift = income["additional"]!.AsArray().Single(item => item!["label"]!.GetValue<string>() == "Gift")!;
+        Assert.Equal("bank", gift["bankAccountId"]!.GetValue<string>());
+        Assert.Equal(["old", "bank"], income["bankAccounts"]!.AsArray().Select(account => account!["id"]!.GetValue<string>()));
+
+        var planned = await Ok(await Send(factory, HttpMethod.Put, $"/api/income/additional/{gift["id"]!.GetValue<string>()}", sub,
+            WithAccount(Item("Gift", 500m, "once", "2026-09"), "bank", "planned")));
+        Assert.Null(planned["additional"]!.AsArray().Single(item => item!["label"]!.GetValue<string>() == "Gift")!["bankAccountId"]);
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await Send(factory, HttpMethod.Post, "/api/income/additional", sub,
+            WithAccount(Item("Gift", 500m, "once", "2026-09"), "old"))).StatusCode);
+        await factory.Store.AddIncomeAsync(sub, new IncomeItem("g", IncomeKind.Additional, "Old gift", 10_000, "2026-09", "2026-09", BankAccountId: "old"));
+        Assert.Equal(HttpStatusCode.OK, (await Send(factory, HttpMethod.Put, "/api/income/additional/g", sub,
+            WithAccount(Item("Old gift", 200m, "once", "2026-09"), "old"))).StatusCode);
     }
 }

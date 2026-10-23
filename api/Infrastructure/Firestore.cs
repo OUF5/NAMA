@@ -303,6 +303,9 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
             ["fromPeriodKey"] = document.FromPeriodKey,
             // null is stored as null: open ended (PRD 7.4).
             ["toPeriodKey"] = document.ToPeriodKey!,
+            ["counts"] = document.Counts!,
+            // null goes through the income split (R-INC-05).
+            ["bankAccountId"] = document.BankAccountId!,
         });
     }
 
@@ -474,6 +477,10 @@ public sealed class IncomeDocument
     [FirestoreProperty("amountMinor")] public long AmountMinor { get; set; }
     [FirestoreProperty("fromPeriodKey")] public string FromPeriodKey { get; set; } = "";
     [FirestoreProperty("toPeriodKey")] public string? ToPeriodKey { get; set; }
+    // R-INC-04: planned, actual or both; missing on items saved before owner note 17 (both).
+    [FirestoreProperty("counts")] public string? Counts { get; set; }
+    // R-INC-05: null (or missing) goes through the income split.
+    [FirestoreProperty("bankAccountId")] public string? BankAccountId { get; set; }
     [FirestoreProperty("createdAt"), ServerTimestamp] public Timestamp CreatedAt { get; set; }
     [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
 }
@@ -629,6 +636,23 @@ public static class FirestoreDocuments
         AmountMinor = income.AmountMinor,
         FromPeriodKey = income.FromPeriodKey,
         ToPeriodKey = income.ToPeriodKey,
+        Counts = ToCountsName(income.Counts),
+        BankAccountId = income.BankAccountId,
+    };
+
+    public static string ToCountsName(IncomeCounts counts) => counts switch
+    {
+        IncomeCounts.Planned => "planned",
+        IncomeCounts.Actual => "actual",
+        _ => "both",
+    };
+
+    // R-INC-04: a missing or unknown value is both, so older items keep their numbers.
+    public static IncomeCounts ToCounts(string? name) => name switch
+    {
+        "planned" => IncomeCounts.Planned,
+        "actual" => IncomeCounts.Actual,
+        _ => IncomeCounts.Both,
     };
 
     public static BankAccountDocument ToDocument(BankAccount account) => new()
@@ -686,7 +710,7 @@ public static class FirestoreDocuments
 
     public static IncomeItem ToIncome(string id, IncomeDocument document) => new(
         id, document.Kind == "salary" ? IncomeKind.Salary : IncomeKind.Additional, document.Label,
-        document.AmountMinor, document.FromPeriodKey, document.ToPeriodKey);
+        document.AmountMinor, document.FromPeriodKey, document.ToPeriodKey, ToCounts(document.Counts), document.BankAccountId);
 
     public static CategoryDocument ToDocument(Category category) => new()
     {

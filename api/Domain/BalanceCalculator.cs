@@ -53,8 +53,9 @@ public static class BalanceCalculator
             .ToList();
 
     // R-BAL-03: the opening balance, plus the account's share of the income of every month that
-    // started from the opening date to today (income arrives on payday, a month's first day), minus
-    // its entries, plus transfers in, minus transfers out, all dated from the opening date to today.
+    // started from the opening date to today (income arrives on payday, a month's first day), plus the
+    // income that goes into it alone in those months (direct, month key → amount, R-INC-05), minus its
+    // entries, plus transfers in, minus transfers out, all dated from the opening date to today.
     public static AccountBalance Balance(
         string accountId,
         OpeningBalance opening,
@@ -64,7 +65,8 @@ public static class BalanceCalculator
         IEnumerable<DatedAmount> spent,
         IEnumerable<DatedAmount> transfersIn,
         IEnumerable<DatedAmount> transfersOut,
-        DateOnly today)
+        DateOnly today,
+        IReadOnlyDictionary<string, long>? direct = null)
     {
         bool Counts(DateOnly date) => opening.Date <= date && date <= today;
         long Sum(IEnumerable<DatedAmount> amounts) => amounts.Where(amount => Counts(amount.Date)).Sum(amount => amount.AmountMinor);
@@ -73,7 +75,8 @@ public static class BalanceCalculator
             .Where(period => Counts(period.StartDate))
             .Sum(period => SplitFor(splits, period.Key) is { } split
                 ? Distribute(income.GetValueOrDefault(period.Key), split.Shares).GetValueOrDefault(accountId)
-                : 0L);
+                : 0L)
+            + periods.Where(period => Counts(period.StartDate)).Sum(period => direct?.GetValueOrDefault(period.Key) ?? 0L);
         return new AccountBalance(opening.AmountMinor, incomeIn, Sum(spent), Sum(transfersIn), Sum(transfersOut));
     }
 }

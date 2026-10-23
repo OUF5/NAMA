@@ -88,8 +88,8 @@ describe('App', () => {
       balance: 28000,
       complete: true,
       accounts: [
-        { id: 'main', name: 'Main', balance: 4100 },
-        { id: 'savings', name: 'Savings', balance: 23900 },
+        { id: 'main', name: 'Main', balance: 4100, openingDate: '2026-01-27' },
+        { id: 'savings', name: 'Savings', balance: 23900, openingDate: '2026-01-27' },
       ],
       month: {
         period: { key: '2026-09', label: 'Sep 2026', startDate: '2026-09-27', endDate: '2026-10-26' },
@@ -129,7 +129,7 @@ describe('App', () => {
     summary.set({
       balance: -250,
       complete: true,
-      accounts: [{ id: 'main', name: 'Main', balance: -250 }],
+      accounts: [{ id: 'main', name: 'Main', balance: -250, openingDate: '2026-01-27' }],
       month: null,
       projection: null,
     });
@@ -168,7 +168,7 @@ describe('App', () => {
 
   // BNK-05: until every account has its opening balance, the top bar asks for it.
   it('should ask to set up the balance until it is complete', async () => {
-    summary.set({ balance: null, complete: false, accounts: [{ id: 'main', name: 'Main', balance: null }], month: null, projection: null });
+    summary.set({ balance: null, complete: false, accounts: [{ id: 'main', name: 'Main', balance: null, openingDate: '2026-01-27' }], month: null, projection: null });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;

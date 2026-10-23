@@ -133,16 +133,18 @@ public static class PlanCalculator
         return result;
     }
 
-    // R-PLN-07, R-PLN-08. Months is the whole FY's Unassigned (R-PLN-03); toToday is the whole budget
-    // carried (R-PLN-05) from the FY's first month to the month in progress, its last item. Saved to
-    // date counts the months from the first that carries (R-PLN-06), like DSH-02.
+    // R-PLN-07, R-PLN-08. Months is the whole FY's Unassigned (R-PLN-03, planned income); toToday is
+    // the whole budget carried (R-PLN-05) from the FY's first month to the month in progress, its last
+    // item. Saved to date is actual income (month key → amount, R-INC-01) minus spent, from the first
+    // month that carries (R-PLN-06), like DSH-02.
     public static Projection Project(
-        IReadOnlyList<UnassignedMonth> months, IReadOnlyList<CarriedMonth> toToday, int carryStart, long? balanceToday)
+        IReadOnlyList<UnassignedMonth> months, IReadOnlyList<CarriedMonth> toToday, int carryStart, long? balanceToday,
+        IReadOnlyDictionary<string, long> actualIncome)
     {
         var current = toToday.Count - 1;
         var saved = Enumerable.Range(0, toToday.Count)
             .Where(i => i >= carryStart)
-            .Sum(i => Saved(months[i].Income, toToday[i].Spent));
+            .Sum(i => Saved(actualIncome.GetValueOrDefault(months[i].PeriodKey), toToday[i].Spent));
         return new Projection(
             months[current].PeriodKey,
             Math.Max(0, toToday[current].Remaining),

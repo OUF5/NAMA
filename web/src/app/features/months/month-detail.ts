@@ -4,6 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { RouterLink } from '@angular/router';
+import { countsLabel } from '../../shared/income-months';
 import { formatMoney, toMinor } from '../../shared/money';
 import { formatDate, formatDay } from '../../shared/month-label';
 import { MonthSummary } from '../../shared/month-summary';
@@ -128,6 +129,21 @@ export class MonthDetail {
           diff === 0
             ? `Same as ${last}`
             : `${formatMoney(Math.abs(diff), this.currency())} ${diff > 0 ? 'more' : 'less'} than ${last}`,
+      };
+    });
+  });
+
+  // Owner note 17 (R-INC-04, R-INC-05): the month's additional income by name, what it counts in and
+  // the account it went into, so a gift or a bonus shows: "Gift · Actual · into SNB · SAR 500".
+  protected readonly extraIncome = computed(() => {
+    const data = this.data();
+    return (data?.additionalIncome ?? []).map((item) => {
+      const account = data!.bankAccounts.find((option) => option.id === item.bankAccountId)?.name;
+      return {
+        id: item.id,
+        label: item.label,
+        caption: [countsLabel(item.counts), account ? `into ${account}` : ''].filter(Boolean).join(' · '),
+        amount: this.money(item.amount),
       };
     });
   });

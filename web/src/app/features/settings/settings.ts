@@ -10,12 +10,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom, map } from 'rxjs';
 import { Me, MeService } from '../../core/me';
+import { SummaryService } from '../../core/summary';
 import { dialogSize } from '../../shared/dialog';
-import { incomeMonths } from '../../shared/income-months';
+import { countsLabel, incomeMonths } from '../../shared/income-months';
 import { formatMoney, toMinor } from '../../shared/money';
 import { MONTH_NAMES, formatDate, monthKeyLabel, periodWithDates } from '../../shared/month-label';
 import { CalendarDialog } from './calendar-dialog';
 import { IncomeItemDialog, IncomeItemDialogData } from './income-item-dialog';
+import { incomeItemContext } from './income-item-fields';
 import { InviteLinkDialog, InviteLinkDialogData, RemovePersonDialog } from './people-dialogs';
 import { ProfileDialog } from './profile-dialog';
 import { SalaryDialog, SalaryDialogData } from './salary-dialog';
@@ -43,6 +45,7 @@ const PHONE = '(max-width: 767.98px)';
 export class Settings {
   private readonly api = inject(SettingsApi);
   private readonly meService = inject(MeService);
+  private readonly summaryService = inject(SummaryService);
   private readonly dialog = inject(MatDialog);
   private readonly breakpoints = inject(BreakpointObserver);
   private readonly route = inject(ActivatedRoute);
@@ -52,6 +55,12 @@ export class Settings {
   protected readonly monthNames = MONTH_NAMES;
   protected readonly formatDate = formatDate;
   protected readonly incomeMonths = incomeMonths;
+
+  // "Sep 2026 · Actual · into SNB" (STG-03, R-INC-04, R-INC-05).
+  protected incomeCaption(item: IncomeItem): string {
+    const account = this.data()?.income.bankAccounts.find((option) => option.id === item.bankAccountId)?.name;
+    return [incomeMonths(item), countsLabel(item.counts), account ? `into ${account}` : ''].filter(Boolean).join(' · ');
+  }
 
   protected readonly phone = toSignal(this.breakpoints.observe(PHONE).pipe(map((state) => state.matches)), {
     initialValue: this.breakpoints.isMatched(PHONE),
@@ -180,13 +189,16 @@ export class Settings {
     this.incomeSaved(await this.open<SalaryDialog, SalaryDialogData, Income>(SalaryDialog, data, '480px'), 'Salary saved.');
   }
 
-  // R-INC-03: add (item null), edit and delete.
+  // R-INC-03 to R-INC-05: add (item null), edit and delete. The preview uses the top bar's balances.
   protected async editIncome(item: IncomeItem | null): Promise<void> {
     const income = this.data()!.income;
+    const me = this.meService.me();
+    const active = income.bankAccounts.filter((account) => !account.archived);
     const data: IncomeItemDialogData = {
       item,
-      groups: monthGroups(income.fiscalYears),
+      context: incomeItemContext(income, this.summaryService.summary(), me?.today ?? null, item),
       defaultKey: income.currentPeriodKey,
+      defaultAccountId: (active.find((account) => account.id === me?.profile?.lastBankAccountId) ?? active[0])?.id ?? null,
       currency: this.currency(),
     };
     this.incomeSaved(await this.open<IncomeItemDialog, IncomeItemDialogData, Income>(IncomeItemDialog, data), 'Income saved.');

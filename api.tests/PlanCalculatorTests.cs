@@ -99,7 +99,7 @@ public class PlanCalculatorTests
     [Fact]
     public void Worked_example_totals_row()
     {
-        var income = IncomeCalculator.TotalsForPeriods(Incomes, Fy.Periods);
+        var income = IncomeCalculator.PlannedTotals(Incomes, Fy.Periods);
 
         var months = PlanCalculator.RunningUnassigned(Fy.Periods, income, [Groceries, Fuel]);
 
@@ -304,7 +304,7 @@ public class PlanCalculatorTests
         var months = PlanCalculator.RunningUnassigned(Fy.Periods, EveryMonth(1_700_000), [plan], carryStart);
         var toToday = PlanCalculator.Carry(
             Fy.Periods.Take(10).Select((_, i) => (1_500_000L, i == 9 ? octSpent : 1_500_000L)), carryStart);
-        return PlanCalculator.Project(months, toToday, carryStart, balanceToday);
+        return PlanCalculator.Project(months, toToday, carryStart, balanceToday, EveryMonth(1_700_000));
     }
 
     // 28,000 − 1,000 + 2 × 2,000 = 31,000. Saved to date 170,000 − 149,000 = 21,000, and the projected
@@ -370,7 +370,7 @@ public class PlanCalculatorTests
         var months = PlanCalculator.RunningUnassigned(Fy.Periods, EveryMonth(1_700_000), [plan]);
         var toToday = PlanCalculator.Carry(Fy.Periods.Select(_ => (1_500_000L, 1_400_000L)));
 
-        var projection = PlanCalculator.Project(months, toToday, 0, 1_000_000);
+        var projection = PlanCalculator.Project(months, toToday, 0, 1_000_000, EveryMonth(1_700_000));
 
         Assert.Empty(projection.FutureMonths);
         Assert.Equal((1_200_000, 0L), (projection.StillToSpend, projection.FutureUnallocated));

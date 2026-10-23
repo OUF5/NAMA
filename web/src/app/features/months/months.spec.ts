@@ -93,7 +93,7 @@ function month(
   spent: number,
   carriedIn = 0,
 ): MonthOverview {
-  return { period, status, income, carriedIn, planned, spent, remaining: Math.round((carriedIn + planned - spent) * 100) / 100 };
+  return { period, status, income, plannedIncome: income, carriedIn, planned, spent, remaining: Math.round((carriedIn + planned - spent) * 100) / 100 };
 }
 
 const cells = (...values: [number, number][]) =>
@@ -151,7 +151,7 @@ function overview(
         ],
       },
     ],
-    totals: { income: 51500.25, planned: 5300, spent: 1379.99, remaining: 3920.01, plannedSaved: 46200.25 },
+    totals: { income: 51500.25, plannedIncome: 51500.25, planned: 5300, spent: 1379.99, remaining: 3920.01, plannedSaved: 46200.25 },
     toDate: { income: 34500.25, planned: 3400, spent: 1379.99, saved: 33120.26, plannedSaved: 31100.25, savedClosed: 17000 },
     rollover: null,
     carryFromPeriodKey: '2026-08',
@@ -212,6 +212,7 @@ function detail(period = sep, latest: Entry[] = [big, fuelEntry], count = latest
       { id: 'rajhi', name: 'Al Rajhi', archived: false },
       { id: 'snb', name: 'SNB', archived: false },
     ],
+    additionalIncome: [],
   };
 }
 
@@ -394,6 +395,33 @@ describe('Tracker (PRD 5.6)', () => {
     const link = section('latest').querySelector('a.see-all')!;
     expect(text(link)).toBe('See all 7 entries in Sep 2026');
     expect(link.getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09');
+  });
+
+  // Owner note 17 (R-INC-04): the month lists its additional income by name, and Income is the actual
+  // income with Plan's under it when they differ.
+  it('lists the month\'s additional income and its planned income', async () => {
+    const data = overview();
+    data.months[1] = { ...data.months[1], plannedIncome: 17000.25 };
+    await open('/months', data, {
+      ...detail(),
+      additionalIncome: [
+        { id: 'g', kind: 'additional', label: 'Gift', amount: 500, type: 'once', fromPeriodKey: '2026-09', toPeriodKey: '2026-09', counts: 'actual', bankAccountId: null },
+        { id: 'b', kind: 'additional', label: 'Bonus', amount: 0.25, type: 'once', fromPeriodKey: '2026-09', toPeriodKey: '2026-09', counts: 'both', bankAccountId: null },
+      ],
+    });
+
+    expect(lines(section('income'), '.row')).toEqual([
+      'Gift Actual SAR 500',
+      'Bonus Planned and actual SAR 0.25',
+    ]);
+    expect(words(root().querySelector('app-month-summary'))).toContain('Income SAR 17,500.25 Planned SAR 17,000.25');
+  });
+
+  it('shows no additional income card when the month has none', async () => {
+    await open('/months', overview(), detail());
+
+    expect(root().querySelector('[aria-labelledby="income-title"]')).toBeNull();
+    expect(words(root().querySelector('app-month-summary'))).toContain('Income SAR 17,500.25 Within plan');
   });
 
   // Owner note 9: the picker steps through the months; the month is kept in the URL and only its

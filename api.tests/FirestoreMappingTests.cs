@@ -146,6 +146,28 @@ public class FirestoreMappingTests
         Assert.Equal(once, FirestoreDocuments.ToIncome("b", FirestoreDocuments.ToDocument(once)));
     }
 
+    // R-INC-04, R-INC-05 (owner note 17): what an item counts in, and the account it goes into.
+    [Fact]
+    public void Income_counts_come_back_unchanged()
+    {
+        var planned = new IncomeItem("a", IncomeKind.Additional, "Bonus", 300_000, "2026-12", "2026-12", IncomeCounts.Planned);
+        var actual = new IncomeItem("b", IncomeKind.Additional, "Gift", 50_000, "2026-09", "2026-09", IncomeCounts.Actual, "main");
+
+        Assert.Equal(("actual", "main"), (FirestoreDocuments.ToDocument(actual).Counts, FirestoreDocuments.ToDocument(actual).BankAccountId));
+        Assert.Equal(planned, FirestoreDocuments.ToIncome("a", FirestoreDocuments.ToDocument(planned)));
+        Assert.Equal(actual, FirestoreDocuments.ToIncome("b", FirestoreDocuments.ToDocument(actual)));
+    }
+
+    // R-INC-04: an item saved before owner note 17 has no counts and is both.
+    [Fact]
+    public void Income_without_counts_is_both()
+    {
+        var document = new IncomeDocument { Kind = "additional", Label = "Rent", AmountMinor = 200_000, FromPeriodKey = "2026-01" };
+
+        Assert.Equal(IncomeCounts.Both, FirestoreDocuments.ToIncome("a", document).Counts);
+        Assert.Null(FirestoreDocuments.ToIncome("a", document).BankAccountId);
+    }
+
     // PRD 7.4 entries: YYYY-MM-DD date, long minor units, periodKey and fyId set by the API.
     [Fact]
     public void Entry_comes_back_unchanged()

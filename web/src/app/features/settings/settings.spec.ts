@@ -3,13 +3,15 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { MatDialog } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 import { of } from 'rxjs';
 import { MeService } from '../../core/me';
 import { FiscalYear } from '../plan/plan-api';
 import { Settings } from './settings';
+import { IncomeItemDialog, IncomeItemDialogData } from './income-item-dialog';
+import { IncomeItemContext } from './income-item-fields';
 import { InviteLinkDialog, RemovePersonDialog } from './people-dialogs';
 import { People, SettingsResponse } from './settings-api';
 import { settingsMatcher } from './settings-sections';
@@ -62,15 +64,17 @@ function settings(currentPeriodKey: string | null = '2026-09', peopleList: Peopl
       fyId: '2026-01',
       // The M2 example: 10,000 from Jan, then 11,000 from Mar.
       salaries: [
-        { id: 's2', kind: 'salary', label: 'Salary', amount: 11000, type: 'monthly', fromPeriodKey: '2026-03', toPeriodKey: null },
-        { id: 's1', kind: 'salary', label: 'Salary', amount: 10000, type: 'monthly', fromPeriodKey: '2026-01', toPeriodKey: '2026-02' },
+        { id: 's2', kind: 'salary', label: 'Salary', amount: 11000, type: 'monthly', fromPeriodKey: '2026-03', toPeriodKey: null, counts: 'both', bankAccountId: null },
+        { id: 's1', kind: 'salary', label: 'Salary', amount: 10000, type: 'monthly', fromPeriodKey: '2026-01', toPeriodKey: '2026-02', counts: 'both', bankAccountId: null },
       ],
       additional: [
-        { id: 'b', kind: 'additional', label: 'Bonus', amount: 500.25, type: 'once', fromPeriodKey: '2026-09', toPeriodKey: '2026-09' },
+        { id: 'b', kind: 'additional', label: 'Bonus', amount: 500.25, type: 'once', fromPeriodKey: '2026-09', toPeriodKey: '2026-09', counts: 'both', bankAccountId: null },
       ],
-      totals: [{ periodKey: '2026-09', total: 11500.25 }],
+      totals: [{ periodKey: '2026-09', planned: 11500.25, actual: 11500.25 }],
       currentPeriodKey,
       currentTotal: currentPeriodKey ? 11500.25 : null,
+      currentPlanned: currentPeriodKey ? 11500.25 : null,
+      bankAccounts: [{ id: 'snb', name: 'SNB', archived: false }],
     },
     people: peopleList,
   };
@@ -202,12 +206,26 @@ describe('Settings (PRD 5.7)', () => {
     expect(text(root)).toContain('Total income in Sep 2026 · 27 Sep to 26 Oct SAR 11,500.25');
     expect(text(root)).toContain('From Mar 2026 SAR 11,000');
     expect(text(root)).not.toContain('Jan 2026 to Feb 2026');
-    expect(text(root)).toContain('Bonus Sep 2026 SAR 500.25');
+    expect(text(root)).toContain('Bonus Sep 2026 · Planned and actual SAR 500.25');
 
     fold(root, 'History (1)').click();
     harness.detectChanges();
 
     expect(text(root)).toContain('Jan 2026 to Feb 2026 SAR 10,000');
+  });
+
+  // Owner note 17: each item says what it counts in; the total shows Plan's income when it differs.
+  it('shows what each item counts in, and the planned income', async () => {
+    const data = settings();
+    data.income.additional.push({
+      id: 'g', kind: 'additional', label: 'Gift', amount: 500, type: 'once', fromPeriodKey: '2026-09', toPeriodKey: '2026-09',
+      counts: 'actual', bankAccountId: 'snb',
+    });
+    data.income.currentTotal = 12000.25;
+    const root = await open('/settings/income', data);
+
+    expect(text(root)).toContain('Total income in Sep 2026 · 27 Sep to 26 Oct SAR 12,000.25 Planned SAR 11,500.25');
+    expect(text(root)).toContain('Gift Sep 2026 · Actual · into SNB SAR 500');
   });
 
   it('says so when no fiscal year contains today', async () => {
@@ -303,5 +321,189 @@ describe('Settings (PRD 5.7)', () => {
 
     expect(text(root.querySelector('.status'))).toBe('Removed friend@example.com.');
     expect(text(root)).toContain('Nobody has joined yet.');
+  });
+});
+
+// R-INC-04, R-INC-05 (owner note 17): the dialog asks what an item counts in and, for Actual or Both,
+// the account it goes into, and shows what it changes. Add's Income has the same fields.
+describe('Income item dialog (STG-03)', () => {
+  let http: HttpTestingController;
+  let close: ReturnType<typeof vi.fn>;
+
+  // Today is 17 Oct 2026 (Sep 2026 is in progress); SNB opened on 27 Jan 2026 with 4,100 today, Al
+  // Rajhi on 20 Oct 2026 (after Sep's payday). Plan's income is 17,000 in Sep and Oct.
+  const oct = { key: '2026-10', label: 'Oct 2026', startDate: '2026-10-27', endDate: '2026-11-26' };
+  const aug = { key: '2026-08', label: 'Aug 2026', startDate: '2026-08-27', endDate: '2026-09-26' };
+  function context(item: IncomeItemContext['item']): IncomeItemContext {
+    return {
+      groups: [{ label: 'FY 2026', months: [aug, sep, oct].map((p) => ({ key: p.key, text: p.label })) }],
+      periods: [aug, sep, oct],
+      accounts: [
+        { id: 'rajhi', name: 'Al Rajhi', archived: false },
+        { id: 'snb', name: 'SNB', archived: false },
+      ],
+      today: '2026-10-17',
+      plannedIncome: { '2026-08': 1_700_000, '2026-09': 1_700_000, '2026-10': 1_700_000 },
+      balances: {
+        snb: { balance: 410_000, openingDate: '2026-01-27' },
+        rajhi: { balance: 100_000, openingDate: '2026-10-20' },
+      },
+      item,
+    };
+  }
+
+  function create(item: IncomeItemDialogData['item']) {
+    close = vi.fn();
+    TestBed.configureTestingModule({
+      imports: [IncomeItemDialog],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: MatDialogRef, useValue: { close } },
+        {
+          provide: MAT_DIALOG_DATA,
+          useValue: {
+            item,
+            context: context(item),
+            defaultKey: '2026-09',
+            defaultAccountId: 'snb',
+            currency: 'SAR',
+          } satisfies IncomeItemDialogData,
+        },
+      ],
+    });
+    http = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(IncomeItemDialog);
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  type Dialog = { form: { patchValue(value: object): void }; save(): Promise<void> };
+
+  function labels(root: HTMLElement): string[] {
+    return Array.from(root.querySelectorAll('mat-label')).map((label) => label.textContent?.trim() ?? '');
+  }
+
+  // Every text node, joined with spaces (Angular drops the whitespace between sibling elements).
+  function preview(root: HTMLElement): string[] {
+    return Array.from(root.querySelectorAll('.preview-line, .preview p')).map((el) => {
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      const parts: string[] = [];
+      while (walker.nextNode()) {
+        parts.push(walker.currentNode.textContent ?? '');
+      }
+      return parts.join(' ').replace(/\s+/g, ' ').trim();
+    });
+  }
+
+  it('asks for the account of a Both item and shows the balance and the plan it changes', async () => {
+    const fixture = create(null);
+    const root = fixture.nativeElement as HTMLElement;
+    const dialog = fixture.componentInstance as unknown as Dialog;
+
+    expect(labels(root)).toEqual(['Label', 'Amount (SAR)', 'Type', 'From', 'Until (optional)', 'Counts in', 'Bank account']);
+    dialog.form.patchValue({ label: 'Gift', amount: '500', type: 'once', from: '2026-09' });
+    fixture.detectChanges();
+    // Sep's payday (27 Sep) has come: SNB has it today. Plan's Sep income goes up too.
+    expect(preview(root)).toEqual([
+      'Into SNB SAR 4,100 arrow_forward SAR 4,600',
+      'Counted from 27 Sep 2026, Sep 2026\'s payday.',
+      "Plan's income Sep 2026 SAR 17,000 arrow_forward SAR 17,500",
+    ]);
+
+    void dialog.save();
+    const post = http.expectOne('/api/income/additional');
+    expect(post.request.body).toEqual({
+      label: 'Gift', amount: 500, counts: 'both', type: 'once', fromPeriodKey: '2026-09', toPeriodKey: null, bankAccountId: 'snb',
+    });
+    post.flush({});
+    await vi.waitFor(() => expect(close).toHaveBeenCalled());
+  });
+
+  it('shows only the balance for Actual, and what is still to come', async () => {
+    const fixture = create(null);
+    const root = fixture.nativeElement as HTMLElement;
+    const dialog = fixture.componentInstance as unknown as Dialog;
+
+    dialog.form.patchValue({ label: 'Rent', amount: '1000', type: 'monthly', from: '2026-08', counts: 'actual' });
+    fixture.detectChanges();
+    // Aug's and Sep's paydays have come; Oct's is still to come.
+    expect(preview(root)).toEqual(['Into SNB SAR 4,100 arrow_forward SAR 6,100', 'SAR 1,000 on every payday from Aug 2026.']);
+
+    // Al Rajhi opened after Sep's payday, so nothing has arrived there yet.
+    dialog.form.patchValue({ bankAccountId: 'rajhi', type: 'once', from: '2026-10' });
+    fixture.detectChanges();
+    expect(preview(root)).toEqual(['Into Al Rajhi SAR 1,000', "Arrives on 27 Oct 2026, Oct 2026's payday."]);
+  });
+
+  it('shows only the plan for Planned, with no account', async () => {
+    const fixture = create(null);
+    const root = fixture.nativeElement as HTMLElement;
+    const dialog = fixture.componentInstance as unknown as Dialog;
+
+    dialog.form.patchValue({ label: 'Bonus', amount: '3000', type: 'monthly', from: '2026-10', to: '2026-10', counts: 'planned' });
+    fixture.detectChanges();
+    expect(labels(root)).toEqual(['Label', 'Amount (SAR)', 'Type', 'From', 'Until (optional)', 'Counts in']);
+    expect(root.querySelector('mat-hint')?.textContent?.trim()).toBe(
+      'Only your plan counts it, not Tracker or your balance. When the money comes, add it as Actual.',
+    );
+    expect(preview(root)).toEqual(["Plan's income Oct 2026 SAR 17,000 arrow_forward SAR 20,000", 'And every month to Oct 2026.']);
+
+    void dialog.save();
+    const post = http.expectOne('/api/income/additional');
+    expect(post.request.body).toEqual({
+      label: 'Bonus', amount: 3000, counts: 'planned', type: 'monthly', fromPeriodKey: '2026-10', toPeriodKey: '2026-10', bankAccountId: null,
+    });
+    post.flush({});
+    await vi.waitFor(() => expect(close).toHaveBeenCalled());
+  });
+
+  // The edited item's own amounts are already in the balance and the plan.
+  it('counts an edited item once, and shows the account it leaves', async () => {
+    const fixture = create({
+      id: 'g', kind: 'additional', label: 'Gift', amount: 500, type: 'once', fromPeriodKey: '2026-09', toPeriodKey: '2026-09',
+      counts: 'both', bankAccountId: 'snb',
+    });
+    const root = fixture.nativeElement as HTMLElement;
+    const dialog = fixture.componentInstance as unknown as Dialog;
+    // The API's numbers already hold the gift.
+    expect(preview(root)).toEqual([
+      'Into SNB SAR 4,100',
+      'Counted from 27 Sep 2026, Sep 2026\'s payday.',
+      "Plan's income Sep 2026 SAR 16,500 arrow_forward SAR 17,000",
+    ]);
+
+    dialog.form.patchValue({ amount: '800', bankAccountId: 'rajhi', counts: 'actual' });
+    fixture.detectChanges();
+    expect(preview(root)).toEqual([
+      'Into Al Rajhi SAR 1,000',
+      'Out of SNB SAR 4,100 arrow_forward SAR 3,600',
+      'Counted from 27 Sep 2026, Sep 2026\'s payday.',
+    ]);
+
+    void dialog.save();
+    const put = http.expectOne('/api/income/additional/g');
+    expect(put.request.body).toEqual({
+      label: 'Gift', amount: 800, counts: 'actual', type: 'once', fromPeriodKey: '2026-09', toPeriodKey: null, bankAccountId: 'rajhi',
+    });
+    put.flush({});
+    await vi.waitFor(() => expect(close).toHaveBeenCalled());
+  });
+
+  // An item made in the wizard (or before owner note 17) may stay with the income split.
+  it('keeps an item with the income split until an account is chosen', async () => {
+    const fixture = create({
+      id: 'r', kind: 'additional', label: 'Rent', amount: 2000, type: 'monthly', fromPeriodKey: '2026-08', toPeriodKey: null,
+      counts: 'both', bankAccountId: null,
+    });
+    const root = fixture.nativeElement as HTMLElement;
+    const dialog = fixture.componentInstance as unknown as Dialog;
+    expect(preview(root)[0]).toBe('The income split shares it out on payday (Banks).');
+
+    void dialog.save();
+    const put = http.expectOne('/api/income/additional/r');
+    expect(put.request.body.bankAccountId).toBeNull();
+    put.flush({});
+    await vi.waitFor(() => expect(close).toHaveBeenCalled());
   });
 });

@@ -84,6 +84,7 @@ function months(statuses = 'CCCCCCCCIYYY'): MonthOverview[] {
       period,
       status: status[statuses[i] as keyof typeof status],
       income,
+      plannedIncome: income,
       carriedIn,
       planned,
       spent,
@@ -146,7 +147,7 @@ function overview(statuses?: string): OverviewResponse {
         subCategories: [{ subCategoryId: 'fuel', months: fuel, planned: 1600, spent: 99.99 }],
       },
     ],
-    totals: { income: 204500.25, planned: 19600, spent: 1349.99, remaining: 18250.01, plannedSaved: 184900.25 },
+    totals: { income: 204500.25, plannedIncome: 204500.25, planned: 19600, spent: 1349.99, remaining: 18250.01, plannedSaved: 184900.25 },
     toDate: {
       income: 153500.25,
       planned: 13900,
@@ -167,8 +168,8 @@ function summary(): Summary {
     balance: 300.01,
     complete: true,
     accounts: [
-      { id: 'rajhi', name: 'Al Rajhi', balance: 500 },
-      { id: 'bank', name: 'SNB', balance: -199.99 },
+      { id: 'rajhi', name: 'Al Rajhi', balance: 500, openingDate: '2026-01-27' },
+      { id: 'bank', name: 'SNB', balance: -199.99, openingDate: '2026-01-27' },
     ],
     month: {
       period: periods[8],
@@ -624,9 +625,9 @@ describe('Dashboard (PRD 5.9)', () => {
     const data = summary();
     data.balance = 4000;
     data.accounts = [
-      { id: 'a', name: 'A', balance: 1000 },
-      { id: 'b', name: 'B', balance: 0 },
-      { id: 'c', name: 'C', balance: 3000 },
+      { id: 'a', name: 'A', balance: 1000, openingDate: '2026-01-27' },
+      { id: 'b', name: 'B', balance: 0, openingDate: '2026-01-27' },
+      { id: 'c', name: 'C', balance: 3000, openingDate: '2026-01-27' },
     ];
     await open(overview(), data);
 
@@ -645,13 +646,13 @@ describe('Dashboard (PRD 5.9)', () => {
     const data = summary();
     data.balance = 15500;
     data.accounts = [
-      { id: 'ahli', name: 'Ahli', balance: 3000 },
-      { id: 'albilad', name: 'Albilad', balance: 1000 },
-      { id: 'rajhi', name: 'Alrajhi', balance: 4200 },
-      { id: 'inma', name: 'Inma', balance: 2500 },
-      { id: 'riyad', name: 'Riyad', balance: 2000 },
-      { id: 'snb', name: 'SNB', balance: 1300 },
-      { id: 'stc', name: 'STC', balance: 1500 },
+      { id: 'ahli', name: 'Ahli', balance: 3000, openingDate: '2026-01-27' },
+      { id: 'albilad', name: 'Albilad', balance: 1000, openingDate: '2026-01-27' },
+      { id: 'rajhi', name: 'Alrajhi', balance: 4200, openingDate: '2026-01-27' },
+      { id: 'inma', name: 'Inma', balance: 2500, openingDate: '2026-01-27' },
+      { id: 'riyad', name: 'Riyad', balance: 2000, openingDate: '2026-01-27' },
+      { id: 'snb', name: 'SNB', balance: 1300, openingDate: '2026-01-27' },
+      { id: 'stc', name: 'STC', balance: 1500, openingDate: '2026-01-27' },
     ];
     await open(overview(), data);
 

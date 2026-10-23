@@ -1,0 +1,98 @@
+// The additional income fields (R-INC-03, R-INC-04) of the Settings dialog and of Add: docs/DESIGN.md
+// "Dialogs", tokens only.
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+mat-form-field {
+  width: 100%;
+}
+
+.row {
+  display: flex;
+  gap: 12px;
+
+  mat-form-field {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.error {
+  margin: 8px 0 0;
+  color: var(--danger);
+}
+
+// What the item changes: an inset box under the fields, lines as in the transfer panel (TRF-01).
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 8px 16px 12px;
+  border: 1px solid var(--divider);
+  border-radius: 8px;
+  background: var(--bg);
+
+  p {
+    margin: 0;
+  }
+}
+
+.preview-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  .name {
+    overflow: hidden;
+    font-weight: 600;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
+
+.amounts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+
+  mat-icon {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    color: var(--text-muted);
+  }
+}
+
+// The amount before, once the item changes it.
+.struck {
+  color: var(--text-muted);
+}
+
+.after {
+  font-weight: 600;
+
+  &.danger {
+    color: var(--danger);
+  }
+}
+
+@media (max-width: 767.98px) {
+  .row {
+    flex-direction: column;
+    gap: 0;
+  }
+}

@@ -78,7 +78,8 @@ public static class SetupEndpoint
     }
 
     // The salary runs from the FY's first month, open ended (owner's choice, M3). Additional
-    // income uses the chosen months: Once is stored with to = from (R-INC-03). Each account opens
+    // income uses the chosen months: Once is stored with to = from (R-INC-03), and counts in what was
+    // picked (R-INC-04). Each account opens
     // with today's balance (R-BAL-01), and the split applies from the FY's first month (R-BAL-02).
     private static SetupData Build(SetupRequest request, ClaimsPrincipal user, FiscalYear fiscalYear, DateOnly today)
     {
@@ -92,7 +93,8 @@ public static class SetupEndpoint
             Names.Normalize(item.Label),
             Money.ToMinor(item.Amount!.Value),
             item.FromPeriodKey!,
-            item.Type == AdditionalIncomeRequest.Once ? item.FromPeriodKey : string.IsNullOrEmpty(item.ToPeriodKey) ? null : item.ToPeriodKey)));
+            item.Type == AdditionalIncomeRequest.Once ? item.FromPeriodKey : string.IsNullOrEmpty(item.ToPeriodKey) ? null : item.ToPeriodKey,
+            FirestoreDocuments.ToCounts(item.Counts))));
 
         var profile = new UserProfile(
             DisplayName: Names.Normalize(request.DisplayName),

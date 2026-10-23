@@ -6,7 +6,8 @@ import { formatMoney, toMinor } from './money';
 
 // docs/DESIGN.md KPI block of one month, shared by the Months cards (MON-02) and the Dashboard
 // current month card (DSH-01). R-PLN-05 reads left to right: Remaining = From last month + Planned -
-// Spent; Income is the month's own. Desktop: the five in one row, then the bar. Phones ("KPI on
+// Spent; Income is the month's own: the actual income, with Plan's under it when they differ (owner
+// note 17). Desktop: the five in one row, then the bar. Phones ("KPI on
 // phones"): Remaining large, the bar, then the others two by two. The numbers come from the overview
 // (decimals, R-MON-01); this component only formats.
 @Component({
@@ -36,6 +37,9 @@ import { formatMoney, toMinor } from './money';
         <div class="kpi">
           <span class="caption">Income</span>
           <span class="money value">{{ money(month().income!) }}</span>
+          @if (plannedIncome(); as planned) {
+            <span class="caption">Planned {{ planned }}</span>
+          }
         </div>
       }
       <div class="bar-line">
@@ -56,8 +60,18 @@ import { formatMoney, toMinor } from './money';
   styleUrl: './month-summary.scss',
 })
 export class MonthSummary {
-  readonly month = input.required<Pick<MonthOverview, 'income' | 'carriedIn' | 'planned' | 'spent' | 'remaining'>>();
+  readonly month = input.required<
+    Pick<MonthOverview, 'income' | 'carriedIn' | 'planned' | 'spent' | 'remaining'> & { plannedIncome?: number | null }
+  >();
   readonly currency = input.required<string>();
+
+  // Shown only when it differs from the actual income.
+  protected readonly plannedIncome = computed(() => {
+    const { income, plannedIncome } = this.month();
+    return plannedIncome === undefined || plannedIncome === null || income === null || plannedIncome === income
+      ? null
+      : this.money(plannedIncome);
+  });
 
   protected readonly line = computed(() =>
     spendLine(availableMinor(this.month()), toMinor(this.month().spent), this.currency()),

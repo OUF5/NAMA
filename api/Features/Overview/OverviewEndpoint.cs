@@ -29,16 +29,18 @@ public static class OverviewEndpoint
         IReadOnlyList<SubCategoryRowDto> SubCategories);
 
     // Status is "closed", "inProgress" or "yetToCome" (R-STA-01), worked out with today in the
-    // profile time zone (R-CAL-10).
+    // profile time zone (R-CAL-10). Income is the actual income and PlannedIncome Plan's (R-INC-01,
+    // owner note 17); both null with a filter.
     public record MonthDto(
-        MeEndpoint.PeriodDto Period, string Status, decimal? Income, decimal CarriedIn, decimal Planned, decimal Spent, decimal Remaining);
+        MeEndpoint.PeriodDto Period, string Status, decimal? Income, decimal? PlannedIncome, decimal CarriedIn, decimal Planned,
+        decimal Spent, decimal Remaining);
 
     // The FY: remaining is FY planned - FY spent (the last month's remaining). PlannedSaved is the
-    // last month's Unassigned (R-PLN-04), null with a filter like income.
-    public record TotalsDto(decimal? Income, decimal Planned, decimal Spent, decimal Remaining, decimal? PlannedSaved);
+    // last month's Unassigned (R-PLN-04, planned income), null with a filter like income.
+    public record TotalsDto(decimal? Income, decimal? PlannedIncome, decimal Planned, decimal Spent, decimal Remaining, decimal? PlannedSaved);
 
     // DSH-02 (owner's choice, M9): the months that started on or before today, each with its full
-    // income and every entry in it, from the first month that carries (R-PLN-06: months before NAMA was
+    // actual income (R-INC-01) and every entry in it, from the first month that carries (R-PLN-06: months before NAMA was
     // set up were never tracked). Saved is income minus spent and can be negative. PlannedSaved is the
     // Unassigned of the latest started month (R-PLN-03): what the plan meant to keep by now.
     // Planned is the started months' planned spending (DSH-02 "planned until now"). SavedClosed is
@@ -95,7 +97,11 @@ public static class OverviewEndpoint
         // R-PLN-06: the carry starts in the month NAMA was set up, or the FY's first month.
         var carryStart = PlanCalculator.CarryStart(periods, profile.StartedOn);
         var allPlans = await store.GetPlansAsync(uid, fiscalYear.Id);
-        var income = IncomeCalculator.TotalsForPeriods(await store.GetIncomesAsync(uid), periods);
+        // R-INC-01 (owner note 17): Unassigned is the plan's, so it uses the planned income; the months,
+        // the totals and FY to date show what came in, the actual income.
+        var incomes = await store.GetIncomesAsync(uid);
+        var plannedIncome = IncomeCalculator.PlannedTotals(incomes, periods);
+        var income = IncomeCalculator.ActualTotals(incomes, periods);
         // PRD 7.4 "Reads": the FY's entries in one query (the Entries query), added up in memory.
         var allEntries = await store.GetFiscalYearEntriesAsync(uid, fiscalYear.Id);
         var categories = (await store.GetCategoriesAsync(uid)).OrderBy(category => category.SortOrder).ToList();
@@ -176,7 +182,7 @@ public static class OverviewEndpoint
         var totalPlanned = months.Sum(month => month.Planned);
         var totalSpent = entries.Sum(entry => entry.AmountMinor);
         // R-PLN-03, R-PLN-04 over the whole budget (a filter has no income).
-        var unassigned = PlanCalculator.RunningUnassigned(periods, income, allPlans, carryStart);
+        var unassigned = PlanCalculator.RunningUnassigned(periods, plannedIncome, allPlans, carryStart);
         // DSH-02 covers everything, whatever the filter, from the first month that carries.
         var started = periods.Skip(carryStart).Where(period => FiscalCalendar.HasStarted(period, today)).Select(period => period.Key).ToHashSet(StringComparer.Ordinal);
         var incomeToDate = started.Sum(key => income[key]);
@@ -195,6 +201,7 @@ public static class OverviewEndpoint
                 MeEndpoint.PeriodDto.From(period),
                 StatusName(FiscalCalendar.Status(period, today)),
                 scope is null ? Money.FromMinor(income[period.Key]) : null,
+                scope is null ? Money.FromMinor(plannedIncome[period.Key]) : null,
                 Money.FromMinor(months[i].CarriedIn),
                 Money.FromMinor(months[i].Planned),
                 Money.FromMinor(months[i].Spent),
@@ -203,6 +210,7 @@ public static class OverviewEndpoint
             rows,
             new TotalsDto(
                 scope is null ? Money.FromMinor(income.Values.Sum()) : null,
+                scope is null ? Money.FromMinor(plannedIncome.Values.Sum()) : null,
                 Money.FromMinor(totalPlanned),
                 Money.FromMinor(totalSpent),
                 Money.FromMinor(PlanCalculator.Remaining(totalPlanned, totalSpent)),

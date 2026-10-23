@@ -61,6 +61,10 @@ h2 {
   gap: 8px;
 }
 
+.income-counts {
+  grid-column: 1 / 4;
+}
+
 .income-error {
   grid-column: 1 / -1;
 }
@@ -191,6 +195,10 @@ h2 {
     > mat-form-field:first-child {
       grid-column: 1 / -1;
     }
+  }
+
+  .income-counts {
+    grid-column: 1 / -1;
   }
 
   // "Mar 2026 · 27 Mar to 26 Apr" needs the full width on phones.

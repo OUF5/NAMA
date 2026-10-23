@@ -4,12 +4,13 @@ import { firstValueFrom, tap } from 'rxjs';
 import { PeriodInfo } from '../shared/month-label';
 import { MeService } from './me';
 
-// GET /api/summary (UX-08). Amounts are decimals (R-MON-01). balance is null on an account without an
-// opening balance (R-BAL-01).
+// GET /api/summary (UX-08). Amounts are decimals (R-MON-01). balance and openingDate are null on an
+// account without an opening balance (R-BAL-01).
 export interface SummaryAccount {
   id: string;
   name: string;
   balance: number | null;
+  openingDate: string | null;
 }
 
 // The month in progress for the whole budget: remaining carries (R-PLN-05), unassigned carries

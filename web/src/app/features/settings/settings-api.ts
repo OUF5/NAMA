@@ -2,6 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Me, Profile } from '../../core/me';
+import { IncomeCounts } from '../../shared/income-months';
+import { BankAccount } from '../add-entry/entry-api';
 import { FiscalYear } from '../plan/plan-api';
 
 // PRD 5.7 Settings. Amounts are decimals in JSON (R-MON-01); every sum comes from the API.
@@ -16,6 +18,8 @@ export interface Calendar {
 }
 
 // R-INC-03: "once" has toPeriodKey equal to fromPeriodKey; "monthly" with a null toPeriodKey is open ended.
+// counts is R-INC-04. bankAccountId is the account it goes into on payday, null through the income
+// split (R-INC-05).
 export interface IncomeItem {
   id: string;
   kind: 'salary' | 'additional';
@@ -24,18 +28,23 @@ export interface IncomeItem {
   type: 'once' | 'monthly';
   fromPeriodKey: string;
   toPeriodKey: string | null;
+  counts: IncomeCounts;
+  bankAccountId: string | null;
 }
 
-// GET /api/income. Items are newest first. currentTotal is the month that contains today (STG-03),
-// null when no FY contains today.
+// GET /api/income. Items are newest first. totals are Plan's and the actual income of each month
+// (R-INC-01). currentTotal (actual) and currentPlanned are the month that contains today (STG-03),
+// null when no FY contains today. bankAccounts (archived ones flagged) feed the account picker.
 export interface Income {
   fiscalYears: FiscalYear[];
   fyId: string;
   salaries: IncomeItem[];
   additional: IncomeItem[];
-  totals: { periodKey: string; total: number }[];
+  totals: { periodKey: string; planned: number; actual: number }[];
   currentPeriodKey: string | null;
   currentTotal: number | null;
+  currentPlanned: number | null;
+  bankAccounts: BankAccount[];
 }
 
 // AUTH-07, STG-07. Dates are YYYY-MM-DD in the admin's time zone. A member id is not a user id.
@@ -83,9 +92,11 @@ export interface ProfileChange {
 export interface IncomeItemChange {
   label: string;
   amount: number;
+  counts: IncomeCounts;
   type: 'once' | 'monthly';
   fromPeriodKey: string;
   toPeriodKey: string | null;
+  bankAccountId: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -108,6 +119,11 @@ export class SettingsApi {
 
   updateCalendar(fiscalStartMonth: number, paydayDay: number): Promise<Calendar> {
     return firstValueFrom(this.http.put<Calendar>('/api/settings/calendar', { fiscalStartMonth, paydayDay }));
+  }
+
+  // Add's Income (INC-01): the month pickers and the current month, without the rest of Settings.
+  income(): Promise<Income> {
+    return firstValueFrom(this.http.get<Income>('/api/income'));
   }
 
   changeSalary(amount: number, effectiveFromPeriodKey: string): Promise<Income> {

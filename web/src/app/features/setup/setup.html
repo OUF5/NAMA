@@ -135,6 +135,16 @@
                   </mat-form-field>
                 }
               </div>
+              <!-- R-INC-04 (owner note 17): as in Settings. -->
+              <mat-form-field class="income-counts">
+                <mat-label>Counts in</mat-label>
+                <mat-select formControlName="counts">
+                  @for (option of countsOptions; track option.value) {
+                    <mat-option [value]="option.value">{{ option.label }}</mat-option>
+                  }
+                </mat-select>
+                <mat-hint>{{ countsHint(i) }}</mat-hint>
+              </mat-form-field>
               @if (item.hasError('untilBeforeFrom')) {
                 <p class="error income-error" role="alert">Until is the same month as From or later.</p>
               }
@@ -152,6 +162,9 @@
           <p class="total">
             <span class="caption">Income in {{ p.currentPeriod.label }}</span>
             <span class="money">{{ money(currentIncomeMinor()) }}</span>
+            @if (currentPlannedMinor() !== currentIncomeMinor()) {
+              <span class="caption">Planned {{ money(currentPlannedMinor()) }}</span>
+            }
           </p>
         }
 
