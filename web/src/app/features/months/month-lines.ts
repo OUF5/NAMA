@@ -1,7 +1,7 @@
 import { formatAmount, formatMoney, toMinor } from '../../shared/money';
 import { PlanStatus, planStatusLabel, spendStatus } from '../../shared/plan-status';
 import { Category } from '../plan/plan-api';
-import { MonthStatus } from './overview-api';
+import { BalancesResponse, MonthOverview, MonthStatus } from './overview-api';
 
 // MON-01: every status has a text label, never color alone.
 export const STATUS_LABELS: Record<MonthStatus, string> = {
@@ -54,4 +54,32 @@ export function nameMaps(categories: Category[]): {
         .map((sub) => [sub.id, named(sub.name, sub.archived)]),
     ),
   };
+}
+
+// Owner note 9: the Balance row of the Year grid and of Totals (owner note 18), one cell per month,
+// then the FY's end (its last month). Real for closed months, projected after (R-PLN-07).
+export function balanceRow(months: MonthOverview[], balances: BalancesResponse | 'error' | null, currency: string) {
+  if (balances === null) {
+    return { state: 'loading' as const, months: [], end: null };
+  }
+  if (balances === 'error' || !balances.complete) {
+    return { state: balances === 'error' ? ('error' as const) : ('setup' as const), months: [], end: null };
+  }
+  const byKey = new Map(balances.months.map((month) => [month.periodKey, month]));
+  const cells = months.map((month) => {
+    const found = byKey.get(month.period.key);
+    const amount = found?.balance ?? null;
+    return {
+      key: month.period.key,
+      amount: amount === null ? null : formatAmount(toMinor(amount)),
+      negative: (amount ?? 0) < 0,
+      projected: found?.projected ?? false,
+      now: month.status === 'inProgress',
+      label:
+        amount === null
+          ? `${month.period.label}: balance not known`
+          : `${month.period.label}: ${found?.projected ? 'projected ' : ''}balance at the end ${formatMoney(toMinor(amount), currency)}`,
+    };
+  });
+  return { state: 'ready' as const, months: cells, end: cells.at(-1) ?? null };
 }

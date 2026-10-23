@@ -21,6 +21,16 @@ public sealed record CarriedMonth(long CarriedIn, long Planned, long Spent)
     public long Remaining => Available - Spent;
 }
 
+// Owner note 18 (Tracker's Totals): one started month of what really happened. CarriedIn is the
+// months before it added up, from the FY's first month.
+public sealed record SavedMonth(string PeriodKey, long CarriedIn, long Income, long Spent)
+{
+    // The month on its own: its actual income minus every entry in it.
+    public long ThisMonth => Income - Spent;
+
+    public long Saved => CarriedIn + ThisMonth;
+}
+
 // R-PLN-07, R-PLN-08 (owner note 8): how the FY that contains today ends if every month from now on
 // is spent as planned. Leftovers carry (R-PLN-05), so they are spent: only this month's remaining
 // above 0 is still to spend. FutureMonths are the months yet to come, each with its income minus its
@@ -152,6 +162,23 @@ public static class PlanCalculator
             saved,
             PlannedSaved(months),
             balanceToday);
+    }
+
+    // Owner note 18: Tracker's Totals add up income minus spent from the FY's first month, the way Plan
+    // adds up its plan (owner note 10). Months before NAMA was set up count with what was entered for
+    // them; balances do not use this, so they still start from the opening balances (R-BAL-03).
+    // Months are the FY's started months, in order.
+    public static IReadOnlyList<SavedMonth> RunningSaved(IEnumerable<(string PeriodKey, long Income, long Spent)> months)
+    {
+        var result = new List<SavedMonth>();
+        var carried = 0L;
+        foreach (var (periodKey, income, spent) in months)
+        {
+            var month = new SavedMonth(periodKey, carried, income, spent);
+            result.Add(month);
+            carried = month.Saved;
+        }
+        return result;
     }
 
     // ENT-01: available minus spent; negative means over plan.

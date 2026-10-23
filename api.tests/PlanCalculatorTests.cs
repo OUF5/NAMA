@@ -82,6 +82,18 @@ public class PlanCalculatorTests
         Assert.Equal(300_000, PlanCalculator.PlannedSaved(months));
     }
 
+    // Owner note 18: Tracker's Totals add up income minus spent, a negative month too.
+    [Fact]
+    public void Saved_adds_up_income_minus_spent()
+    {
+        var months = PlanCalculator.RunningSaved([("2026-01", 1_700_000, 1_420_000), ("2026-02", 1_700_000, 1_850_000), ("2026-03", 1_700_000, 930_000)]);
+
+        Assert.Equal([0L, 280_000, 130_000], months.Select(month => month.CarriedIn));
+        Assert.Equal([280_000L, -150_000, 770_000], months.Select(month => month.ThisMonth));
+        Assert.Equal([280_000L, 130_000, 900_000], months.Select(month => month.Saved));
+        Assert.Empty(PlanCalculator.RunningSaved([]));
+    }
+
     // R-PLN-03: more planned than received so far stays negative until later income covers it.
     [Fact]
     public void A_negative_unassigned_carries_too()

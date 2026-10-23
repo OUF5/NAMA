@@ -30,14 +30,18 @@ public static class OverviewEndpoint
 
     // Status is "closed", "inProgress" or "yetToCome" (R-STA-01), worked out with today in the
     // profile time zone (R-CAL-10). Income is the actual income and PlannedIncome Plan's (R-INC-01,
-    // owner note 17); both null with a filter.
+    // owner note 17); both null with a filter. Unspent is the month's income minus its spent and Saved
+    // that added up from the FY's first month (owner note 18, Tracker's Totals); both null with a
+    // filter and for a month yet to come.
     public record MonthDto(
         MeEndpoint.PeriodDto Period, string Status, decimal? Income, decimal? PlannedIncome, decimal CarriedIn, decimal Planned,
-        decimal Spent, decimal Remaining);
+        decimal Spent, decimal Remaining, decimal? Unspent, decimal? Saved);
 
     // The FY: remaining is FY planned - FY spent (the last month's remaining). PlannedSaved is the
-    // last month's Unassigned (R-PLN-04, planned income), null with a filter like income.
-    public record TotalsDto(decimal? Income, decimal? PlannedIncome, decimal Planned, decimal Spent, decimal Remaining, decimal? PlannedSaved);
+    // last month's Unassigned (R-PLN-04, planned income), null with a filter like income. Saved is the
+    // latest started month's Saved (owner note 18), null with a filter or before the FY starts.
+    public record TotalsDto(
+        decimal? Income, decimal? PlannedIncome, decimal Planned, decimal Spent, decimal Remaining, decimal? PlannedSaved, decimal? Saved);
 
     // DSH-02 (owner's choice, M9): the months that started on or before today, each with its full
     // actual income (R-INC-01) and every entry in it, from the first month that carries (R-PLN-06: months before NAMA was
@@ -193,6 +197,14 @@ public static class OverviewEndpoint
             .Select(period => period.Key).ToHashSet(StringComparer.Ordinal);
         var savedClosed = PlanCalculator.Saved(
             closed.Sum(key => income[key]), allEntries.Where(entry => closed.Contains(entry.PeriodKey)).Sum(entry => entry.AmountMinor));
+        // Owner note 18: the started months' income minus spent, added up from the FY's first month.
+        var savedMonths = PlanCalculator.RunningSaved(periods
+            .Select((period, i) => (period, i))
+            .Where(month => FiscalCalendar.HasStarted(month.period, today))
+            .Select(month => (month.period.Key, income[month.period.Key], months[month.i].Spent)));
+        var saved = savedMonths.ToDictionary(month => month.PeriodKey);
+        decimal? Saved(string periodKey, Func<SavedMonth, long> value) =>
+            scope is null && saved.TryGetValue(periodKey, out var month) ? Money.FromMinor(value(month)) : null;
 
         return new OverviewResponse(
             fiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
@@ -205,7 +217,9 @@ public static class OverviewEndpoint
                 Money.FromMinor(months[i].CarriedIn),
                 Money.FromMinor(months[i].Planned),
                 Money.FromMinor(months[i].Spent),
-                Money.FromMinor(months[i].Remaining))).ToList(),
+                Money.FromMinor(months[i].Remaining),
+                Saved(period.Key, month => month.ThisMonth),
+                Saved(period.Key, month => month.Saved))).ToList(),
             categories.Select(category => CategoriesEndpoint.ToDto(category, subCategories)).ToList(),
             rows,
             new TotalsDto(
@@ -214,7 +228,8 @@ public static class OverviewEndpoint
                 Money.FromMinor(totalPlanned),
                 Money.FromMinor(totalSpent),
                 Money.FromMinor(PlanCalculator.Remaining(totalPlanned, totalSpent)),
-                scope is null ? Money.FromMinor(PlanCalculator.PlannedSaved(unassigned)) : null),
+                scope is null ? Money.FromMinor(PlanCalculator.PlannedSaved(unassigned)) : null,
+                scope is null && savedMonths.Count > 0 ? Money.FromMinor(savedMonths[^1].Saved) : null),
             new ToDateDto(
                 Money.FromMinor(incomeToDate),
                 Money.FromMinor(plannedToDate),

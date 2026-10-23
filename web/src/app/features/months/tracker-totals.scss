@@ -1,0 +1,78 @@
+// Owner note 18: the same sideways table as Plan's Allocating (docs/DESIGN.md). Tokens only.
+@use '../../shared/totals-table';
+
+@include totals-table.styles;
+
+.card {
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--divider);
+
+  h2 {
+    margin: 0;
+  }
+}
+
+.ok {
+  color: var(--ok);
+}
+
+.danger {
+  color: var(--danger);
+}
+
+// The month headers are labels here, not buttons.
+.month {
+  display: block;
+  cursor: default;
+}
+
+// The planned income is a side note to Income.
+.totals .secondary {
+  th,
+  td {
+    color: var(--text-muted);
+    font-size: 12px;
+  }
+}
+
+// The Balance row stands apart from the sum above it; projected or actual under each amount.
+.totals .balance {
+  th,
+  td {
+    border-top: 1px solid var(--divider);
+  }
+
+  td .caption {
+    display: block;
+    font-size: 11px;
+  }
+}
+
+.totals td.row-note {
+  text-align: left;
+  white-space: normal;
+}
+
+@media (max-width: 767.98px) {
+  .card {
+    margin-bottom: 12px;
+    padding: 16px;
+  }
+
+  .card-head {
+    flex-wrap: wrap;
+  }
+}

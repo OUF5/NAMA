@@ -71,6 +71,27 @@ public class StartMonthTests(ApiFactory factory) : IClassFixture<ApiFactory>
             (Dec(toDate["income"]), Dec(toDate["spent"]), Dec(toDate["saved"]), Dec(toDate["plannedSaved"])));
     }
 
+    // Tracker's Totals (owner note 18): the owner's choice is that months before NAMA was set up count
+    // too, with what was entered for them, so Accumulated savings adds up from Aug: 10,000 a month, and
+    // 9,250 in Sep after a back-filled 750. FY to date (Dashboard) and the balance still start in Oct.
+    [Fact]
+    public async Task Tracker_totals_add_up_unspent_from_the_fiscal_years_first_month()
+    {
+        var sub = await SetUp();
+        await factory.Store.AddEntryAsync(sub, new Entry("e1", new DateOnly(2026, 9, 5), "2026-09", Fy, "food", "rent", "rajhi", 75_000, ""));
+
+        var overview = await Get(sub, $"/api/fiscal-years/{Fy}/overview");
+
+        var months = overview["months"]!.AsArray();
+        Assert.Equal([10_000m, 9_250m, 10_000m], months.Take(3).Select(month => Dec(month!["unspent"])));
+        Assert.Equal([10_000m, 19_250m, 29_250m], months.Take(3).Select(month => Dec(month!["saved"])));
+        Assert.Null(months[3]!["saved"]);
+        Assert.Equal(29_250m, Dec(overview["totals"]!["saved"]));
+        Assert.Equal(10_000m, Dec(overview["toDate"]!["saved"]));
+        var summary = await Get(sub, "/api/summary");
+        Assert.Equal(2_500m, Dec(summary["balance"]));
+    }
+
     // Plan (owner note 10): Accumulated Planned Savings is the plan alone, so it adds up from Aug, the
     // FY's first month, even though NAMA was set up in Oct: 9,000 a month, 10,000 in Feb (the bonus).
     // The FY column is the whole FY: income 12 × 10,000 + 1,000 = 121,000, planned 12 × 1,000 = 12,000,

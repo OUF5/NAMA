@@ -3,7 +3,7 @@ import { Component, computed, input, signal } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { Params, RouterLink } from '@angular/router';
 import { formatAmount, formatMoney, toMinor } from '../../shared/money';
-import { STATUS_LABELS, availableMinor, nameMaps, spendLine } from './month-lines';
+import { STATUS_LABELS, availableMinor, balanceRow, nameMaps, spendLine } from './month-lines';
 import { BalancesResponse, Cell, OverviewResponse } from './overview-api';
 
 // MON-02 Year view: category rows (they expand to sub-categories), the months plus an FY total, and
@@ -90,32 +90,7 @@ export class YearGrid {
   });
 
   // The Balance row: one cell per month, then the FY's end (its last month).
-  protected readonly balanceRow = computed(() => {
-    const balances = this.balances();
-    if (balances === null) {
-      return { state: 'loading' as const, months: [], end: null };
-    }
-    if (balances === 'error' || !balances.complete) {
-      return { state: balances === 'error' ? ('error' as const) : ('setup' as const), months: [], end: null };
-    }
-    const byKey = new Map(balances.months.map((month) => [month.periodKey, month]));
-    const months = this.data().months.map((month) => {
-      const found = byKey.get(month.period.key);
-      const amount = found?.balance ?? null;
-      return {
-        key: month.period.key,
-        amount: amount === null ? null : formatAmount(toMinor(amount)),
-        negative: (amount ?? 0) < 0,
-        projected: found?.projected ?? false,
-        now: month.status === 'inProgress',
-        label:
-          amount === null
-            ? `${month.period.label}: balance not known`
-            : `${month.period.label}: ${found?.projected ? 'projected ' : ''}balance at the end ${formatMoney(toMinor(amount), this.currency())}`,
-      };
-    });
-    return { state: 'ready' as const, months, end: months.at(-1) ?? null };
-  });
+  protected readonly balanceRow = computed(() => balanceRow(this.data().months, this.balances(), this.currency()));
 
   protected toggleCategory(id: string): void {
     this.openCategories.update((ids) => {

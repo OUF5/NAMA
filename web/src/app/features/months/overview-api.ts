@@ -13,7 +13,9 @@ import { Category, FiscalYear } from '../plan/plan-api';
 export type MonthStatus = 'closed' | 'inProgress' | 'yetToCome';
 
 // income is the actual income and plannedIncome Plan's (R-INC-01, owner note 17); both null when
-// Tracker is filtered to a category: income belongs to the whole budget.
+// Tracker is filtered to a category: income belongs to the whole budget. unspent is the month's
+// income minus its spent and saved that added up from the FY's first month (owner note 18, Totals);
+// both null with a filter and for a month yet to come.
 export interface MonthOverview {
   period: PeriodInfo;
   status: MonthStatus;
@@ -23,6 +25,8 @@ export interface MonthOverview {
   planned: number;
   spent: number;
   remaining: number;
+  unspent: number | null;
+  saved: number | null;
 }
 
 export interface Cell {
@@ -50,7 +54,8 @@ export interface CategoryRow {
 }
 
 // The FY: remaining is FY planned - FY spent. plannedSaved (R-PLN-04) is the last month's Unassigned,
-// null with a filter.
+// null with a filter. saved is the latest started month's saved (owner note 18), null with a filter or
+// before the FY starts.
 export interface Totals {
   income: number | null;
   plannedIncome: number | null;
@@ -58,6 +63,7 @@ export interface Totals {
   spent: number;
   remaining: number;
   plannedSaved: number | null;
+  saved: number | null;
 }
 
 // DSH-02 (owner's choice, M9): the months that started on or before today, each with its full income
@@ -127,7 +133,7 @@ export class OverviewApi {
     return firstValueFrom(this.http.get<OverviewResponse>(`/api/fiscal-years/${fyId}/overview`, { params }));
   }
 
-  // Only the Year view asks: balances read every entry since the earliest opening date.
+  // Only Totals and the Year view ask: balances read every entry since the earliest opening date.
   balances(fyId: string): Promise<BalancesResponse> {
     return firstValueFrom(this.http.get<BalancesResponse>(`/api/fiscal-years/${fyId}/balances`));
   }

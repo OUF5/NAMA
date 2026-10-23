@@ -89,6 +89,8 @@ function months(statuses = 'CCCCCCCCIYYY'): MonthOverview[] {
       planned,
       spent,
       remaining: carried / 100,
+      unspent: null,
+      saved: null,
     };
   });
 }
@@ -147,7 +149,7 @@ function overview(statuses?: string): OverviewResponse {
         subCategories: [{ subCategoryId: 'fuel', months: fuel, planned: 1600, spent: 99.99 }],
       },
     ],
-    totals: { income: 204500.25, plannedIncome: 204500.25, planned: 19600, spent: 1349.99, remaining: 18250.01, plannedSaved: 184900.25 },
+    totals: { income: 204500.25, plannedIncome: 204500.25, planned: 19600, spent: 1349.99, remaining: 18250.01, plannedSaved: 184900.25, saved: null },
     toDate: {
       income: 153500.25,
       planned: 13900,

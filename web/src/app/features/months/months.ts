@@ -23,7 +23,8 @@ import { MonthApi } from './month-api';
 import { MonthDetail, MonthDetailState } from './month-detail';
 import { STATUS_LABELS, SpendLine, availableMinor, nameMaps, spendLine } from './month-lines';
 import { BalancesResponse, Cell, CategoryRow, OverviewApi, OverviewResponse } from './overview-api';
-import { MonthsView, loadView, saveView } from './view-choice';
+import { TrackerTotals } from './tracker-totals';
+import { MonthsView, isMonthsView, loadView, saveView } from './view-choice';
 import { YearGrid } from './year-grid';
 
 const PHONE = '(max-width: 767.98px)';
@@ -31,8 +32,8 @@ const PHONE = '(max-width: 767.98px)';
 // PRD 5.6 Months (MON-01 to MON-04), Tracker on screen. Owner note 9: the Months view shows one month
 // at a time (the month in progress first, or ?month=), in detail (MonthDetail). Page load is the
 // overview plus that month's detail (NFR-01: 2 calls); picking another month makes only its detail
-// call. The Year view makes the overview and the balances call instead. The API makes every sum
-// (R-MON-01); the page only formats.
+// call. Totals (owner note 18, the default) and the Year view make the overview and the balances call
+// instead. The API makes every sum (R-MON-01); the page only formats.
 @Component({
   selector: 'app-months',
   imports: [
@@ -47,6 +48,7 @@ const PHONE = '(max-width: 767.98px)';
     MonthDetail,
     MonthPicker,
     RolloverBanner,
+    TrackerTotals,
     YearGrid,
   ],
   providers: [OUTLINE_FORM_FIELDS],
@@ -68,12 +70,12 @@ export class Months {
   protected readonly loadError = signal('');
   protected readonly data = signal<OverviewResponse | null>(null);
   protected readonly status = signal('');
-  // MON-02: the last choice is remembered (Months by default).
+  // MON-02: the last choice is remembered (Totals by default, owner note 18).
   protected readonly view = signal<MonthsView>(loadView());
   // Owner note 9: the month in the URL (?month=YYYY-MM), and its detail call.
   private readonly urlMonth = signal<string | null>(null);
   protected readonly monthDetail = signal<MonthDetailState | null>(null);
-  // Owner note 9: the Year view's Balance row (null while it loads).
+  // Owner note 9: the Balance row of the Year view and Totals (null while it loads).
   protected readonly balances = signal<BalancesResponse | 'error' | null>(null);
 
   protected readonly currency = computed(() => this.meService.me()?.profile?.currency ?? 'SAR');
@@ -169,7 +171,7 @@ export class Months {
       this.urlMonth.set(params.get('month'));
       // Plan's "See the year grid" link (M8) opens the Year view.
       const view = params.get('view');
-      if (view === 'months' || view === 'year') {
+      if (isMonthsView(view)) {
         this.setView(view);
       }
       const scope = [this.urlFyId, this.categoryId(), this.subCategoryId()].join('|');
@@ -187,7 +189,7 @@ export class Months {
     if (view === 'months' && this.data() && !this.monthDetail()) {
       void this.loadMonth();
     }
-    if (view === 'year' && this.data() && !this.balances()) {
+    if (view !== 'months' && this.data() && !this.balances()) {
       void this.loadBalances();
     }
   }
@@ -250,7 +252,7 @@ export class Months {
     void this.load();
   }
 
-  // The overview, then the shown month's detail (Months view only).
+  // The overview, then the shown month's detail (Months view) or the balances (Totals and Year).
   private async load(): Promise<void> {
     const request = ++this.request;
     try {
@@ -317,7 +319,7 @@ export class Months {
     }
   }
 
-  // The Year view's Balance row for the FY shown; only the latest answer is kept.
+  // The Balance row of the Year view and Totals for the FY shown; only the latest answer is kept.
   private async loadBalances(): Promise<void> {
     const fyId = this.data()?.fyId;
     if (!fyId) {

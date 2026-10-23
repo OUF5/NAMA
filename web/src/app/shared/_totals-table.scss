@@ -1,0 +1,126 @@
+// The sideways totals tables (docs/DESIGN.md): Plan's Allocating (PLN-03) and Tracker's Totals
+// (owner note 18). Row labels stay in view, month columns are equal, the FY column stands apart,
+// and each computed row has its formula under its name. Tokens only.
+@mixin styles {
+  .scroll {
+    overflow-x: auto;
+  }
+
+  .totals {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+
+    caption {
+      padding-top: 8px;
+      caption-side: bottom;
+      text-align: left;
+    }
+
+    // Each month's header and numbers are centered in its column, so they read as one column.
+    th,
+    td {
+      height: 36px;
+      padding: 0 4px;
+      text-align: center;
+      font-weight: 400;
+      white-space: nowrap;
+    }
+
+    // The row labels stay in view when the table scrolls sideways.
+    tbody th,
+    thead td {
+      position: sticky;
+      left: 0;
+      width: 168px;
+      padding-left: 0;
+      background: var(--surface);
+      text-align: left;
+      color: var(--text-muted);
+    }
+
+    // A label and its formula take two or three lines rather than more width.
+    tbody th {
+      padding-top: 6px;
+      padding-bottom: 6px;
+      white-space: normal;
+      line-height: 1.25;
+    }
+
+    thead th {
+      padding: 0;
+    }
+
+    .selected,
+    .now {
+      background: var(--primary-soft);
+    }
+  }
+
+  // The FY column (R-PLN-04) stands apart from the months behind a divider.
+  .totals .fy-col {
+    border-left: 1px solid var(--divider);
+    color: var(--text-2);
+
+    .caption {
+      display: block;
+    }
+  }
+
+  // "Unallocated this month" is a step of the sum, so it gets the line above it but not the weight.
+  .totals .subtotal th,
+  .totals .subtotal td {
+    border-top: 1px solid var(--divider);
+  }
+
+  .totals-note {
+    margin: 8px 0 0;
+  }
+
+  // The last row is the result, so it reads as one.
+  .totals .result th,
+  .totals .result td {
+    border-top: 1px solid var(--divider);
+    font-weight: 600;
+  }
+
+  // A computed row's formula, under its name ("Income − Planned").
+  .formula {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--text-muted);
+    opacity: 0.85;
+  }
+
+  // R-PLN-04 in the card head: "Accumulated Planned Savings in FY 2026 · SAR 184,900.25".
+  .saved-kpi {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin: 0 0 0 auto;
+    text-align: right;
+
+    .money {
+      font-size: 16px;
+      font-weight: 600;
+    }
+  }
+
+  // A month header selects its column: the whole cell, at least 44px tall.
+  .month {
+    width: 100%;
+    min-height: 44px;
+    padding: 4px 0;
+    border: 0;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    text-align: center;
+    cursor: pointer;
+
+    .caption {
+      display: block;
+    }
+  }
+}

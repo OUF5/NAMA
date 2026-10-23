@@ -1,0 +1,175 @@
+<!-- Owner note 18: Plan's Allocating table with what really happened. -->
+<section class="card totals-card" aria-labelledby="totals-title">
+  <div class="card-head">
+    <h2 id="totals-title">Totals per month <span class="caption">({{ currency() }})</span></h2>
+    @if (fiscalYearColumn().savedMoney; as saved) {
+      <p class="saved-kpi">
+        <span class="caption">Accumulated savings{{ soFar() ? ' so far' : '' }} in {{ fiscalYearLabel() }}</span>
+        <span class="money" [class.ok]="!fiscalYearColumn().over" [class.danger]="fiscalYearColumn().over">{{ saved }}</span>
+      </p>
+    }
+  </div>
+  <div class="scroll">
+    <!-- Equal month columns; the table scrolls sideways when they do not fit. -->
+    <table class="totals" [style.min-width.px]="labelWidth + (columns().length + 1) * columnWidth">
+      <thead>
+        <tr>
+          <td></td>
+          @for (column of columns(); track column.key) {
+            <th scope="col" [class.now]="column.now" [title]="column.title">
+              <span class="month">
+                {{ column.month }}
+                <span class="caption">{{ column.year }}</span>
+              </span>
+            </th>
+          }
+          <th scope="col" class="fy-col">FY<span class="caption">total</span></th>
+        </tr>
+      </thead>
+      @let fy = fiscalYearColumn();
+      <tbody>
+        @if (whole()) {
+          <tr>
+            <th scope="row">Income</th>
+            @for (column of columns(); track column.key) {
+              <td class="money" [class.now]="column.now">{{ column.income }}</td>
+            }
+            <td class="money fy-col">{{ fy.income }}</td>
+          </tr>
+          @if (showPlannedIncome()) {
+            <!-- R-INC-04: Plan's income, when an item counts in only one of the two. -->
+            <tr class="secondary">
+              <th scope="row">Planned income</th>
+              @for (column of columns(); track column.key) {
+                <td class="money" [class.now]="column.now">{{ column.plannedIncome }}</td>
+              }
+              <td class="money fy-col">{{ fy.plannedIncome }}</td>
+            </tr>
+          }
+        }
+        <tr>
+          <th scope="row">Planned</th>
+          @for (column of columns(); track column.key) {
+            <td class="money" [class.now]="column.now">{{ column.planned }}</td>
+          }
+          <td class="money fy-col">{{ fy.planned }}</td>
+        </tr>
+        <tr>
+          <th scope="row">Spent</th>
+          @for (column of columns(); track column.key) {
+            <td class="money" [class.now]="column.now">{{ column.spent ?? '–' }}</td>
+          }
+          <td class="money fy-col">{{ fy.spent }}</td>
+        </tr>
+        @if (whole()) {
+          <!-- The month on its own: what came in minus what went out. -->
+          <tr class="subtotal">
+            <th scope="row">
+              Unspent this month
+              <span class="formula">Income − Spent</span>
+            </th>
+            @for (column of columns(); track column.key) {
+              <td
+                class="money"
+                [class.now]="column.now"
+                [class.ok]="column.unspent !== null && !column.unspentOver"
+                [class.danger]="column.unspentOver"
+              >
+                {{ column.unspent ?? '–' }}
+              </td>
+            }
+            <td class="money fy-col" [class.ok]="fy.saved !== null && !fy.over" [class.danger]="fy.over">
+              {{ fy.saved ?? '–' }}
+              @if (soFar() && fy.saved !== null) {
+                <span class="caption">so far</span>
+              }
+            </td>
+          </tr>
+          <tr class="result">
+            <th scope="row">
+              Accumulated savings
+              <span class="formula">Unspent this month, added up from {{ firstMonth() }}</span>
+            </th>
+            @for (column of columns(); track column.key) {
+              <td
+                class="money"
+                [class.now]="column.now"
+                [class.ok]="column.saved !== null && !column.savedOver"
+                [class.danger]="column.savedOver"
+              >
+                {{ column.saved ?? '–' }}
+              </td>
+            }
+            <td
+              class="money fy-col"
+              [class.ok]="fy.saved !== null && !fy.over"
+              [class.danger]="fy.over"
+              [attr.aria-label]="fy.saved === null ? null : 'Accumulated savings ' + (soFar() ? 'so far ' : '') + fy.saved"
+            >
+              {{ fy.saved ?? '–' }}
+              @if (soFar() && fy.saved !== null) {
+                <span class="caption">so far</span>
+              }
+            </td>
+          </tr>
+          <!-- Owner note 9: the money in the accounts at each month's end, real or projected (R-PLN-07). -->
+          <tr class="balance">
+            <th scope="row">
+              Balance
+              <span class="formula">End of month</span>
+            </th>
+            @let row = balanceRow();
+            @if (row.state === 'ready') {
+              @for (month of row.months; track month.key) {
+                <td class="money" [class.now]="month.now" [attr.aria-label]="month.label">
+                  @if (month.amount !== null) {
+                    <span [class.danger]="month.negative">{{ month.amount }}</span>
+                    <span class="caption">{{ month.projected ? 'Projected' : 'Actual' }}</span>
+                  } @else {
+                    <span aria-hidden="true">–</span>
+                  }
+                </td>
+              }
+              <td class="money fy-col">
+                @if (row.end?.amount; as amount) {
+                  <span [class.danger]="row.end?.negative">{{ amount }}</span>
+                  <span class="caption">End of FY</span>
+                } @else {
+                  <span aria-hidden="true">–</span>
+                }
+              </td>
+            } @else {
+              <td [attr.colspan]="columns().length + 1" class="row-note">
+                <span class="caption">
+                  @switch (row.state) {
+                    @case ('loading') {
+                      Loading…
+                    }
+                    @case ('error') {
+                      The balances could not be loaded.
+                    }
+                    @default {
+                      Set every account's balance and the income split on <a routerLink="/banks">Banks</a> to see it.
+                    }
+                  }
+                </span>
+              </td>
+            }
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+  <!-- Under the table, not its caption, so it wraps instead of scrolling with the months. -->
+  <p class="caption totals-note">
+    @if (whole()) {
+      Unspent is income that was not spent. Accumulated savings adds up each month's unspent from
+      {{ firstMonth() }}, the first month of {{ fiscalYearLabel() }}, with what you entered for months
+      before you started NAMA. It is not your balance: Balance starts from the balances you set on Banks.
+      Months yet to come show –.
+    } @else {
+      Income, savings and the balance belong to the whole budget, so they are hidden while a category is
+      picked.
+    }
+  </p>
+</section>

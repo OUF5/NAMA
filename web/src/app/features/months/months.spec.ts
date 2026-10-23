@@ -93,7 +93,31 @@ function month(
   spent: number,
   carriedIn = 0,
 ): MonthOverview {
-  return { period, status, income, plannedIncome: income, carriedIn, planned, spent, remaining: Math.round((carriedIn + planned - spent) * 100) / 100 };
+  return {
+    period,
+    status,
+    income,
+    plannedIncome: income,
+    carriedIn,
+    planned,
+    spent,
+    remaining: Math.round((carriedIn + planned - spent) * 100) / 100,
+    unspent: null,
+    saved: null,
+  };
+}
+
+// Owner note 18: each started month's income minus spent, added up from the FY's first month.
+function withSaved(months: MonthOverview[]): MonthOverview[] {
+  let saved = 0;
+  return months.map((item) => {
+    if (item.status === 'yetToCome') {
+      return item;
+    }
+    const unspent = Math.round(((item.income ?? 0) - item.spent) * 100) / 100;
+    saved = Math.round((saved + unspent) * 100) / 100;
+    return { ...item, unspent, saved };
+  });
 }
 
 const cells = (...values: [number, number][]) =>
@@ -114,11 +138,11 @@ function overview(
   return {
     fiscalYears,
     fyId,
-    months: [
+    months: withSaved([
       month(aug, statuses[0], 17000, 1500, 80),
       month(sep, statuses[1], 17500.25, 1900, 1299.99),
       month(oct, statuses[2], 17000, 1900, 0),
-    ],
+    ]),
     categories,
     rows: [
       {
@@ -151,7 +175,7 @@ function overview(
         ],
       },
     ],
-    totals: { income: 51500.25, plannedIncome: 51500.25, planned: 5300, spent: 1379.99, remaining: 3920.01, plannedSaved: 46200.25 },
+    totals: { income: 51500.25, plannedIncome: 51500.25, planned: 5300, spent: 1379.99, remaining: 3920.01, plannedSaved: 46200.25, saved: 33120.26 },
     toDate: { income: 34500.25, planned: 3400, spent: 1379.99, saved: 33120.26, plannedSaved: 31100.25, savedClosed: 17000 },
     rollover: null,
     carryFromPeriodKey: '2026-08',
@@ -234,6 +258,8 @@ describe('Tracker (PRD 5.6)', () => {
   beforeEach(() => {
     meValue = me;
     localStorage.clear();
+    // Most tests are about the Months view; the Totals tests clear this (owner note 18: the default).
+    localStorage.setItem('nama.months.view', 'months');
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -664,13 +690,85 @@ describe('Tracker (PRD 5.6)', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('blocked');
     });
-    await open();
+    await open('/months', overview(), balances);
+    expect(root().querySelector('app-tracker-totals')).not.toBeNull();
+
+    button(root(), 'Months').click();
+    (await monthCall('2026-09')).flush(detail());
+    await settle();
     expect(section('month')).not.toBeNull();
+  });
+
+  // Owner note 18: Totals is the first view and the default; it shares the balances with Year.
+  it('opens on Totals when nothing is remembered, before Year and Months', async () => {
+    localStorage.clear();
+    await open('/months', overview(), balances);
+
+    expect(lines(root(), 'mat-button-toggle')).toEqual(['Totals', 'Year', 'Months']);
+    expect(root().querySelector('app-tracker-totals')).not.toBeNull();
+    // Totals has no lines to leave out.
+    expect(root().textContent).not.toContain('Over plan only');
 
     button(root(), 'Year').click();
-    (await balancesCall()).flush(balances);
     await settle();
+    http.verify();
     expect(root().querySelector('table.grid')).not.toBeNull();
+    expect(root().textContent).toContain('Over plan only');
+  });
+
+  function totalsRows(): string[] {
+    return lines(root(), 'app-tracker-totals tbody tr');
+  }
+
+  // Owner note 18: Allocating's table with what really happened. Aug kept 17,000 - 80 and Sep
+  // 17,500.25 - 1,299.99, added up from Aug; Oct has not started.
+  it('shows the totals per month: what came in, went out and was kept', async () => {
+    await open('/months?view=totals', overview(), balances);
+
+    const card = section('totals');
+    expect(words(card.querySelector('h2'))).toBe('Totals per month (SAR)');
+    expect(words(card.querySelector('.saved-kpi'))).toBe('Accumulated savings so far in FY 2026 SAR 33,120.26');
+    expect(lines(card, 'thead th')).toEqual(['Aug 2026', 'Sep 2026', 'Oct 2026', 'FY total']);
+    expect(totalsRows()).toEqual([
+      'Income 17,000 17,500.25 17,000 51,500.25',
+      'Planned 1,500 1,900 1,900 5,300',
+      'Spent 80 1,299.99 – 1,379.99',
+      'Unspent this month Income − Spent 16,920 16,200.26 – 33,120.26 so far',
+      'Accumulated savings Unspent this month, added up from Aug 2026 16,920 33,120.26 – 33,120.26 so far',
+      'Balance End of month 18,450 Actual 22,000 Projected -500 Projected -500 End of FY',
+    ]);
+    // The month in progress is marked in its header and every row.
+    expect(card.querySelector('thead th.now')?.getAttribute('title')).toBe('Sep 2026 · In progress');
+    expect(card.querySelectorAll('tbody td.now').length).toBe(6);
+    // Aug, Sep and the FY are green; Oct's dash has no color.
+    expect(card.querySelectorAll('tr.result td.ok').length).toBe(3);
+    expect(text(card.querySelector('.totals-note'))).toContain('It is not your balance');
+  });
+
+  it('shows the planned income when it differs, and spending above income in red', async () => {
+    const data = overview();
+    data.months = withSaved(data.months.map((item, i) => (i === 0 ? { ...item, plannedIncome: 18000, spent: 20000 } : item)));
+    data.totals = { ...data.totals, plannedIncome: 52500.25, spent: 21299.99, saved: 13200.26 };
+    await open('/months?view=totals', data, balances);
+
+    const rows = totalsRows();
+    expect(rows[1]).toBe('Planned income 18,000 17,500.25 17,000 52,500.25');
+    expect(rows[4]).toBe('Unspent this month Income − Spent -3,000 16,200.26 – 13,200.26 so far');
+    const unspent = section('totals').querySelectorAll('tr.subtotal td');
+    expect(unspent[0].classList).toContain('danger');
+    expect(unspent[1].classList).toContain('ok');
+  });
+
+  // MON-05: income, savings and the balance belong to the whole budget.
+  it('shows only Planned and Spent for a category', async () => {
+    const data = overview();
+    data.months = data.months.map((item) => ({ ...item, income: null, plannedIncome: null, unspent: null, saved: null }));
+    data.totals = { ...data.totals, income: null, plannedIncome: null, plannedSaved: null, saved: null };
+    await open('/months?view=totals&categoryId=food', data, balances);
+
+    expect(totalsRows()).toEqual(['Planned 1,500 1,900 1,900 5,300', 'Spent 80 1,299.99 – 1,379.99']);
+    expect(section('totals').querySelector('.saved-kpi')).toBeNull();
+    expect(text(section('totals').querySelector('.totals-note'))).toContain('hidden while a category is picked');
   });
 
   // MON-02 Year view and MON-04 links; owner note 9: every value has its label.

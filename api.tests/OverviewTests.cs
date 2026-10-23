@@ -124,6 +124,47 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(139_600.25m, Dec(overview["toDate"]!["plannedSaved"]));
     }
 
+    // Owner note 18 (Tracker's Totals): each started month's income minus spent, added up from Jan.
+    // Jan to Jul 17,000 each (119,000); Aug 17,000 - 50 = 16,950 (135,950); Sep 17,500.25 - 1,299.99
+    // = 16,200.26 (152,150.26, FY to date's saved, as the carry starts in Jan). Oct to Dec have not
+    // started. The FY column is the latest started month's.
+    [Fact]
+    public async Task Unspent_adds_up_over_the_started_months()
+    {
+        var overview = await GetOk(await SetUp());
+
+        var months = overview["months"]!.AsArray();
+        Assert.Equal([17_000m, 17_000m, 17_000m, 17_000m, 17_000m, 17_000m, 17_000m, 16_950m, 16_200.26m],
+            months.Take(9).Select(month => Dec(month!["unspent"])));
+        Assert.Equal([17_000m, 34_000m, 51_000m, 68_000m, 85_000m, 102_000m, 119_000m, 135_950m, 152_150.26m],
+            months.Take(9).Select(month => Dec(month!["saved"])));
+        Assert.All(months.Skip(9), month => Assert.Equal((null, null), (month!["unspent"], month["saved"])));
+        Assert.Equal(152_150.26m, Dec(overview["totals"]!["saved"]));
+    }
+
+    // Spending more than came in makes Unspent negative, and the months after start lower.
+    [Fact]
+    public async Task Unspent_can_be_negative()
+    {
+        var sub = await SetUp();
+        await AddEntry(sub, "groceries", "2026-02-10", 20_000m); // Jan 2026
+
+        var overview = await GetOk(sub);
+
+        Assert.Equal((-3_000m, -3_000m), (Dec(Month(overview, "2026-01")["unspent"]), Dec(Month(overview, "2026-01")["saved"])));
+        Assert.Equal((17_000m, 14_000m), (Dec(Month(overview, "2026-02")["unspent"]), Dec(Month(overview, "2026-02")["saved"])));
+        Assert.Equal(132_150.26m, Dec(overview["totals"]!["saved"]));
+    }
+
+    [Fact]
+    public async Task Saved_is_null_before_the_FY_starts()
+    {
+        var overview = await GetOk(await SetUp(), utcNow: new DateTimeOffset(2026, 1, 26, 9, 0, 0, TimeSpan.Zero));
+
+        Assert.All(overview["months"]!.AsArray(), month => Assert.Null(month!["saved"]));
+        Assert.Null(overview["totals"]!["saved"]);
+    }
+
     // DSH-02 "planned until now": Jan to Aug 8 × 1,500 + Sep 1,900 = 13,900. DSH-04: the closed months
     // (Jan to Aug) added 8 × 17,000 − 50 = 135,950; Sep is still in progress.
     [Fact]
@@ -360,6 +401,9 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((18_000m, 1_249.99m, 16_750.01m), Scoped(overview["totals"]!));
         Assert.Null(overview["totals"]!["income"]);
         Assert.Null(overview["totals"]!["plannedSaved"]);
+        // Owner note 18: unspent is income minus spent, so a filter has none either.
+        Assert.Equal((null, null), (Month(overview, "2026-09")["unspent"], Month(overview, "2026-09")["saved"]));
+        Assert.Null(overview["totals"]!["saved"]);
         Assert.Equal((153_500.25m, 1_349.99m, 152_150.26m), ToDate(overview));
         // The selectors still get every category.
         Assert.Equal(2, overview["categories"]!.AsArray().Count);
