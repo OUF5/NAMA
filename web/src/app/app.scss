@@ -78,6 +78,24 @@
   }
 }
 
+// Owner note 15: the Balance link, then the 44px eye that hides it. The link gives up its right
+// padding to the eye, so the amount keeps its room in the phone strip's half.
+.balance {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+
+  .stat {
+    flex: 1;
+    padding-right: 4px;
+  }
+
+  .eye {
+    flex: none;
+    color: var(--text-muted);
+  }
+}
+
 .stat {
   display: flex;
   flex-direction: column;
@@ -95,8 +113,10 @@
   }
 
   .caption {
+    overflow: hidden;
     font-size: 12px;
     white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   .value {
@@ -311,13 +331,23 @@
   .stats.strip {
     flex: none;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    // Owner note 15: Balance and its eye take what they need (at most 60%), Left the rest; a caption
+    // that does not fit ends in "…" (its aria-label has it all).
+    grid-template-columns: minmax(0, 1fr) fit-content(60%);
+    gap: 4px;
     box-sizing: border-box;
     min-height: 49px;
-    padding: 2px 4px;
+    padding: 2px 0 2px 4px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
+
+    .stat {
+      padding: 0 8px;
+    }
+
+    .balance .stat {
+      padding-right: 0;
+    }
   }
 
   .nav-item {

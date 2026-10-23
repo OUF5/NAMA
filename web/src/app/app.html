@@ -45,14 +45,29 @@
           <span class="money value" [class]="left.status">{{ left.amount }}</span>
         </a>
       }
-      <a class="stat" routerLink="/banks" [attr.aria-label]="h.balance.label" [title]="h.balance.title">
-        <span class="caption">Balance</span>
-        @if (h.balance.amount; as amount) {
-          <span class="money value" [class.danger]="h.balance.negative">{{ amount }}</span>
-        } @else {
-          <span class="value setup">Set up</span>
+      <!-- Owner note 15: the eye hides the balance, as banking apps do. Nothing to hide while it is "Set up". -->
+      <div class="balance">
+        <a class="stat" routerLink="/banks" [attr.aria-label]="h.balance.label" [title]="h.balance.title">
+          <span class="caption">Balance</span>
+          @if (h.balance.amount; as amount) {
+            <span class="money value" [class.danger]="h.balance.negative">{{ amount }}</span>
+          } @else {
+            <span class="value setup">Set up</span>
+          }
+        </a>
+        @if (h.balance.canHide) {
+          <button
+            mat-icon-button
+            type="button"
+            class="eye"
+            [attr.aria-label]="balanceHidden() ? 'Show balance' : 'Hide balance'"
+            [title]="balanceHidden() ? 'Show balance' : 'Hide balance'"
+            (click)="toggleBalanceHidden()"
+          >
+            <mat-icon aria-hidden="true">{{ balanceHidden() ? 'visibility_off' : 'visibility' }}</mat-icon>
+          </button>
         }
-      </a>
+      </div>
     }
   </div>
 </ng-template>

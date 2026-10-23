@@ -123,6 +123,49 @@ describe('App', () => {
     expect(compiled.querySelectorAll('.stats.strip .stat').length).toBe(2);
   });
 
+  // Owner note 15: the eye hides the balance (amount, color and accounts) and remembers it on this device.
+  it('should hide and show the balance with the eye', async () => {
+    localStorage.removeItem('nama.balance.hidden');
+    summary.set({
+      balance: -250,
+      complete: true,
+      accounts: [{ id: 'main', name: 'Main', balance: -250 }],
+      month: null,
+      projection: null,
+    });
+    const fixture = TestBed.createComponent(App);
+    await fixture.whenStable();
+    const compiled = fixture.nativeElement as HTMLElement;
+    const balance = () => compiled.querySelector<HTMLAnchorElement>('.stats.bar .balance .stat')!;
+    const eye = () => compiled.querySelector<HTMLButtonElement>('.stats.bar .balance .eye')!;
+    expect(statText(balance())).toBe('Balance SAR -250');
+    expect(eye().getAttribute('aria-label')).toBe('Hide balance');
+    expect(eye().textContent?.trim()).toBe('visibility');
+
+    eye().click();
+    await fixture.whenStable();
+
+    expect(statText(balance())).toBe('Balance SAR ••••');
+    expect(balance().querySelector('.value')!.classList).not.toContain('danger');
+    expect(balance().getAttribute('aria-label')).toBe('Balance hidden. Open Banks');
+    expect(balance().getAttribute('title')).toBe('');
+    expect(eye().getAttribute('aria-label')).toBe('Show balance');
+    expect(eye().textContent?.trim()).toBe('visibility_off');
+    // The phone strip follows, and the choice is kept for the next visit.
+    expect(statText(compiled.querySelector('.stats.strip .balance .stat')!)).toBe('Balance SAR ••••');
+    expect(localStorage.getItem('nama.balance.hidden')).toBe('1');
+
+    const again = TestBed.createComponent(App);
+    await again.whenStable();
+    expect(statText((again.nativeElement as HTMLElement).querySelector('.stats.bar .balance .stat')!)).toBe('Balance SAR ••••');
+
+    eye().click();
+    await fixture.whenStable();
+    expect(statText(balance())).toBe('Balance SAR -250');
+    expect(localStorage.getItem('nama.balance.hidden')).toBe('0');
+    localStorage.removeItem('nama.balance.hidden');
+  });
+
   // BNK-05: until every account has its opening balance, the top bar asks for it.
   it('should ask to set up the balance until it is complete', async () => {
     summary.set({ balance: null, complete: false, accounts: [{ id: 'main', name: 'Main', balance: null }], month: null, projection: null });
@@ -133,6 +176,8 @@ describe('App', () => {
     const stats = Array.from(compiled.querySelectorAll<HTMLAnchorElement>('.stats.bar .stat'));
     expect(stats.map(statText)).toEqual(['Balance Set up']);
     expect(stats[0].getAttribute('aria-label')).toBe('Balance: set up your bank balances. Open Banks');
+    // Nothing to hide yet, so no eye.
+    expect(compiled.querySelector('.eye')).toBeNull();
   });
 
   // Owner's choice (M8): Settings in the side bar, with its sections while you are in Settings.

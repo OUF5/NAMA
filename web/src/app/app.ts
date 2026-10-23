@@ -49,6 +49,25 @@ function saveCollapsed(collapsed: boolean): void {
   }
 }
 
+// Owner note 15: the top bar's balance can be hidden, as banking apps do, and stays so on this device.
+const BALANCE_HIDDEN_KEY = 'nama.balance.hidden';
+
+function loadBalanceHidden(): boolean {
+  try {
+    return localStorage.getItem(BALANCE_HIDDEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function saveBalanceHidden(hidden: boolean): void {
+  try {
+    localStorage.setItem(BALANCE_HIDDEN_KEY, hidden ? '1' : '0');
+  } catch {
+    // Without storage the eye still works; only the memory is lost.
+  }
+}
+
 
 @Component({
   imports: [
@@ -91,6 +110,9 @@ export class App {
     return period ? periodWithDates(period) : null;
   });
 
+  // Owner note 15: read by header, so it comes first.
+  protected readonly balanceHidden = signal(loadBalanceHidden());
+
   // UX-08: "Left in Sep 2026 · 6 days left" (the month's remaining, carried, R-PLN-05, in its plan
   // status color) and "Balance" (the active accounts' total, R-BAL-03), or "Set up" until every
   // account has its opening balance. The API makes the sums; this only formats.
@@ -116,17 +138,26 @@ export class App {
             label: `Left to spend in ${month.period.label}: ${money(month.remaining)}, ${days}. Open Tracker`,
           }
         : null,
-      balance: {
-        amount: summary.balance === null ? null : money(summary.balance),
-        negative: (summary.balance ?? 0) < 0,
-        title: accounts,
-        label:
-          summary.balance === null
-            ? 'Balance: set up your bank balances. Open Banks'
-            : `Balance ${money(summary.balance)}${accounts ? `: ${accounts}` : ''}. Open Banks`,
-      },
+      balance:
+        summary.balance === null
+          ? { amount: null, negative: false, title: '', canHide: false, label: 'Balance: set up your bank balances. Open Banks' }
+          : this.balanceHidden()
+            ? // Hidden: no amount anywhere, not even its color or the accounts' title.
+              { amount: `${currency} ••••`, negative: false, title: '', canHide: true, label: 'Balance hidden. Open Banks' }
+            : {
+                amount: money(summary.balance),
+                negative: summary.balance < 0,
+                title: accounts,
+                canHide: true,
+                label: `Balance ${money(summary.balance)}${accounts ? `: ${accounts}` : ''}. Open Banks`,
+              },
     };
   });
+
+  protected toggleBalanceHidden(): void {
+    this.balanceHidden.update((hidden) => !hidden);
+    saveBalanceHidden(this.balanceHidden());
+  }
 
   // Owner note 9: the folded side bar (desktop) and the drawer (phones).
   protected readonly collapsed = signal(loadCollapsed());
