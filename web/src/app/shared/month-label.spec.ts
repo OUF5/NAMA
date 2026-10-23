@@ -9,8 +9,14 @@ describe('month label and dates', () => {
   });
 
   it('labels a month key by the month it starts in', () => {
-    expect(monthKeyLabel('2026-03')).toBe('Mar 2026');
-    expect(monthKeyLabel('2027-12')).toBe('Dec 2027');
+    expect(monthKeyLabel('2026-03', 0)).toBe('Mar 2026');
+    expect(monthKeyLabel('2027-12', 0)).toBe('Dec 2027');
+  });
+
+  // R-CAL-11 (owner note 19): named by the month it ends in, /api/me's monthKeyOffset is 1.
+  it('labels a month key by the month it ends in with offset 1', () => {
+    expect(monthKeyLabel('2026-10', 1)).toBe('Nov 2026');
+    expect(monthKeyLabel('2026-12', 1)).toBe('Jan 2027');
   });
 
   // The date picker works with local dates; the API takes YYYY-MM-DD.

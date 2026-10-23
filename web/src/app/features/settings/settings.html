@@ -73,6 +73,11 @@
                 <dt class="caption">Payday</dt>
                 <dd>{{ d.calendar.paydayDay }}</dd>
               </div>
+              <!-- R-CAL-11 -->
+              <div>
+                <dt class="caption">Months named by</dt>
+                <dd>{{ namingLabel(d.calendar.monthNaming) }}</dd>
+              </div>
             </dl>
             <p>Takes effect from the fiscal year starting {{ formatDate(d.calendar.takesEffectFrom) }}.</p>
             <p class="caption">

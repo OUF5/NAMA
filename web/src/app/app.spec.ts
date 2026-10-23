@@ -22,7 +22,7 @@ describe('App', () => {
   const summaryService = { summary, load: vi.fn(async () => undefined), clear: vi.fn() };
 
   beforeEach(async () => {
-    me.set({ setupCompleted: true, isAdmin: false, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null });
+    me.set({ setupCompleted: true, isAdmin: false, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null, monthKeyOffset: 0 });
     summary.set(null);
     summaryService.load.mockClear();
     summaryService.clear.mockClear();
@@ -56,6 +56,7 @@ describe('App', () => {
         timezone: 'Asia/Riyadh',
         fiscalStartMonth: 1,
         paydayDay: 27,
+        monthNaming: 'payday',
         lastBankAccountId: null,
       },
       currentFyId: '2026-01',
@@ -64,6 +65,7 @@ describe('App', () => {
       today: '2026-10-17',
       firstDate: '2026-01-27',
       lastDate: '2027-01-26',
+      monthKeyOffset: 0,
     });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -346,7 +348,7 @@ describe('App', () => {
   });
 
   it('should hide navigation and settings until setup is complete', async () => {
-    me.set({ setupCompleted: false, isAdmin: false, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null });
+    me.set({ setupCompleted: false, isAdmin: false, profile: null, currentFyId: null, currentPeriodKey: null, currentPeriod: null, today: null, firstDate: null, lastDate: null, monthKeyOffset: 0 });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;

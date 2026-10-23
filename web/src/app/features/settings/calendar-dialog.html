@@ -22,6 +22,17 @@
         <mat-error>Enter a day from 1 to 31.</mat-error>
       </mat-form-field>
     </div>
+    <!-- R-CAL-11 (owner note 19) -->
+    <mat-form-field>
+      <mat-label>Name each month by</mat-label>
+      <mat-select formControlName="monthNaming">
+        @for (option of namings; track option.value) {
+          <mat-option [value]="option.value">{{ option.label }}</mat-option>
+        }
+      </mat-select>
+      <mat-hint>{{ namingHint() }}</mat-hint>
+    </mat-form-field>
+    <p class="note">Month names change right away for every month. Dates and amounts stay the same.</p>
     @if (error()) {
       <p class="error" role="alert">{{ error() }}</p>
     }

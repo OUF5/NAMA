@@ -19,13 +19,14 @@ function meWith(lastBankAccountId: string | null): Me {
   return {
     setupCompleted: true,
     isAdmin: false,
-    profile: { displayName: 'Owner', email: 'o@example.com', projectName: 'Home', currency: 'SAR', timezone: 'Asia/Riyadh', fiscalStartMonth: 1, paydayDay: 27, lastBankAccountId },
+    profile: { displayName: 'Owner', email: 'o@example.com', projectName: 'Home', currency: 'SAR', timezone: 'Asia/Riyadh', fiscalStartMonth: 1, paydayDay: 27, monthNaming: 'payday', lastBankAccountId },
     currentFyId: '2026-01',
     currentPeriodKey: '2026-09',
     currentPeriod: sep,
     today: '2026-10-17',
     firstDate: '2026-01-27',
     lastDate: '2027-01-26',
+    monthKeyOffset: 0,
   };
 }
 

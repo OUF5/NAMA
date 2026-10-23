@@ -25,6 +25,7 @@ function me(today: string): Me {
     today,
     firstDate: '2026-01-27',
     lastDate: '2027-01-26',
+    monthKeyOffset: 0,
   };
 }
 

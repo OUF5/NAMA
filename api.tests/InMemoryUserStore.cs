@@ -41,7 +41,7 @@ public sealed class InMemoryUserStore : IUserStore
     // Adds an FY without plans, for tests that only need its months.
     public Task AddFiscalYear(string uid, FiscalYear fiscalYear) => Write(uid, data => data.FiscalYears.Add(fiscalYear));
 
-    public Task<IReadOnlyList<FiscalYear>> GetFiscalYearsAsync(string uid) => Read<FiscalYear>(uid, data => data.FiscalYears);
+    public Task<IReadOnlyList<FiscalYear>> GetStoredFiscalYearsAsync(string uid) => Read<FiscalYear>(uid, data => data.FiscalYears);
 
     public Task<bool> CreateSetupAsync(string uid, SetupData setup) => Task.FromResult(_users.TryAdd(uid, new UserData(setup)));
 
@@ -121,8 +121,11 @@ public sealed class InMemoryUserStore : IUserStore
             Timezone = timezone,
         });
 
-    public Task UpdateCalendarAsync(string uid, int fiscalStartMonth, int paydayDay) =>
-        Write(uid, data => data.Profile = data.Profile with { FiscalStartMonth = fiscalStartMonth, PaydayDay = paydayDay });
+    public Task UpdateCalendarAsync(string uid, int fiscalStartMonth, int paydayDay, MonthNaming monthNaming) =>
+        Write(uid, data => data.Profile = data.Profile with
+        {
+            FiscalStartMonth = fiscalStartMonth, PaydayDay = paydayDay, MonthNaming = monthNaming,
+        });
 
     // As the Firestore batch: nothing is written when the FY already exists.
     public Task<bool> StartFiscalYearAsync(string uid, FiscalYear fiscalYear, IReadOnlyList<PlanAmounts> plans) => Change(uid, data =>

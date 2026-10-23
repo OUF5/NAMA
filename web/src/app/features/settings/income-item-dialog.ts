@@ -45,7 +45,7 @@ export class IncomeItemDialog {
   // "Bonus · SAR 500.25 · Sep 2026" for the delete confirmation.
   protected summary(): string {
     const item = this.item!;
-    return `${item.label} · ${formatMoney(toMinor(item.amount), this.data.currency)} · ${incomeMonths(item)}`;
+    return `${item.label} · ${formatMoney(toMinor(item.amount), this.data.currency)} · ${incomeMonths(item, this.data.context.monthKeyOffset)}`;
   }
 
   protected async save(): Promise<void> {

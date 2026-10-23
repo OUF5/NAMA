@@ -61,6 +61,7 @@ describe('Banks dialogs (BNK-02, BNK-03)', () => {
       defaultKey: '2026-09',
       income: { '2026-09': 17000.01 },
       currency: 'SAR',
+      monthKeyOffset: 0,
     };
 
     it('previews each amount and saves the shares in percent', async () => {
@@ -84,6 +85,17 @@ describe('Banks dialogs (BNK-02, BNK-03)', () => {
       put.flush({ ok: true });
       await settle(fixture);
       expect(close).toHaveBeenCalledWith({ ok: true });
+    });
+
+    // R-CAL-11: named by the month it ends in, the month key 2026-09 is Oct 2026.
+    it('names the chosen month with /api/me\'s offset', async () => {
+      configure({ ...data, monthKeyOffset: 1 });
+      const fixture = TestBed.createComponent(SplitDialog);
+      await settle(fixture);
+
+      expect((fixture.nativeElement as HTMLElement).querySelector('.income')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        'Income in Oct 2026: SAR 17,000.01',
+      );
     });
 
     it('does not save shares that do not add up to 100%', async () => {

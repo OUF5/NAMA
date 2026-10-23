@@ -16,10 +16,12 @@ public static class MeEndpoint
         string Timezone,
         int FiscalStartMonth,
         int PaydayDay,
+        string MonthNaming,
         string? LastBankAccountId)
     {
         public static ProfileDto From(UserProfile profile) => new(profile.DisplayName, profile.Email, profile.ProjectName,
-            profile.Currency, profile.Timezone, profile.FiscalStartMonth, profile.PaydayDay, profile.LastBankAccountId);
+            profile.Currency, profile.Timezone, profile.FiscalStartMonth, profile.PaydayDay,
+            FirestoreDocuments.ToMonthNamingName(profile.MonthNaming), profile.LastBankAccountId);
     }
 
     // DateOnly is sent as YYYY-MM-DD.
@@ -31,6 +33,7 @@ public static class MeEndpoint
     // Today (R-CAL-10) and the first and last day of the stored FYs (FY-03, R-STA-03) are for the
     // Add form, so it needs no extra call (M5, NFR-01).
     // IsAdmin: the email is in ALLOWED_EMAILS, so Settings shows People (AUTH-07).
+    // MonthKeyOffset names the month keys of income items and splits in the web app (R-CAL-11).
     public record MeResponse(
         bool SetupCompleted,
         bool IsAdmin,
@@ -40,7 +43,8 @@ public static class MeEndpoint
         PeriodDto? CurrentPeriod,
         DateOnly? Today,
         DateOnly? FirstDate,
-        DateOnly? LastDate);
+        DateOnly? LastDate,
+        int MonthKeyOffset = 0);
 
     public static IEndpointRouteBuilder MapMe(this IEndpointRouteBuilder api)
     {
@@ -71,6 +75,12 @@ public static class MeEndpoint
             current is { } found ? PeriodDto.From(found.Period) : null,
             today,
             fiscalYears.Count == 0 ? null : fiscalYears.Min(fiscalYear => fiscalYear.StartDate),
-            fiscalYears.Count == 0 ? null : fiscalYears.Max(fiscalYear => fiscalYear.EndDate));
+            fiscalYears.Count == 0 ? null : fiscalYears.Max(fiscalYear => fiscalYear.EndDate),
+            MonthKeyOffset(profile, fiscalYears));
     }
+
+    // R-CAL-11 with the payday of the latest FY, where the newest month keys are (the profile's
+    // payday is the next FY's, R-CAL-07).
+    public static int MonthKeyOffset(UserProfile profile, IReadOnlyList<FiscalYear> fiscalYears) =>
+        FiscalCalendar.KeyOffset(profile.MonthNaming, FiscalCalendar.Latest(fiscalYears)?.PaydayDay ?? profile.PaydayDay);
 }

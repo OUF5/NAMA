@@ -91,7 +91,7 @@ export class AddEntry {
   // The preview's balances are the top bar's, so they follow every save.
   protected readonly incomeContext = computed(() => {
     const income = this.income();
-    return income ? incomeItemContext(income, this.summaryService.summary(), this.me()?.today ?? null, null) : null;
+    return income ? incomeItemContext(income, this.summaryService.summary(), this.me(), null) : null;
   });
   protected readonly incomeLoadError = signal('');
 
@@ -165,10 +165,13 @@ export class AddEntry {
       this.incomeForm.controls.label.reset('');
       this.incomeForm.controls.amount.reset('');
       const account = this.accounts().find((option) => option.id === change.bankAccountId)?.name;
-      const months = incomeMonths({
-        fromPeriodKey: change.fromPeriodKey,
-        toPeriodKey: change.type === 'once' ? change.fromPeriodKey : change.toPeriodKey,
-      });
+      const months = incomeMonths(
+        {
+          fromPeriodKey: change.fromPeriodKey,
+          toPeriodKey: change.type === 'once' ? change.fromPeriodKey : change.toPeriodKey,
+        },
+        this.me()?.monthKeyOffset ?? 0,
+      );
       this.saved.set(
         [`Added ${change.label}`, formatMoney(toMinor(change.amount), this.currency()), months, account ? `into ${account}` : '']
           .filter(Boolean)

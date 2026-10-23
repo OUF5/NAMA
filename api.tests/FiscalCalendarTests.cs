@@ -453,4 +453,136 @@ public class FiscalCalendarTests
         Assert.Equal((fy2026.Id, "2026-12"), (before.FiscalYear.Id, before.Period.Key));
         Assert.Null(FiscalCalendar.PreviousPeriod([fy2026, fy2027], "2026-01"));
     }
+
+    // R-CAL-11 (owner note 19): section 3 named by the month each month ends in. Only the names move.
+    [Fact]
+    public void Worked_example_named_by_the_month_it_ends_in()
+    {
+        var stored = FiscalCalendar.FirstFiscalYear(Today, fiscalStartMonth: 1, payday: 27);
+        var fy = FiscalCalendar.Named(stored, MonthNaming.EndMonth);
+
+        Assert.Equal(
+            new[] { "Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026",
+                    "Aug 2026", "Sep 2026", "Oct 2026", "Nov 2026", "Dec 2026", "Jan 2027" },
+            fy.Periods.Select(p => p.Label));
+        Assert.Equal(
+            (stored.Id, stored.Label, stored.StartDate, stored.EndDate, stored.FiscalStartMonth, stored.PaydayDay),
+            (fy.Id, fy.Label, fy.StartDate, fy.EndDate, fy.FiscalStartMonth, fy.PaydayDay));
+        Assert.Equal("FY 2026", fy.Label);
+        Assert.Equal(
+            stored.Periods.Select(p => (p.Key, p.StartDate, p.EndDate)),
+            fy.Periods.Select(p => (p.Key, p.StartDate, p.EndDate)));
+        Assert.Equal(
+            new Period("2026-09", "Oct 2026", new(2026, 9, 27), new(2026, 10, 26)),
+            FiscalCalendar.FindPeriod([fy], Today)!.Value.Period);
+    }
+
+    // R-CAL-11, the owner's example: with payday 25, everything from 25 Oct is November.
+    [Fact]
+    public void Payday_25_salary_of_25_October_starts_November()
+    {
+        var fy = FiscalCalendar.Named(FiscalCalendar.FirstFiscalYear(Today, fiscalStartMonth: 1, payday: 25), MonthNaming.EndMonth);
+
+        Assert.Equal(
+            new Period("2026-09", "Oct 2026", new(2026, 9, 25), new(2026, 10, 24)),
+            FiscalCalendar.FindPeriod([fy], new DateOnly(2026, 10, 24))!.Value.Period);
+        Assert.Equal(
+            new Period("2026-10", "Nov 2026", new(2026, 10, 25), new(2026, 11, 24)),
+            FiscalCalendar.FindPeriod([fy], new DateOnly(2026, 10, 25))!.Value.Period);
+        Assert.Equal("Nov 2026", FiscalCalendar.FindPeriod([fy], new DateOnly(2026, 11, 24))!.Value.Period.Label);
+    }
+
+    // R-CAL-11: named by the month the salary arrives, the months keep the names they had before.
+    [Fact]
+    public void Named_by_the_month_the_salary_arrives_is_the_month_it_starts_in()
+    {
+        var stored = FiscalCalendar.FirstFiscalYear(Today, fiscalStartMonth: 1, payday: 27);
+
+        Assert.Equal(stored.Periods, FiscalCalendar.Named(stored, MonthNaming.PaydayMonth).Periods);
+        Assert.Equal("Sep 2026", FiscalCalendar.Named(FiscalCalendar.PeriodFor(2026, 9, 27), MonthNaming.PaydayMonth).Label);
+    }
+
+    // R-CAL-11: payday 1 gives calendar months either way.
+    [Fact]
+    public void Payday_1_names_are_the_same_either_way()
+    {
+        var stored = FiscalCalendar.FirstFiscalYear(Today, fiscalStartMonth: 1, payday: 1);
+
+        Assert.Equal(
+            FiscalCalendar.Named(stored, MonthNaming.PaydayMonth).Periods.Select(p => p.Label),
+            FiscalCalendar.Named(stored, MonthNaming.EndMonth).Periods.Select(p => p.Label));
+        Assert.Equal("Jan 2026", FiscalCalendar.Named(stored, MonthNaming.EndMonth).Periods[0].Label);
+    }
+
+    // R-CAL-01 with R-CAL-11: payday 31 months named by the month they end in.
+    [Theory]
+    [InlineData(1, "Feb 2026")]
+    [InlineData(2, "Mar 2026")]
+    [InlineData(12, "Jan 2027")]
+    public void Payday_31_months_named_by_the_month_they_end_in(int month, string expected)
+    {
+        Assert.Equal(expected, FiscalCalendar.Named(FiscalCalendar.PeriodFor(2026, month, 31), MonthNaming.EndMonth).Label);
+    }
+
+    // R-CAL-11: with an unchanged payday every name is used once, in order, across FYs, and is the
+    // key moved by KeyOffset (what the web app uses for income and split months).
+    [Theory]
+    [MemberData(nameof(Settings))]
+    public void Names_follow_each_other_once_each(int startMonth, int payday)
+    {
+        var fy = FiscalCalendar.FirstFiscalYear(Today, startMonth, payday);
+        var next = FiscalCalendar.NextFiscalYear(fy, startMonth, payday);
+
+        foreach (var naming in new[] { MonthNaming.EndMonth, MonthNaming.PaydayMonth })
+        {
+            var periods = new[] { fy, next }.SelectMany(year => FiscalCalendar.Named(year, naming).Periods).ToList();
+            var offset = FiscalCalendar.KeyOffset(naming, payday);
+            var first = DateOnly.ParseExact(periods[0].Key, "yyyy-MM", CultureInfo.InvariantCulture).AddMonths(offset);
+
+            Assert.Equal(
+                Enumerable.Range(0, periods.Count).Select(i => first.AddMonths(i).ToString("MMM yyyy", CultureInfo.InvariantCulture)),
+                periods.Select(p => p.Label));
+        }
+    }
+
+    [Theory]
+    [InlineData(MonthNaming.EndMonth, 1, 0)]
+    [InlineData(MonthNaming.EndMonth, 2, 1)]
+    [InlineData(MonthNaming.EndMonth, 25, 1)]
+    [InlineData(MonthNaming.EndMonth, 31, 1)]
+    [InlineData(MonthNaming.PaydayMonth, 1, 0)]
+    [InlineData(MonthNaming.PaydayMonth, 25, 0)]
+    public void Key_offset(MonthNaming naming, int payday, int expected)
+    {
+        Assert.Equal(expected, FiscalCalendar.KeyOffset(naming, payday));
+    }
+
+    // R-CAL-08 Example B with R-CAL-11: the FY's dates do not change, so the month before the short
+    // first month and the short month are both "Jan 2027".
+    [Fact]
+    public void Payday_change_to_1_names_two_months_alike_when_named_by_the_month_they_end_in()
+    {
+        var fy2026 = FiscalCalendar.FirstFiscalYear(Today, 1, 27);
+        var fy2027 = FiscalCalendar.NextFiscalYear(fy2026, 1, 1);
+
+        Assert.Equal("Jan 2027", FiscalCalendar.Named(fy2026, MonthNaming.EndMonth).Periods[^1].Label);
+        Assert.Equal(
+            new Period("2027-01", "Jan 2027", new(2027, 1, 27), new(2027, 1, 31)),
+            FiscalCalendar.Named(fy2027, MonthNaming.EndMonth).Periods[0]);
+        Assert.Equal("Feb 2027", FiscalCalendar.Named(fy2027, MonthNaming.EndMonth).Periods[1].Label);
+    }
+
+    // The other way round: the long first month (1 Jan to 26 Feb) is "Feb 2027", and no month is "Jan 2027".
+    [Fact]
+    public void Payday_change_from_1_skips_a_name_when_named_by_the_month_they_end_in()
+    {
+        var fy2026 = FiscalCalendar.FirstFiscalYear(Today, 1, 1);
+        var fy2027 = FiscalCalendar.Named(FiscalCalendar.NextFiscalYear(fy2026, 1, 27), MonthNaming.EndMonth);
+
+        Assert.Equal("Dec 2026", FiscalCalendar.Named(fy2026, MonthNaming.EndMonth).Periods[^1].Label);
+        Assert.Equal(
+            new Period("2027-01", "Feb 2027", new(2027, 1, 1), new(2027, 2, 26)),
+            fy2027.Periods[0]);
+        Assert.DoesNotContain(fy2027.Periods, p => p.Label == "Jan 2027");
+    }
 }

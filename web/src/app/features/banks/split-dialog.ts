@@ -22,6 +22,8 @@ export interface SplitDialogData {
   // Month key → total income, for the preview.
   income: Record<string, number>;
   currency: string;
+  // /api/me's, to name the chosen month (R-CAL-11).
+  monthKeyOffset: number;
 }
 
 // "80" for the input, "33.33" with decimals.
@@ -85,7 +87,7 @@ export class SplitDialog {
   protected readonly totalText = computed(() => (this.total() === null ? '–' : formatPercent(this.total()!)));
   protected readonly complete = computed(() => this.total() === 10_000);
 
-  protected readonly monthLabel = computed(() => monthKeyLabel(this.fromKey()));
+  protected readonly monthLabel = computed(() => monthKeyLabel(this.fromKey(), this.data.monthKeyOffset));
   protected readonly monthIncome = computed(() => formatMoney(toMinor(this.data.income[this.fromKey()] ?? 0), this.data.currency));
 
   // What each account gets in the chosen month, once the shares add up to 100%.

@@ -1,16 +1,23 @@
 import { Component, inject, signal } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { map } from 'rxjs';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
-import { MONTH_NAMES, formatDate } from '../../shared/month-label';
+import { MONTH_NAMES, MONTH_NAMINGS, MonthNaming, formatDate } from '../../shared/month-label';
 import { Calendar, SettingsApi } from './settings-api';
 
+function hintFor(naming: MonthNaming): string {
+  return MONTH_NAMINGS.find((option) => option.value === naming)!.hint;
+}
+
 // STG-02, R-CAL-07: the FY start month and the payday. They are saved now and apply from the next
-// FY; the current FY keeps its dates. Closes with the new calendar.
+// FY; the current FY keeps its dates. The month names (R-CAL-11) apply right away to every month.
+// Closes with the new calendar.
 @Component({
   selector: 'app-calendar-dialog',
   imports: [ReactiveFormsModule, MatButtonModule, MatDialogModule, MatFormFieldModule, MatInputModule, MatSelectModule],
@@ -24,6 +31,7 @@ export class CalendarDialog {
   protected readonly calendar = inject<Calendar>(MAT_DIALOG_DATA);
 
   protected readonly monthNames = MONTH_NAMES;
+  protected readonly namings = MONTH_NAMINGS;
   protected readonly formatDate = formatDate;
 
   // PRD 4.7: FY start month 1 to 12, payday 1 to 31.
@@ -35,7 +43,13 @@ export class CalendarDialog {
       Validators.max(31),
       Validators.pattern(/^\d+$/),
     ]),
+    monthNaming: new FormControl<MonthNaming>(this.calendar.monthNaming, { nonNullable: true }),
   });
+
+  protected readonly namingHint = toSignal(
+    this.form.controls.monthNaming.valueChanges.pipe(map((value) => hintFor(value))),
+    { initialValue: hintFor(this.calendar.monthNaming) },
+  );
 
   protected readonly busy = signal(false);
   protected readonly error = signal('');
@@ -49,7 +63,7 @@ export class CalendarDialog {
     this.busy.set(true);
     this.error.set('');
     try {
-      this.dialogRef.close(await this.api.updateCalendar(value.fiscalStartMonth, Number(value.paydayDay)));
+      this.dialogRef.close(await this.api.updateCalendar(value.fiscalStartMonth, Number(value.paydayDay), value.monthNaming));
     } catch {
       this.error.set('The settings could not be saved. Please try again.');
     } finally {

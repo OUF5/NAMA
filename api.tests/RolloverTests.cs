@@ -103,7 +103,7 @@ public class RolloverTests(ApiFactory factory) : IClassFixture<ApiFactory>
         // The current FY keeps its dates.
         Assert.Equal(new DateOnly(2027, 1, 26), (await Stored(sub, Fy2026)).EndDate);
 
-        // FY-01: 409 before the last month (Dec 2026 = 27 Dec 2026 to 26 Jan 2027).
+        // FY-01: 409 before the last month (Jan 2027 = 27 Dec 2026 to 26 Jan 2027).
         Assert.Equal(HttpStatusCode.Conflict, (await StartNext(sub)).StatusCode);
         Today(2026, 12, 26);
         Assert.Equal(HttpStatusCode.Conflict, (await StartNext(sub)).StatusCode);
@@ -125,7 +125,7 @@ public class RolloverTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.True(transition.IsTransition);
         Assert.Equal("FY 2027", transition.Label);
         Assert.Equal((new DateOnly(2027, 1, 27), new DateOnly(2027, 7, 26)), (transition.StartDate, transition.EndDate));
-        Assert.Equal(["Jan 2027", "Feb 2027", "Mar 2027", "Apr 2027", "May 2027", "Jun 2027"], transition.Periods.Select(p => p.Label));
+        Assert.Equal(["Feb 2027", "Mar 2027", "Apr 2027", "May 2027", "Jun 2027", "Jul 2027"], transition.Periods.Select(p => p.Label));
 
         // Groceries Jan to Jun 2026 → Jan to Jun 2027. Fuel had nothing then; Old Gym is archived.
         var transitionPlans = await Plans(sub, "2027-01");

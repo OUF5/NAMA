@@ -10,14 +10,14 @@ export function untilNotBeforeFrom(group: AbstractControl): ValidationErrors | n
   return type === 'monthly' && from && to && to < from ? { untilBeforeFrom: true } : null;
 }
 
-// "Sep 2026" (once), "From Mar 2026" (open ended), "Jan 2026 to Feb 2026".
-export function incomeMonths(item: { fromPeriodKey: string; toPeriodKey: string | null }): string {
+// "Sep 2026" (once), "From Mar 2026" (open ended), "Jan 2026 to Feb 2026". offset as monthKeyLabel's.
+export function incomeMonths(item: { fromPeriodKey: string; toPeriodKey: string | null }, offset: number): string {
   if (item.toPeriodKey === item.fromPeriodKey) {
-    return monthKeyLabel(item.fromPeriodKey);
+    return monthKeyLabel(item.fromPeriodKey, offset);
   }
   return item.toPeriodKey
-    ? `${monthKeyLabel(item.fromPeriodKey)} to ${monthKeyLabel(item.toPeriodKey)}`
-    : `From ${monthKeyLabel(item.fromPeriodKey)}`;
+    ? `${monthKeyLabel(item.fromPeriodKey, offset)} to ${monthKeyLabel(item.toPeriodKey, offset)}`
+    : `From ${monthKeyLabel(item.fromPeriodKey, offset)}`;
 }
 
 // R-INC-04 (owner note 17): what an additional income item counts in.

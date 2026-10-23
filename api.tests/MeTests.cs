@@ -36,7 +36,7 @@ public class MeTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var me = await GetMe(await SetUp(), TestTime.Default);
 
         Assert.Equal(
-            """{"setupCompleted":true,"isAdmin":true,"profile":{"displayName":"Owner","email":"owner@example.com","projectName":"Home budget","currency":"SAR","timezone":"Asia/Riyadh","fiscalStartMonth":1,"paydayDay":27,"lastBankAccountId":null},"currentFyId":"2026-01","currentPeriodKey":"2026-09","currentPeriod":{"key":"2026-09","label":"Sep 2026","startDate":"2026-09-27","endDate":"2026-10-26"},"today":"2026-10-17","firstDate":"2026-01-27","lastDate":"2027-01-26"}""",
+            """{"setupCompleted":true,"isAdmin":true,"profile":{"displayName":"Owner","email":"owner@example.com","projectName":"Home budget","currency":"SAR","timezone":"Asia/Riyadh","fiscalStartMonth":1,"paydayDay":27,"monthNaming":"end","lastBankAccountId":null},"currentFyId":"2026-01","currentPeriodKey":"2026-09","currentPeriod":{"key":"2026-09","label":"Oct 2026","startDate":"2026-09-27","endDate":"2026-10-26"},"today":"2026-10-17","firstDate":"2026-01-27","lastDate":"2027-01-26","monthKeyOffset":1}""",
             me.ToJsonString());
     }
 

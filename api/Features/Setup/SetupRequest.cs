@@ -20,6 +20,10 @@ public sealed class SetupRequest : IValidatableObject
     [Range(1, 31)]
     public int PaydayDay { get; init; }
 
+    // R-CAL-11: "end" (the default) or "payday".
+    [AllowedValues(null, "end", "payday")]
+    public string? MonthNaming { get; init; }
+
     [Required]
     public decimal? Salary { get; init; }
 

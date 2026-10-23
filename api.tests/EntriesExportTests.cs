@@ -56,8 +56,8 @@ public class EntriesExportTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         Assert.Equal(
             Header +
-            "\"2026-10-17\",\"Sep 2026\",\"Food\",\"Groceries\",\"125.50\",\"Al Rajhi\",\"Weekly, \"\"big\"\"\nshop\"\r\n" +
-            "\"2026-10-01\",\"Sep 2026\",\"Transport\",\"Fuel\",\"1000.00\",\"SNB\",\"\"\r\n",
+            "\"2026-10-17\",\"Oct 2026\",\"Food\",\"Groceries\",\"125.50\",\"Al Rajhi\",\"Weekly, \"\"big\"\"\nshop\"\r\n" +
+            "\"2026-10-01\",\"Oct 2026\",\"Transport\",\"Fuel\",\"1000.00\",\"SNB\",\"\"\r\n",
             csv);
         Assert.Equal("text/csv; charset=utf-8", response.Content.Headers.ContentType!.ToString());
         Assert.Equal("nama-entries-2026-01.csv", response.Content.Headers.ContentDisposition!.FileName);
@@ -75,7 +75,7 @@ public class EntriesExportTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var csv = await Export(sub, "?periodKey=2026-09&q=SHOP");
 
-        Assert.Equal(Header + "\"2026-10-17\",\"Sep 2026\",\"Food\",\"Groceries\",\"125.50\",\"Al Rajhi\",\"Weekly shop\"\r\n", csv);
+        Assert.Equal(Header + "\"2026-10-17\",\"Oct 2026\",\"Food\",\"Groceries\",\"125.50\",\"Al Rajhi\",\"Weekly shop\"\r\n", csv);
     }
 
     // OWASP "CSV Injection": a note a spreadsheet would run as a formula gets a leading quote.

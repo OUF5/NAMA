@@ -70,24 +70,32 @@ export function incomeItemChange(form: IncomeItemForm): IncomeItemChange | null 
 }
 
 // What the preview needs, in minor units. periods are the stored months, oldest first (each payday is a
-// month's first day). item is the edited one, so its own amounts are not counted twice.
+// month's first day). item is the edited one, so its own amounts are not counted twice. monthKeyOffset
+// is /api/me's (R-CAL-11).
 export interface IncomeItemContext {
   groups: MonthGroup[];
   periods: PeriodInfo[];
   accounts: BankAccount[];
   today: string | null;
+  monthKeyOffset: number;
   plannedIncome: Record<string, number>;
   balances: Record<string, { balance: number | null; openingDate: string | null }>;
   item: IncomeItem | null;
 }
 
-// From GET /api/income, the top bar's summary (R-BAL-03 balances) and /api/me's today.
-export function incomeItemContext(income: Income, summary: Summary | null, today: string | null, item: IncomeItem | null): IncomeItemContext {
+// From GET /api/income, the top bar's summary (R-BAL-03 balances) and /api/me's today and monthKeyOffset.
+export function incomeItemContext(
+  income: Income,
+  summary: Summary | null,
+  me: { today: string | null; monthKeyOffset: number } | null,
+  item: IncomeItem | null,
+): IncomeItemContext {
   return {
     groups: monthGroups(income.fiscalYears),
     periods: income.fiscalYears.flatMap((fy) => fy.periods),
     accounts: income.bankAccounts,
-    today,
+    today: me?.today ?? null,
+    monthKeyOffset: me?.monthKeyOffset ?? 0,
     plannedIncome: Object.fromEntries(income.totals.map((month) => [month.periodKey, toMinor(month.planned)])),
     balances: Object.fromEntries(
       (summary?.accounts ?? []).map((account) => [
@@ -193,7 +201,7 @@ export class IncomeItemFields implements OnInit {
       (context.plannedIncome[value.from] ?? 0) -
       (item && item.counts !== 'actual' && this.covers(this.oldShape(item), value.from) ? toMinor(item.amount) : 0);
     return {
-      month: monthKeyLabel(value.from),
+      month: monthKeyLabel(value.from, context.monthKeyOffset),
       now: known ? this.money(before) : null,
       after: known && shape.amount > 0 ? this.money(before + shape.amount) : null,
       added: shape.amount > 0 ? this.money(shape.amount) : null,
@@ -201,7 +209,7 @@ export class IncomeItemFields implements OnInit {
         value.type === 'once'
           ? null
           : value.to
-            ? `And every month to ${monthKeyLabel(value.to)}.`
+            ? `And every month to ${monthKeyLabel(value.to, context.monthKeyOffset)}.`
             : 'And every month after it.',
     };
   });
@@ -255,7 +263,7 @@ export class IncomeItemFields implements OnInit {
         ? `Arrives on ${formatDate(first.startDate)}, ${first.label}'s payday.`
         : `Counted from ${formatDate(first.startDate)}, ${first.label}'s payday.`;
     }
-    const until = shape.to ? ` to ${monthKeyLabel(shape.to)}` : '';
+    const until = shape.to ? ` to ${monthKeyLabel(shape.to, this.context().monthKeyOffset)}` : '';
     return `${this.money(shape.amount)} on every payday from ${first.label}${until}.`;
   }
 

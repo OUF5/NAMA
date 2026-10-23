@@ -4,7 +4,7 @@ namespace Api.Infrastructure;
 
 // PRD 7.4 users/{uid}. FiscalStartMonth and PaydayDay are used for the next FY created (R-CAL-07).
 // StartedOn is the day setup was finished (the profile's createdAt in its time zone, R-PLN-06); it is
-// read only, and null when unknown.
+// read only, and null when unknown. MonthNaming names every month, right away (R-CAL-11).
 public sealed record UserProfile(
     string DisplayName,
     string Email,
@@ -15,7 +15,8 @@ public sealed record UserProfile(
     int PaydayDay,
     bool SetupCompleted,
     string? LastBankAccountId,
-    DateOnly? StartedOn = null);
+    DateOnly? StartedOn = null,
+    MonthNaming MonthNaming = MonthNaming.EndMonth);
 
 // R-BAL-01: Opening is null until it is set (accounts made before 20 Oct 2026 have none).
 public sealed record BankAccount(string Id, string Name, bool Archived = false, OpeningBalance? Opening = null);
@@ -70,7 +71,8 @@ public interface IUserStore
 {
     Task<UserProfile?> GetProfileAsync(string uid);
 
-    Task<IReadOnlyList<FiscalYear>> GetFiscalYearsAsync(string uid);
+    // As stored: the months keep the labels they were created with. GetFiscalYearsAsync names them.
+    Task<IReadOnlyList<FiscalYear>> GetStoredFiscalYearsAsync(string uid);
 
     // False when the user is already set up (409).
     Task<bool> CreateSetupAsync(string uid, SetupData setup);
@@ -118,8 +120,9 @@ public interface IUserStore
     // STG-01. The other profile fields are not changed.
     Task UpdateProfileAsync(string uid, string displayName, string projectName, string currency, string timezone);
 
-    // STG-02, R-CAL-07: used for the next FY created.
-    Task UpdateCalendarAsync(string uid, int fiscalStartMonth, int paydayDay);
+    // STG-02, R-CAL-07: the start month and payday are used for the next FY created; the month
+    // naming applies right away (R-CAL-11).
+    Task UpdateCalendarAsync(string uid, int fiscalStartMonth, int paydayDay, MonthNaming monthNaming);
 
     // FY-02: the FY and its copied plans in one batch. False when the FY already exists (409).
     Task<bool> StartFiscalYearAsync(string uid, FiscalYear fiscalYear, IReadOnlyList<PlanAmounts> plans);
@@ -162,4 +165,18 @@ public interface IUserStore
     Task<bool> UpdateCategoryAsync(string uid, Category category);
 
     Task<bool> UpdateSubCategoryAsync(string uid, SubCategory subCategory);
+}
+
+public static class UserStoreExtensions
+{
+    // R-CAL-11: the stored FYs with every month named as the profile says (by the month it ends in
+    // when there is no profile). The profile and the FYs are read together.
+    public static async Task<IReadOnlyList<FiscalYear>> GetFiscalYearsAsync(this IUserStore store, string uid)
+    {
+        var profile = store.GetProfileAsync(uid);
+        var fiscalYears = store.GetStoredFiscalYearsAsync(uid);
+        await Task.WhenAll(profile, fiscalYears);
+        var naming = (await profile)?.MonthNaming ?? MonthNaming.EndMonth;
+        return (await fiscalYears).Select(fiscalYear => FiscalCalendar.Named(fiscalYear, naming)).ToList();
+    }
 }

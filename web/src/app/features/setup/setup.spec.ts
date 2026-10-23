@@ -18,6 +18,7 @@ const periods = MONTHS.map((name, i) => ({
 const preview = {
   fiscalYear: { id: '2026-01', label: 'FY 2026', startDate: '2026-01-27', endDate: '2027-01-26', isTransition: false, periods },
   currentPeriod: periods[8],
+  monthKeyOffset: 0,
 };
 
 // The protected members the income month specs drive, instead of opening 12 mat-select panels.
@@ -133,12 +134,13 @@ describe('Setup wizard income months', () => {
     http = TestBed.inject(HttpTestingController);
   });
 
-  // Step 2 filled in and the preview answered (it waits 250 ms after typing).
+  // Step 2 filled in and the preview answered (it waits 250 ms after typing). The fixture's months
+  // are named by the month the salary arrives (R-CAL-11).
   async function wizardWithPreview(): Promise<{ fixture: ReturnType<typeof TestBed.createComponent<Setup>>; wizard: Wizard }> {
     const fixture = TestBed.createComponent(Setup);
     const wizard = fixture.componentInstance as unknown as Wizard;
     await fixture.whenStable();
-    wizard.calendar.setValue({ fiscalStartMonth: 1, paydayDay: 27 });
+    wizard.calendar.setValue({ fiscalStartMonth: 1, paydayDay: 27, monthNaming: 'payday' });
     await new Promise((resolve) => setTimeout(resolve, 300));
     http.expectOne((request) => request.url === '/api/setup/preview').flush(preview);
     await fixture.whenStable();
@@ -240,6 +242,7 @@ describe('Setup wizard income months', () => {
 
     void wizard.finish();
     const request = http.expectOne('/api/setup');
+    expect(request.request.body.monthNaming).toBe('payday');
     expect(request.request.body.additionalIncome).toEqual([
       { label: 'Annual bonus', amount: 5000, type: 'once', fromPeriodKey: '2026-03', toPeriodKey: null, counts: 'planned' },
       { label: 'Rent', amount: 2000, type: 'monthly', fromPeriodKey: '2026-10', toPeriodKey: null, counts: 'both' },
@@ -268,5 +271,30 @@ describe('Setup wizard income months', () => {
     // An older draft has no months; 2027-03 is not a month of FY 2026.
     expect(item(wizard, 0).getRawValue()).toMatchObject({ from: '2026-09', to: '' });
     expect(item(wizard, 1).getRawValue()).toMatchObject({ from: '2026-04', to: '' });
+    // Nor a month naming (R-CAL-11): the month it ends in.
+    expect(wizard.calendar.getRawValue().monthNaming).toBe('end');
+  });
+
+  // R-CAL-11 (owner note 19): named by the month it ends in unless chosen otherwise; the preview
+  // follows the choice, and its offset names the income months.
+  it('previews the month naming, the month it ends in by default', async () => {
+    const fixture = TestBed.createComponent(Setup);
+    const wizard = fixture.componentInstance as unknown as Wizard;
+    await fixture.whenStable();
+    wizard.calendar.patchValue({ fiscalStartMonth: 1, paydayDay: 27 });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    const first = http.expectOne((request) => request.url === '/api/setup/preview');
+    expect(first.request.params.get('monthNaming')).toBe('end');
+    first.flush({ ...preview, monthKeyOffset: 1 });
+    await fixture.whenStable();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain('the salary pays for the month ahead');
+
+    wizard.addIncomeItem();
+    item(wizard, 0).patchValue({ label: 'Rent', amount: '2000', type: 'once', from: '2026-10' });
+    expect(wizard.incomeLines()).toEqual(['Rent · SAR 2,000 · Nov 2026 · Planned and actual']);
+
+    wizard.calendar.patchValue({ monthNaming: 'payday' });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(http.expectOne((request) => request.url === '/api/setup/preview').request.params.get('monthNaming')).toBe('payday');
   });
 });

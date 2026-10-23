@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import { PeriodInfo } from '../shared/month-label';
+import { MonthNaming, PeriodInfo } from '../shared/month-label';
 
 export interface Profile {
   displayName: string;
@@ -11,6 +11,8 @@ export interface Profile {
   timezone: string;
   fiscalStartMonth: number;
   paydayDay: number;
+  // R-CAL-11: applies right away to every month.
+  monthNaming: MonthNaming;
   // Decision 5: the Add form defaults to it; null before the first entry.
   lastBankAccountId: string | null;
 }
@@ -29,6 +31,8 @@ export interface Me {
   today: string | null;
   firstDate: string | null;
   lastDate: string | null;
+  // R-CAL-11: how many months a month's name is after its key, for monthKeyLabel.
+  monthKeyOffset: number;
 }
 
 // Loads /api/me once per sign-in.
@@ -66,9 +70,16 @@ export class MeService {
     this.me.update((me) => (me?.profile ? { ...me, profile: { ...me.profile, lastBankAccountId: id } } : me));
   }
 
-  // PUT /api/settings/calendar (STG-02) changes these two; nothing else in /api/me moves.
+  // PUT /api/settings/calendar (STG-02) changes the start month and payday; a new month naming
+  // (R-CAL-11) renames the current month too, so /api/me is loaded again (reload).
   patchProfile(changes: Partial<Profile>): void {
     this.me.update((me) => (me?.profile ? { ...me, profile: { ...me.profile, ...changes } } : me));
+  }
+
+  async reload(): Promise<Me> {
+    const me = await firstValueFrom(this.http.get<Me>('/api/me'));
+    this.me.set(me);
+    return me;
   }
 
   clear(): void {

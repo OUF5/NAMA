@@ -14,7 +14,7 @@ import { SummaryService } from '../../core/summary';
 import { dialogSize } from '../../shared/dialog';
 import { countsLabel, incomeMonths } from '../../shared/income-months';
 import { formatMoney, toMinor } from '../../shared/money';
-import { MONTH_NAMES, formatDate, monthKeyLabel, periodWithDates } from '../../shared/month-label';
+import { MONTH_NAMES, MONTH_NAMINGS, MonthNaming, formatDate, monthKeyLabel, periodWithDates } from '../../shared/month-label';
 import { CalendarDialog } from './calendar-dialog';
 import { IncomeItemDialog, IncomeItemDialogData } from './income-item-dialog';
 import { incomeItemContext } from './income-item-fields';
@@ -54,12 +54,21 @@ export class Settings {
 
   protected readonly monthNames = MONTH_NAMES;
   protected readonly formatDate = formatDate;
-  protected readonly incomeMonths = incomeMonths;
+  // R-CAL-11: names the month keys of income items.
+  private readonly keyOffset = computed(() => this.meService.me()?.monthKeyOffset ?? 0);
+
+  protected namingLabel(naming: MonthNaming): string {
+    return MONTH_NAMINGS.find((option) => option.value === naming)?.label ?? '';
+  }
+
+  protected incomeMonths(item: IncomeItem): string {
+    return incomeMonths(item, this.keyOffset());
+  }
 
   // "Sep 2026 · Actual · into SNB" (STG-03, R-INC-04, R-INC-05).
   protected incomeCaption(item: IncomeItem): string {
     const account = this.data()?.income.bankAccounts.find((option) => option.id === item.bankAccountId)?.name;
-    return [incomeMonths(item), countsLabel(item.counts), account ? `into ${account}` : ''].filter(Boolean).join(' · ');
+    return [this.incomeMonths(item), countsLabel(item.counts), account ? `into ${account}` : ''].filter(Boolean).join(' · ');
   }
 
   protected readonly phone = toSignal(this.breakpoints.observe(PHONE).pipe(map((state) => state.matches)), {
@@ -92,7 +101,7 @@ export class Settings {
       return null;
     }
     const period = income.fiscalYears.flatMap((fy) => fy.periods).find((p) => p.key === key);
-    return period ? periodWithDates(period) : monthKeyLabel(key);
+    return period ? periodWithDates(period) : monthKeyLabel(key, this.keyOffset());
   });
 
   // STG-02: "FY 2027 · 27 Jan 2027 to 26 Jul 2027 · 6 months (transition)".
@@ -168,14 +177,22 @@ export class Settings {
     }
   }
 
-  // STG-02, R-CAL-07.
+  // STG-02, R-CAL-07. A new month naming (R-CAL-11) renames every month now, so /api/me (the top
+  // bar's month) and this page's months are loaded again.
   protected async editCalendar(): Promise<void> {
-    const calendar = await this.open<CalendarDialog, Calendar, Calendar>(CalendarDialog, this.data()!.calendar, '480px');
-    if (calendar) {
-      this.meService.patchProfile({ fiscalStartMonth: calendar.fiscalStartMonth, paydayDay: calendar.paydayDay });
-      this.patch({ calendar });
-      this.status.set(`Saved. It takes effect from the fiscal year starting ${formatDate(calendar.takesEffectFrom)}.`);
+    const before = this.data()!.calendar;
+    const calendar = await this.open<CalendarDialog, Calendar, Calendar>(CalendarDialog, before, '480px');
+    if (!calendar) {
+      return;
     }
+    if (calendar.monthNaming !== before.monthNaming) {
+      await Promise.all([this.meService.reload().catch(() => undefined), this.load()]);
+      this.status.set('Saved. Every month is renamed now; dates and amounts stay the same.');
+      return;
+    }
+    this.meService.patchProfile({ fiscalStartMonth: calendar.fiscalStartMonth, paydayDay: calendar.paydayDay });
+    this.patch({ calendar });
+    this.status.set(`Saved. It takes effect from the fiscal year starting ${formatDate(calendar.takesEffectFrom)}.`);
   }
 
   // R-INC-02
@@ -196,7 +213,7 @@ export class Settings {
     const active = income.bankAccounts.filter((account) => !account.archived);
     const data: IncomeItemDialogData = {
       item,
-      context: incomeItemContext(income, this.summaryService.summary(), me?.today ?? null, item),
+      context: incomeItemContext(income, this.summaryService.summary(), me, item),
       defaultKey: income.currentPeriodKey,
       defaultAccountId: (active.find((account) => account.id === me?.profile?.lastBankAccountId) ?? active[0])?.id ?? null,
       currency: this.currency(),

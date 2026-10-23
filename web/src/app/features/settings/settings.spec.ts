@@ -56,9 +56,10 @@ function settings(currentPeriodKey: string | null = '2026-09', peopleList: Peopl
       timezone: 'Asia/Riyadh',
       fiscalStartMonth: 7,
       paydayDay: 27,
+      monthNaming: 'payday',
       lastBankAccountId: null,
     },
-    calendar: { fiscalStartMonth: 7, paydayDay: 27, takesEffectFrom: '2027-01-27', nextFiscalYear: transition },
+    calendar: { fiscalStartMonth: 7, paydayDay: 27, monthNaming: 'payday', monthKeyOffset: 0, takesEffectFrom: '2027-01-27', nextFiscalYear: transition },
     income: {
       fiscalYears: [fy2026],
       fyId: '2026-01',
@@ -343,6 +344,7 @@ describe('Income item dialog (STG-03)', () => {
         { id: 'snb', name: 'SNB', archived: false },
       ],
       today: '2026-10-17',
+      monthKeyOffset: 0,
       plannedIncome: { '2026-08': 1_700_000, '2026-09': 1_700_000, '2026-10': 1_700_000 },
       balances: {
         snb: { balance: 410_000, openingDate: '2026-01-27' },

@@ -5,7 +5,11 @@ namespace Api.Domain;
 // R-STA-01: derived from dates, never stored.
 public enum PeriodStatus { Closed, InProgress, YetToCome }
 
-// One payday cycle (PRD 3 "Month"). Key is YYYY-MM of the start date.
+// R-CAL-11: a month is named by the month it ends in (the default), or by the month the salary
+// arrives, which is the month it starts in.
+public enum MonthNaming { EndMonth, PaydayMonth }
+
+// One payday cycle (PRD 3 "Month"). Key is YYYY-MM of the start date, whatever its name (R-CAL-11).
 public sealed record Period(string Key, string Label, DateOnly StartDate, DateOnly EndDate);
 
 // PRD 7.4 fiscal year document. Id is the key of its first month. FiscalStartMonth and
@@ -32,7 +36,8 @@ public static class FiscalCalendar
         return new DateOnly(year, month, Math.Min(payday, DateTime.DaysInMonth(year, month)));
     }
 
-    // R-CAL-01 to R-CAL-03: labeled by the month it starts in, ends the day before the next month starts.
+    // R-CAL-01, R-CAL-02: ends the day before the next month starts. Labeled by the month it starts in
+    // until it is named (R-CAL-11).
     public static Period PeriodFor(int year, int month, int payday)
     {
         var next = new DateOnly(year, month, 1).AddMonths(1);
@@ -80,7 +85,8 @@ public static class FiscalCalendar
         return NewFiscalYear(periods, fiscalStartMonth, payday, isTransition);
     }
 
-    // R-CAL-06: "FY 2026" when all month labels fall in one calendar year, otherwise "FY 2026/27".
+    // R-CAL-06: "FY 2026" when all months start in one calendar year, otherwise "FY 2026/27". The month
+    // names (R-CAL-11) do not change it.
     public static string FiscalYearLabel(IReadOnlyList<Period> periods)
     {
         var firstYear = periods[0].StartDate.Year;
@@ -88,6 +94,22 @@ public static class FiscalCalendar
         return firstYear == lastYear
             ? FormattableString.Invariant($"FY {firstYear}")
             : FormattableString.Invariant($"FY {firstYear}/{lastYear % 100:00}");
+    }
+
+    // R-CAL-03, R-CAL-11: only the label changes; the dates and the key stay.
+    public static Period Named(Period period, MonthNaming naming) =>
+        period with { Label = Label(naming == MonthNaming.EndMonth ? period.EndDate : period.StartDate) };
+
+    public static FiscalYear Named(FiscalYear fiscalYear, MonthNaming naming) =>
+        fiscalYear with { Periods = fiscalYear.Periods.Select(period => Named(period, naming)).ToList().AsReadOnly() };
+
+    // R-CAL-11: how many months a month's name is after its key, for a month that starts on the
+    // payday (1 for payday 2 to 31 named by the month it ends in, otherwise 0). The web app names
+    // the month keys of income items and splits with it.
+    public static int KeyOffset(MonthNaming naming, int payday)
+    {
+        CheckPayday(payday);
+        return naming == MonthNaming.EndMonth && payday > 1 ? 1 : 0;
     }
 
     // R-STA-01
@@ -163,13 +185,15 @@ public static class FiscalCalendar
         Key(DateOnly.ParseExact(key, "yyyy-MM", CultureInfo.InvariantCulture).AddMonths(months));
 
     private static Period NewPeriod(DateOnly start, DateOnly end) =>
-        new(Key(start), start.ToString("MMM yyyy", CultureInfo.InvariantCulture), start, end);
+        new(Key(start), Label(start), start, end);
 
     private static FiscalYear NewFiscalYear(List<Period> periods, int fiscalStartMonth, int payday, bool isTransition) =>
         new(periods[0].Key, FiscalYearLabel(periods), periods[0].StartDate, periods[^1].EndDate,
             fiscalStartMonth, payday, isTransition, periods.AsReadOnly());
 
     private static string Key(DateOnly date) => date.ToString("yyyy-MM", CultureInfo.InvariantCulture);
+
+    private static string Label(DateOnly date) => date.ToString("MMM yyyy", CultureInfo.InvariantCulture);
 
     private static DateOnly FirstOfMonth(DateOnly date) => new(date.Year, date.Month, 1);
 

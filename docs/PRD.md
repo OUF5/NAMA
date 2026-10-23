@@ -137,7 +137,7 @@ Stop. That is not in the approved plan or the PRD. Undo it and continue with the
 | 1 | Hosting | Angular on Firebase Hosting. The .NET API runs on Cloud Run and is reached through a Hosting rewrite of `/api/**` | Cloud Functions for Firebase only supports Node.js and Python, so .NET must run on Cloud Run, which Hosting can route to. Same origin means no CORS setup. [Hosting + Cloud Run](https://firebase.google.com/docs/hosting/cloud-run), [Functions languages](https://firebase.google.com/docs/reference/functions) | ✅ DECIDED |
 | 2 | Firebase plan | Blaze (billing card linked) plus a budget alert | Cloud Run needs a Cloud Billing account even inside its free quota; linking billing moves the project from Spark to Blaze. [Hosting + Cloud Run](https://firebase.google.com/docs/hosting/cloud-run) | ✅ DECIDED |
 | 3 | Database | Cloud Firestore, Native mode, the default database, accessed only by the API | Firebase-native. Free quota of 50,000 reads and 20,000 writes per day, for one database per project. [Firestore billing](https://firebase.google.com/docs/firestore/pricing) | 🆕 ADDED · Tech |
-| 4 | Month cycle | A month runs from payday to the day before the next payday and is named by the month the salary arrives. Payday is set in the wizard and can be changed in Settings | Matches salary-to-salary spending. Worked example in section 3. Confirmed on 17 Oct 2026 | ✅ DECIDED |
+| 4 | Month cycle | A month runs from payday to the day before the next payday and is named by the month it ends in (the month the salary pays for), or by the month the salary arrives (R-CAL-11). Payday is set in the wizard and can be changed in Settings | Matches salary-to-salary spending: the salary of 25 Oct pays for November. Worked example in section 3. Confirmed on 17 Oct 2026; naming changed on 23 Oct 2026 (owner note 19) | ✅ DECIDED |
 | 5 | Bank account on entries | Required on every entry, defaults to the last used account | No extra tap, and better data for Phase 2 | ✅ DECIDED |
 | 6 | Closed months | Status is automatic by date; closed months stay editable | Mistakes can be fixed later | ✅ DECIDED |
 | 7 | Backend version | .NET 10 (LTS, supported until 14 Nov 2028), `ASP.NET` Core Minimal API | .NET 8 and .NET 9 both reach end of support on 10 Nov 2026. [.NET support policy](https://dotnet.microsoft.com/platform/support/policy) | 🆕 ADDED · Tech |
@@ -152,7 +152,7 @@ Stop. That is not in the approved plan or the PRD. Undo it and continue with the
 ## 3. Glossary
 
 - **Fiscal year (FY):** 12 consecutive months, starting with the month you choose (for example January or July).
-- **Month (period):** one payday cycle. It starts on payday and ends the day before the next payday. It is named by the month the salary arrives. In code it is a *period* with a key like `2026-09`.
+- **Month (period):** one payday cycle. It starts on payday and ends the day before the next payday. It is named by the month it ends in, so with payday 25 the salary of 25 Oct starts "Nov 2026" (25 Oct to 24 Nov); you can choose the month the salary arrives instead (R-CAL-11). In code it is a *period* with a key like `2026-10`: the month it starts in, whatever its name. ✅ DECIDED (23 Oct 2026, owner note 19)
 - **Payday:** the day of the month your salary arrives (1 to 31). Payday 1 gives normal calendar months.
 - **Category:** a top-level group you create, for example Food.
 - **Sub-category:** belongs to exactly one category, for example Food → Groceries. Planned amounts are set at this level.
@@ -173,9 +173,10 @@ Stop. That is not in the approved plan or the PRD. Undo it and continue with the
 
 **Worked example (also used as a unit test).** Payday = 27, FY start = January, today = 17 Oct 2026.
 
-- Month "Sep 2026" = 27 Sep 2026 to 26 Oct 2026, funded by the salary received on 27 Sep.
-- On 17 Oct 2026: Sep 2026 is **In progress**, Aug 2026 is **Closed**, Oct 2026 (27 Oct to 26 Nov) is **Yet to come**.
-- FY 2026 = 27 Jan 2026 to 26 Jan 2027: 12 months labeled Jan 2026 to Dec 2026.
+- Month "Oct 2026" = 27 Sep 2026 to 26 Oct 2026, funded by the salary received on 27 Sep.
+- On 17 Oct 2026: Oct 2026 is **In progress**, Sep 2026 is **Closed**, Nov 2026 (27 Oct to 26 Nov) is **Yet to come**.
+- FY 2026 = 27 Jan 2026 to 26 Jan 2027: 12 months named Feb 2026 to Jan 2027.
+- Named by the month the salary arrives (R-CAL-11), the same months read Sep 2026 (27 Sep to 26 Oct), Aug 2026, Oct 2026, and Jan 2026 to Dec 2026. The dates, the FY and every amount are the same.
 </aside>
 
 ---
@@ -188,16 +189,18 @@ These are the rules Claude must get exactly right. Put them in pure functions in
 
 - **R-CAL-01** A month starts on the payday of its calendar month. If that calendar month is shorter than the payday (payday 31 in February), the month starts on that calendar month's last day. 🆕 ADDED · Must
 - **R-CAL-02** A month ends the day before the next month starts.
-- **R-CAL-03** A month's label is the month and year it starts in. The UI always shows the date range next to it, for example "Sep 2026 · 27 Sep to 26 Oct". ✅ DECIDED
-- **R-CAL-04** An FY has 12 consecutive months, starting with the month whose label equals the FY start month.
+- **R-CAL-03** A month's label is the month and year it ends in (with R-CAL-11, the month it starts in instead). The UI always shows the date range next to it, for example "Oct 2026 · 27 Sep to 26 Oct". ✅ DECIDED (changed on 23 Oct 2026, owner note 19: "Sep 2026" before)
+- **R-CAL-04** An FY has 12 consecutive months, starting with the month that starts in the FY start month (on its payday). The month names (R-CAL-11) do not move the FY: with payday 27 and January, the FY starts on 27 Jan whatever its first month is named.
 - **R-CAL-05** The first FY (created by the wizard) is the FY that contains today.
-- **R-CAL-06** The FY label is "FY 2026" when all month labels fall in one calendar year, otherwise "FY 2026/27".
+- **R-CAL-06** The FY label is "FY 2026" when all its months start in one calendar year, otherwise "FY 2026/27". It does not follow the month names (R-CAL-11), so 27 Jan 2026 to 26 Jan 2027 is "FY 2026".
 - **R-CAL-07** Changing the FY start month (your rule) or the payday is saved right away but only applies when the next FY is started. The current FY keeps its dates. ✅ DECIDED (payday rule confirmed on 17 Oct 2026)
 - **R-CAL-08** The next FY starts the day after the current FY ends. Every following month starts on the payday of the next calendar month (R-CAL-01), so the first month can be shorter or longer when the payday changed. If the FY start month changed, the next FY is a short **transition FY** that ends just before the new start month; normal 12-month FYs follow. 🆕 ADDED · Must
+    - Examples A and B name each month by the month it starts in (its key).
     - Example A: FY 2026 runs Jan to Dec 2026 with payday 27, and you switch the start month to July. Transition FY = Jan 2027 to Jun 2027 (6 months). Then FY 2027/28 = Jul 2027 to Jun 2028.
-    - Example B: you switch payday from 27 to 1. The next FY's first month is 27 Jan 2027 to 31 Jan 2027 ("Jan 2027"), then 1 Feb to 28 Feb ("Feb 2027"), and so on.
-- **R-CAL-09** Months are generated once, when an FY is created, and stored on the FY document. Past months are never recomputed. Each entry stores its `periodKey` and `fyId`, which the API assigns from the entry date. 🆕 ADDED · Tech
+    - Example B: you switch payday from 27 to 1. The next FY's first month is 27 Jan 2027 to 31 Jan 2027 ("Jan 2027"), then 1 Feb to 28 Feb ("Feb 2027"), and so on. Named by the month they end in (R-CAL-11), the month before it (27 Dec to 26 Jan) and this short month are both "Jan 2027"; their dates tell them apart. The other way round (payday 1 to 27), the first month is 1 Jan to 26 Feb, "Feb 2027", and no month is named "Jan 2027". Only a payday change to or from 1 does this, and only in a FY started after it. ❓ To confirm with the owner (23 Oct 2026, owner note 19: the FY's dates do not change, so the names give way)
+- **R-CAL-09** Months are generated once, when an FY is created, and stored on the FY document. Past months are never recomputed. Their names follow R-CAL-11 when read; the stored labels are the names they had when the FY was created. Each entry stores its `periodKey` and `fyId`, which the API assigns from the entry date. 🆕 ADDED · Tech
 - **R-CAL-10** "Today" means today's date in the time zone saved in your profile (auto-detected in the wizard, editable in Settings). Use .NET `TimeProvider` so tests can fake today. 🆕 ADDED · Must
+- **R-CAL-11** Month names: each month is named by **the month it ends in** (default), or by **the month the salary arrives** (the month it starts in). With payday 25, the salary of 25 Oct, everything dated from 25 Oct to 24 Nov (spending, income and plans) and the balance it adds on 25 Oct are "Nov 2026" by default and "Oct 2026" by choice. With payday 1 both give calendar months. Chosen in the wizard (step 2) and in Settings (STG-02). Only names change: unlike R-CAL-07 it applies right away to every FY, past ones too, and no date, key, FY or amount changes. The name is worked out from the month's dates when it is read (R-CAL-09). ✅ DECIDED (23 Oct 2026, owner note 19)
 
 ### 4.2 Money
 
@@ -278,7 +281,7 @@ These are the rules Claude must get exactly right. Put them in pure functions in
 A 6-step wizard (Angular Material stepper) with Back and Next, visible progress and inline validation. Nothing is saved until **Finish**.
 
 1. **Project:** project name, your name (prefilled from Google), currency (default SAR). 🆕 ADDED · Must (currency)
-2. **Fiscal year:** FY start month and payday (1 to 31, hint "1 = calendar months"). ✅ DECIDED. A live preview shows the current FY and current month with dates, for example "FY 2026: 27 Jan 2026 to 26 Jan 2027. You are in Sep 2026 (27 Sep to 26 Oct)". 🆕 ADDED · Must (prevents a wrong setup)
+2. **Fiscal year:** FY start month and payday (1 to 31, hint "1 = calendar months"). ✅ DECIDED. Month names (R-CAL-11): "The month it ends in" (default) or "The month the salary arrives". A live preview shows the current FY and current month with dates, for example "FY 2026: 27 Jan 2026 to 26 Jan 2027. You are in Oct 2026 (27 Sep to 26 Oct)". 🆕 ADDED · Must (prevents a wrong setup)
 3. **Income:** monthly salary, then optional additional income items (label, amount, Once or Monthly, and Counts in: Planned, Actual or Both, default Both, R-INC-04, as in Settings) with their months, picked from the first FY's months with their dates: **Once** in one month (default: the current month), **Monthly** from a month (default: the FY's first month), optionally until a month (R-INC-03). Shows the **total income of the current month** (salary + the items received in it). ✅ DECIDED (20 Oct 2026; replaces "Total monthly income" and the fixed months)
 4. **Bank accounts:** at least one account, each with its balance today (R-BAL-01) and its share of income (R-BAL-02, the first account 100% at first; together 100%). 🆕 ADDED · Must (entries require an account). ✅ DECIDED (20 Oct 2026: balance and share)
 5. **General categories:** add category names. Optional suggestion chips you can tap: Housing, Food, Transport, Bills & Utilities, Health, Family, Education, Entertainment, Savings, Other. 🆕 ADDED · Nice
@@ -343,7 +346,7 @@ Page **Tracker** (`/tracker`), titled "Plan vs actual", with an "Edit plan" link
 Page **Settings** (`/settings`). One page with clear sections and no hidden menus.
 
 - **STG-01 Profile:** edit your name and project name. Edit time zone (🆕 ADDED · Must). Currency is shown and can be changed (formatting only).
-- **STG-02 Fiscal year:** change the FY start month; the page shows when it takes effect, for example "Takes effect from the FY starting 27 Jan 2027" (your rule). Change the payday with the same rule (✅ DECIDED, R-CAL-07).
+- **STG-02 Fiscal year:** change the FY start month; the page shows when it takes effect, for example "Takes effect from the FY starting 27 Jan 2027" (your rule). Change the payday with the same rule (✅ DECIDED, R-CAL-07). Change the month names (R-CAL-11): this applies right away to every FY, and the page says so: "Every month is renamed now. Dates and amounts stay the same." ✅ DECIDED (23 Oct 2026, owner note 19)
 - **STG-03 Income:** change the salary at any time with an "effective from" month (R-INC-02) and see the salary history. Add, edit and delete additional income items, each with what it counts in (R-INC-04) and the account it goes into (R-INC-05), in the same box as Add's Income (INC-01), with its preview. The section shows **Total income** for the current month (salary + additional): the actual income, and the planned income when it differs (owner note 17).
 - **STG-04 Bank accounts:** moved to Banks (BNK-02) on 20 Oct 2026; `/settings/bank-accounts` opens Banks.
 - **STG-05 Categories and sub-categories:** add and rename. No delete (your rule). Archive (🆕 ADDED · Nice). Moved to Plan's Categories tab (owner note 9, 20 Oct 2026); `/settings/categories` opens it.
@@ -476,8 +479,8 @@ All data lives under `users/{uid}`. Amounts are `long` minor units. Dates are `Y
 
 | Path | Fields | Notes |
 | --- | --- | --- |
-| `users/{uid}` | `displayName`, `email`, `projectName`, `currency`, `timezone`, `fiscalStartMonth`, `paydayDay`, `setupCompleted`, `lastBankAccountId` | Profile and settings. `fiscalStartMonth` and `paydayDay` are used for the next FY created (R-CAL-07). Its `createdAt`, as a date in `timezone`, is the day NAMA was set up (R-PLN-06) |
-| `users/{uid}/fiscalYears/{fyId}` | `label`, `startDate`, `endDate`, `fiscalStartMonth`, `paydayDay`, `isTransition`, `periods` (list of `key`, `label`, `startDate`, `endDate`) | `fyId` is the key of its first month, for example `2026-01`. Months are stored, never recomputed |
+| `users/{uid}` | `displayName`, `email`, `projectName`, `currency`, `timezone`, `fiscalStartMonth`, `paydayDay`, `monthNaming`, `setupCompleted`, `lastBankAccountId` | Profile and settings. `fiscalStartMonth` and `paydayDay` are used for the next FY created (R-CAL-07). `monthNaming` is `end` or `payday` (R-CAL-11); a missing one is `end`. Its `createdAt`, as a date in `timezone`, is the day NAMA was set up (R-PLN-06) |
+| `users/{uid}/fiscalYears/{fyId}` | `label`, `startDate`, `endDate`, `fiscalStartMonth`, `paydayDay`, `isTransition`, `periods` (list of `key`, `label`, `startDate`, `endDate`) | `fyId` is the key of its first month, for example `2026-01`. Months are stored, never recomputed. A month's `label` is the name it had when the FY was created; the API names months by R-CAL-11 when it reads them |
 | `users/{uid}/categories/{id}` | `name`, `nameLower`, `sortOrder`, `archived` | `nameLower` enforces case-insensitive uniqueness |
 | `users/{uid}/subCategories/{id}` | `categoryId`, `name`, `nameLower`, `sortOrder`, `archived` | Cannot move to another category in Phase 1 |
 | `users/{uid}/plans/{fyId}_{subCategoryId}` | `fyId`, `subCategoryId`, `categoryId`, `amounts` (map of month key to amount) | One document per sub-category per FY |
@@ -502,7 +505,7 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 | `GET /api/me` | Profile, `setupCompleted`, `isAdmin`, current FY id, current month key | Called right after sign-in |
 | `POST /api/setup` | Saves the whole wizard in one batch | 409 if already set up |
 | `PUT /api/profile` | Name, project name, currency, time zone |  |
-| `PUT /api/settings/calendar` | FY start month and payday | Applies from the next FY; returns the date it takes effect |
+| `PUT /api/settings/calendar` | FY start month, payday and month names (`monthNaming`, R-CAL-11) | The start month and payday apply from the next FY; returns the date they take effect. The month names apply right away |
 | `GET /api/fiscal-years` | List FYs |  |
 | `POST /api/fiscal-years/next` | Start the next FY; body has `copyPlans` | 409 before the last month of the current FY |
 | `GET /api/fiscal-years/{fyId}/overview` | Everything Dashboard and Months need: months with status, income, carried in, planned, spent and remaining (R-PLN-05) per sub-category per month, totals with planned saved, and FY to date with planned and planned saved | One call. Each month also has `unspent` and `saved`, and the totals `saved` (Tracker's Totals, owner note 18; null for a month yet to come). Optional `categoryId` and `subCategoryId` (MON-05) narrow rows, months and totals and make income, planned saved, unspent and saved null |
@@ -742,7 +745,7 @@ Ideas from the benchmark, not committed: spending by category, trend vs plan ove
 
 ## 11. Decisions confirmed on 17 Oct 2026
 
-1. **Month naming:** ✅ a month starts on payday, ends the day before the next payday, and is named by the month the salary arrives (salary on 27 Sep → "Sep 2026" = 27 Sep to 26 Oct).
+1. **Month naming:** ✅ a month starts on payday, ends the day before the next payday, and is named by the month the salary arrives (salary on 27 Sep → "Sep 2026" = 27 Sep to 26 Oct). Changed on 23 Oct 2026 (owner note 19): named by the month it ends in by default ("Oct 2026"), or by the month the salary arrives as an option (R-CAL-11).
 2. **Payday changes:** ✅ apply from the next FY, the same way as the FY start month.
 3. **Region:** ✅ `me-central1` (Doha) for Cloud Run and Firestore. Billing: link your existing Cloud Billing account.
 4. **Language:** ✅ English-only UI in Phase 1.

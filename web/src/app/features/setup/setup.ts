@@ -36,15 +36,16 @@ import {
   parsePercent,
   percentValidator,
 } from '../../shared/money';
-import { MONTH_NAMES, PeriodInfo, formatDate, formatDay, periodWithDates } from '../../shared/month-label';
+import { MONTH_NAMES, MONTH_NAMINGS, MonthNaming, PeriodInfo, formatDate, formatDay, periodWithDates } from '../../shared/month-label';
 import { NAME_MAX_LENGTH, isValidName, nameValidator, notInListValidator, sameName } from '../../shared/names';
 import { SetupDraft, clearDraft, loadDraft, saveDraft } from './setup-draft';
 
 // GET /api/setup/preview: step 2's live preview, computed by FiscalCalendar in the API. The FY's
-// months give step 3's income month pickers.
+// months give step 3's income month pickers; monthKeyOffset names month keys (R-CAL-11).
 interface Preview {
   fiscalYear: { id: string; label: string; startDate: string; endDate: string; periods: PeriodInfo[] };
   currentPeriod: PeriodInfo;
+  monthKeyOffset: number;
 }
 
 type IncomeType = 'once' | 'monthly';
@@ -118,7 +119,8 @@ export class Setup {
     currency: ['SAR', Validators.required],
   });
 
-  // Step 2: Fiscal year. No defaults, so both are chosen on purpose (SET-01).
+  // Step 2: Fiscal year. No defaults for the start month and payday, so both are chosen on purpose
+  // (SET-01). The month names default to the month each month ends in (R-CAL-11).
   protected readonly calendar = new FormGroup({
     fiscalStartMonth: new FormControl<number | null>(null, Validators.required),
     paydayDay: new FormControl<number | null>(null, [
@@ -127,7 +129,15 @@ export class Setup {
       Validators.max(31),
       Validators.pattern(/^\d+$/),
     ]),
+    monthNaming: new FormControl<MonthNaming>('end', { nonNullable: true }),
   });
+  protected readonly namings = MONTH_NAMINGS;
+  protected readonly namingHint = toSignal(
+    this.calendar.controls.monthNaming.valueChanges.pipe(
+      map((value) => MONTH_NAMINGS.find((option) => option.value === value)!.hint),
+    ),
+    { initialValue: MONTH_NAMINGS[0].hint },
+  );
 
   // Step 3: Income. A salary of 0 is allowed (SET-01).
   protected readonly income = this.fb.group({
@@ -188,6 +198,7 @@ export class Setup {
         const params = new HttpParams()
           .set('fiscalStartMonth', String(this.calendar.value.fiscalStartMonth))
           .set('paydayDay', String(this.calendar.value.paydayDay))
+          .set('monthNaming', this.calendar.getRawValue().monthNaming)
           .set('timezone', this.timezone);
         return this.http.get<Preview>('/api/setup/preview', { params }).pipe(catchError(() => of(null)));
       }),
@@ -213,7 +224,12 @@ export class Setup {
   protected readonly incomeLines = computed(() =>
     this.incomeItems().map((item) => {
       const amount = parseAmount(item.amount);
-      const months = item.from ? incomeMonths({ fromPeriodKey: item.from, toPeriodKey: item.type === 'once' ? item.from : item.to || null }) : '';
+      const months = item.from
+        ? incomeMonths(
+            { fromPeriodKey: item.from, toPeriodKey: item.type === 'once' ? item.from : item.to || null },
+            this.preview()?.monthKeyOffset ?? 0,
+          )
+        : '';
       return [item.label.trim(), amount === null ? '' : this.money(amount), months, countsLabel(item.counts ?? 'both')]
         .filter(Boolean)
         .join(' · ');
@@ -269,6 +285,12 @@ export class Setup {
 
   protected monthName(month: number | null | undefined): string {
     return month ? MONTH_NAMES[month - 1] : '';
+  }
+
+  // Review: "the month it ends in" (R-CAL-11).
+  protected namingLabel(): string {
+    const label = MONTH_NAMINGS.find((option) => option.value === this.calendar.getRawValue().monthNaming)!.label;
+    return label.charAt(0).toLowerCase() + label.slice(1);
   }
 
   protected addIncomeItem(): void {
@@ -376,6 +398,7 @@ export class Setup {
       timezone: this.timezone,
       fiscalStartMonth: calendar.fiscalStartMonth,
       paydayDay: Number(calendar.paydayDay),
+      monthNaming: calendar.monthNaming,
       salary: parseAmount(income.salary, true)! / 100,
       additionalIncome: (income.additional as SetupDraft['additional']).map((item) => ({
         label: item.label.trim(),
@@ -478,6 +501,7 @@ export class Setup {
       ...project,
       fiscalStartMonth: calendar.fiscalStartMonth,
       paydayDay: calendar.paydayDay,
+      monthNaming: calendar.monthNaming,
       salary: income.salary,
       additional: income.additional as SetupDraft['additional'],
       bankAccounts: this.bankAccounts.getRawValue() as AccountValue[],
@@ -494,6 +518,7 @@ export class Setup {
     this.calendar.patchValue({
       fiscalStartMonth: draft.fiscalStartMonth ?? null,
       paydayDay: draft.paydayDay ?? null,
+      monthNaming: draft.monthNaming === 'payday' ? 'payday' : 'end',
     });
     this.income.controls.salary.setValue(draft.salary ?? '');
     for (const item of draft.additional ?? []) {

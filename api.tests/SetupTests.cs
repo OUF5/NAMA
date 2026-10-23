@@ -66,13 +66,13 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
             SetupCompleted: true,
             LastBankAccountId: null), saved.Profile);
 
-        // R-CAL-05: FY 2026 = 27 Jan 2026 to 26 Jan 2027, 12 months Jan 2026 to Dec 2026.
+        // R-CAL-05: FY 2026 = 27 Jan 2026 to 26 Jan 2027, 12 months named Feb 2026 to Jan 2027 (R-CAL-11).
         var fy = saved.FiscalYear;
         Assert.Equal(("2026-01", "FY 2026", new DateOnly(2026, 1, 27), new DateOnly(2027, 1, 26), false),
             (fy.Id, fy.Label, fy.StartDate, fy.EndDate, fy.IsTransition));
         Assert.Equal(12, fy.Periods.Count);
-        Assert.Equal("Jan 2026", fy.Periods[0].Label);
-        Assert.Equal("Dec 2026", fy.Periods[^1].Label);
+        Assert.Equal("Feb 2026", fy.Periods[0].Label);
+        Assert.Equal("Jan 2027", fy.Periods[^1].Label);
 
         // The salary runs from the FY's first month (owner's choice, M3); additional income uses the chosen months.
         Assert.Equal(
@@ -215,6 +215,7 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
         { "start month 13", b => b["fiscalStartMonth"] = 13, "FiscalStartMonth" },
         { "payday 0", b => b["paydayDay"] = 0, "PaydayDay" },
         { "payday 32", b => b["paydayDay"] = 32, "PaydayDay" },
+        { "unknown month naming", b => b["monthNaming"] = "start", "MonthNaming" },
         { "no salary", b => b.Remove("salary"), "Salary" },
         { "negative salary", b => b["salary"] = -1, "Salary" },
         { "salary over 10,000,000", b => b["salary"] = 10_000_000.01m, "Salary" },
@@ -276,13 +277,13 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var periods = fy["periods"]!.AsArray();
         Assert.Equal(12, periods.Count);
         Assert.Equal(
-            """{"key":"2026-01","label":"Jan 2026","startDate":"2026-01-27","endDate":"2026-02-26"}""",
+            """{"key":"2026-01","label":"Feb 2026","startDate":"2026-01-27","endDate":"2026-02-26"}""",
             periods[0]!.ToJsonString());
         Assert.Equal(
-            """{"key":"2026-12","label":"Dec 2026","startDate":"2026-12-27","endDate":"2027-01-26"}""",
+            """{"key":"2026-12","label":"Jan 2027","startDate":"2026-12-27","endDate":"2027-01-26"}""",
             periods[^1]!.ToJsonString());
         Assert.Equal(
-            """{"key":"2026-09","label":"Sep 2026","startDate":"2026-09-27","endDate":"2026-10-26"}""",
+            """{"key":"2026-09","label":"Oct 2026","startDate":"2026-09-27","endDate":"2026-10-26"}""",
             preview["currentPeriod"]!.ToJsonString());
     }
 
@@ -291,9 +292,50 @@ public class SetupTests(ApiFactory factory) : IClassFixture<ApiFactory>
     [InlineData("fiscalStartMonth=1&paydayDay=0&timezone=Asia/Riyadh")]
     [InlineData("fiscalStartMonth=1&paydayDay=27&timezone=Mars/Olympus")]
     [InlineData("fiscalStartMonth=1&paydayDay=27")]
+    [InlineData("fiscalStartMonth=1&paydayDay=27&timezone=Asia/Riyadh&monthNaming=start")]
     public async Task Preview_with_bad_settings_returns_400(string query)
     {
         var response = await Send(HttpMethod.Get, "/api/setup/preview?" + query, NewSub());
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    // R-CAL-11 (owner note 19): the preview names the months as chosen; the dates stay. Its
+    // monthKeyOffset names step 3's income months.
+    [Theory]
+    [InlineData("", "Feb 2026", "Oct 2026", 1)]
+    [InlineData("&monthNaming=end", "Feb 2026", "Oct 2026", 1)]
+    [InlineData("&monthNaming=payday", "Jan 2026", "Sep 2026", 0)]
+    public async Task Preview_names_the_months_as_chosen(string naming, string first, string current, int offset)
+    {
+        var response = await Send(HttpMethod.Get, "/api/setup/preview?fiscalStartMonth=1&paydayDay=27&timezone=Asia/Riyadh" + naming, NewSub());
+
+        var preview = (await response.Content.ReadFromJsonAsync<JsonObject>())!;
+        Assert.Equal(
+            $$"""{"key":"2026-01","label":"{{first}}","startDate":"2026-01-27","endDate":"2026-02-26"}""",
+            preview["fiscalYear"]!["periods"]![0]!.ToJsonString());
+        Assert.Equal(
+            $$"""{"key":"2026-09","label":"{{current}}","startDate":"2026-09-27","endDate":"2026-10-26"}""",
+            preview["currentPeriod"]!.ToJsonString());
+        Assert.Equal(("FY 2026", offset), (preview["fiscalYear"]!["label"]!.GetValue<string>(), preview["monthKeyOffset"]!.GetValue<int>()));
+    }
+
+    // R-CAL-11: Finish saves the choice with the profile; the FY's dates do not depend on it.
+    [Fact]
+    public async Task Finish_saves_the_month_naming()
+    {
+        var sub = NewSub();
+        var body = ValidRequest();
+        body["monthNaming"] = "payday";
+
+        var response = await PostSetup(sub, body);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var saved = factory.Store.Saved(sub)!;
+        Assert.Equal(MonthNaming.PaydayMonth, saved.Profile.MonthNaming);
+        Assert.Equal(("Jan 2026", new DateOnly(2026, 1, 27)), (saved.FiscalYear.Periods[0].Label, saved.FiscalYear.StartDate));
+        var me = (await response.Content.ReadFromJsonAsync<JsonObject>())!;
+        Assert.Equal(("payday", "Sep 2026", 0),
+            (me["profile"]!["monthNaming"]!.GetValue<string>(), me["currentPeriod"]!["label"]!.GetValue<string>(),
+                me["monthKeyOffset"]!.GetValue<int>()));
     }
 }

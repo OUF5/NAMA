@@ -50,6 +50,8 @@ export class Banks {
   protected readonly allTransfers = signal(false);
 
   protected readonly currency = computed(() => this.meService.me()?.profile?.currency ?? 'SAR');
+  // R-CAL-11: names month keys.
+  private readonly keyOffset = computed(() => this.meService.me()?.monthKeyOffset ?? 0);
 
   protected readonly active = computed(() => (this.data()?.accounts ?? []).filter((account) => !account.archived));
   protected readonly archived = computed(() => (this.data()?.accounts ?? []).filter((account) => account.archived));
@@ -60,7 +62,7 @@ export class Banks {
   protected readonly monthLabel = computed(() => {
     const data = this.data();
     const key = data?.currentPeriodKey ?? data?.split?.fromPeriodKey;
-    return key ? monthKeyLabel(key) : '';
+    return key ? monthKeyLabel(key, this.keyOffset()) : '';
   });
 
   // Each active account's card. The breakdown reads top to bottom, like Plan's totals.
@@ -149,7 +151,7 @@ export class Banks {
   }
 
   protected monthLabelOf(key: string): string {
-    return monthKeyLabel(key);
+    return monthKeyLabel(key, this.keyOffset());
   }
 
   protected money(amount: number): string {
@@ -212,6 +214,7 @@ export class Banks {
       defaultKey: data.split ? (data.currentPeriodKey ?? data.fiscalYears.at(-1)!.periods[0].key) : data.fiscalYears[0].periods[0].key,
       income: data.income,
       currency: this.currency(),
+      monthKeyOffset: this.keyOffset(),
     };
     const banks = await this.open<SplitDialog, SplitDialogData, BanksResponse>(SplitDialog, dialogData, '640px');
     if (banks) {
@@ -253,7 +256,7 @@ export class Banks {
       .filter(([, percent]) => percent > 0)
       .map(([id, percent]) => `${names.get(id) ?? ''} ${formatPercent(toBasisPoints(percent))}`)
       .join(', ');
-    return `From ${monthKeyLabel(split.fromPeriodKey)} · ${shares}`;
+    return `From ${monthKeyLabel(split.fromPeriodKey, this.keyOffset())} · ${shares}`;
   }
 
   private accountDialog(account: Account | null): Promise<BanksResponse | undefined> {

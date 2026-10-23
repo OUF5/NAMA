@@ -32,6 +32,22 @@ public class FirestoreMappingTests
         Assert.Equal(profile, FirestoreDocuments.ToProfile(FirestoreDocuments.ToDocument(profile)));
     }
 
+    // R-CAL-11: stored as "end" or "payday"; a profile saved before 23 Oct 2026 has none and is named
+    // by the month each month ends in.
+    [Fact]
+    public void Month_naming_comes_back_unchanged_and_defaults_to_the_month_it_ends_in()
+    {
+        var profile = new UserProfile("Owner", "owner@example.com", "Home budget", "SAR", "Asia/Riyadh", 1, 25, true, null,
+            MonthNaming: MonthNaming.PaydayMonth);
+        var document = FirestoreDocuments.ToDocument(profile);
+
+        Assert.Equal("payday", document.MonthNaming);
+        Assert.Equal(profile, FirestoreDocuments.ToProfile(document));
+        Assert.Equal("end", FirestoreDocuments.ToDocument(profile with { MonthNaming = MonthNaming.EndMonth }).MonthNaming);
+        document.MonthNaming = null;
+        Assert.Equal(MonthNaming.EndMonth, FirestoreDocuments.ToProfile(document).MonthNaming);
+    }
+
     // R-PLN-06: the day setup was finished is createdAt in the profile's time zone (21:30 UTC on 20 Oct
     // is already 21 Oct in Riyadh). A document never stored has none.
     [Fact]

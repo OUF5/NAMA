@@ -95,7 +95,7 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(Fy, overview["fyId"]!.GetValue<string>());
         Assert.Equal(Months2026, overview["months"]!.AsArray().Select(month => month!["period"]!["key"]!.GetValue<string>()));
         var sep = Month(overview, "2026-09");
-        Assert.Equal(("Sep 2026", "2026-09-27", "2026-10-26"), (
+        Assert.Equal(("Oct 2026", "2026-09-27", "2026-10-26"), (
             sep["period"]!["label"]!.GetValue<string>(), sep["period"]!["startDate"]!.GetValue<string>(), sep["period"]!["endDate"]!.GetValue<string>()));
         Assert.Equal((17_500.25m, 1_900m, 1_299.99m, 12_550.01m), Numbers(sep));
         Assert.Equal(11_950m, Dec(sep["carriedIn"]));
@@ -175,7 +175,7 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((13_900m, 135_950m), (Dec(overview["toDate"]!["planned"]), Dec(overview["toDate"]!["savedClosed"])));
     }
 
-    // Every entry of a started month counts, also one dated after today (25 Oct is in Sep 2026).
+    // Every entry of a started month counts, also one dated after today (25 Oct is in Oct 2026, 27 Sep to 26 Oct).
     [Fact]
     public async Task To_date_counts_entries_dated_later_in_the_current_month()
     {
@@ -195,7 +195,7 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((153_500.25m, 201_349.99m, -47_849.74m), ToDate(await GetOk(sub)));
     }
 
-    // 26 Oct 23:59:59 in Riyadh is still Sep 2026; at 27 Oct 00:00 Oct 2026 starts and its income joins.
+    // 26 Oct 23:59:59 in Riyadh is still Oct 2026; at 27 Oct 00:00 Nov 2026 starts and its income joins.
     [Theory]
     [InlineData("2026-10-26T20:59:59Z", 153_500.25, 152_150.26)]
     [InlineData("2026-10-26T21:00:00Z", 170_500.25, 169_150.26)]
@@ -248,8 +248,8 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
     // R-STA-01 with today in the profile time zone (R-CAL-10): C = closed, I = in progress, Y = yet to come.
     [Theory]
-    [InlineData("2026-10-17T09:00:00Z", "CCCCCCCCIYYY")] // the section 3 example: Sep 2026 is in progress
-    [InlineData("2026-10-26T20:59:59Z", "CCCCCCCCIYYY")] // 26 Oct 23:59:59 in Riyadh, last day of Sep 2026
+    [InlineData("2026-10-17T09:00:00Z", "CCCCCCCCIYYY")] // the section 3 example: Oct 2026 is in progress
+    [InlineData("2026-10-26T20:59:59Z", "CCCCCCCCIYYY")] // 26 Oct 23:59:59 in Riyadh, last day of Oct 2026
     [InlineData("2026-10-26T21:00:00Z", "CCCCCCCCCIYY")] // 27 Oct 00:00 in Riyadh: Oct 2026 starts
     [InlineData("2026-01-26T09:00:00Z", "YYYYYYYYYYYY")] // before the FY starts
     [InlineData("2026-01-26T21:00:00Z", "IYYYYYYYYYYY")] // 27 Jan 00:00 in Riyadh: the first day

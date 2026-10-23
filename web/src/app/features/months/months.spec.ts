@@ -52,6 +52,7 @@ const me: Me = {
     timezone: 'Asia/Riyadh',
     fiscalStartMonth: 1,
     paydayDay: 27,
+    monthNaming: 'payday',
     lastBankAccountId: 'rajhi',
   },
   currentFyId: '2026-01',
@@ -60,6 +61,7 @@ const me: Me = {
   today: '2026-10-17',
   firstDate: '2026-01-27',
   lastDate: '2027-01-26',
+  monthKeyOffset: 0,
 };
 
 const categories: Category[] = [

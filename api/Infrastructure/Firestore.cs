@@ -33,7 +33,7 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
         return snapshot.Exists ? FirestoreDocuments.ToProfile(snapshot.ConvertTo<ProfileDocument>()) : null;
     }
 
-    public async Task<IReadOnlyList<FiscalYear>> GetFiscalYearsAsync(string uid)
+    public async Task<IReadOnlyList<FiscalYear>> GetStoredFiscalYearsAsync(string uid)
     {
         var snapshot = await User(uid).Collection("fiscalYears").GetSnapshotAsync();
         return snapshot.Documents
@@ -239,11 +239,12 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
             ["updatedAt"] = FieldValue.ServerTimestamp,
         });
 
-    public Task UpdateCalendarAsync(string uid, int fiscalStartMonth, int paydayDay) =>
+    public Task UpdateCalendarAsync(string uid, int fiscalStartMonth, int paydayDay, MonthNaming monthNaming) =>
         User(uid).UpdateAsync(new Dictionary<string, object>
         {
             ["fiscalStartMonth"] = fiscalStartMonth,
             ["paydayDay"] = paydayDay,
+            ["monthNaming"] = FirestoreDocuments.ToMonthNamingName(monthNaming),
             ["updatedAt"] = FieldValue.ServerTimestamp,
         });
 
@@ -440,6 +441,7 @@ public sealed class ProfileDocument
     [FirestoreProperty("timezone")] public string Timezone { get; set; } = "";
     [FirestoreProperty("fiscalStartMonth")] public int FiscalStartMonth { get; set; }
     [FirestoreProperty("paydayDay")] public int PaydayDay { get; set; }
+    [FirestoreProperty("monthNaming")] public string? MonthNaming { get; set; }
     [FirestoreProperty("setupCompleted")] public bool SetupCompleted { get; set; }
     [FirestoreProperty("lastBankAccountId")] public string? LastBankAccountId { get; set; }
     [FirestoreProperty("createdAt"), ServerTimestamp] public Timestamp CreatedAt { get; set; }
@@ -590,9 +592,15 @@ public static class FirestoreDocuments
         Timezone = profile.Timezone,
         FiscalStartMonth = profile.FiscalStartMonth,
         PaydayDay = profile.PaydayDay,
+        MonthNaming = ToMonthNamingName(profile.MonthNaming),
         SetupCompleted = profile.SetupCompleted,
         LastBankAccountId = profile.LastBankAccountId,
     };
+
+    public static string ToMonthNamingName(MonthNaming naming) => naming == MonthNaming.PaydayMonth ? "payday" : "end";
+
+    // R-CAL-11: a missing or unknown value is the month it ends in, the default.
+    public static MonthNaming ToMonthNaming(string? name) => name == "payday" ? MonthNaming.PaydayMonth : MonthNaming.EndMonth;
 
     // R-PLN-06: the day setup was finished is the profile's createdAt in the profile time zone (a
     // document that was never stored has no createdAt).
@@ -601,7 +609,8 @@ public static class FirestoreDocuments
         document.FiscalStartMonth, document.PaydayDay, document.SetupCompleted, document.LastBankAccountId,
         document.CreatedAt.Equals(default(Timestamp)) || string.IsNullOrEmpty(document.Timezone)
             ? null
-            : FiscalCalendar.DateIn(document.CreatedAt.ToDateTimeOffset(), document.Timezone));
+            : FiscalCalendar.DateIn(document.CreatedAt.ToDateTimeOffset(), document.Timezone),
+        ToMonthNaming(document.MonthNaming));
 
     public static FiscalYearDocument ToDocument(FiscalYear fiscalYear) => new()
     {
@@ -620,7 +629,8 @@ public static class FirestoreDocuments
         }).ToList(),
     };
 
-    // R-CAL-09: the stored months are used as they are, never recomputed.
+    // R-CAL-09: the stored months are used as they are, never recomputed (their names follow
+    // R-CAL-11 in UserStoreExtensions.GetFiscalYearsAsync).
     public static FiscalYear ToFiscalYear(string id, FiscalYearDocument document) => new(
         id, document.Label, ToDate(document.StartDate), ToDate(document.EndDate),
         document.FiscalStartMonth, document.PaydayDay, document.IsTransition,

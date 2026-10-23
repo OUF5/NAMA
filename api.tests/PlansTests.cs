@@ -45,7 +45,7 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
     private static JsonObject EveryMonth(decimal amount) =>
         new(Enumerable.Range(1, 12).Select(m => KeyValuePair.Create<string, JsonNode?>($"2026-{m:00}", amount)));
 
-    // PLN-04, R-STA-02: Jan 2026 is closed on 17 Oct 2026 and still takes amounts.
+    // PLN-04, R-STA-02: the FY's first month (2026-01, Feb 2026) is closed on 17 Oct 2026 and still takes amounts.
     [Fact]
     public async Task Amounts_save_in_minor_units_and_come_back_including_closed_months()
     {
@@ -196,7 +196,7 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(("2026-01", "FY 2026", "2026-01-20"),
             (fiscalYear["id"]!.GetValue<string>(), fiscalYear["label"]!.GetValue<string>(), fiscalYear["startDate"]!.GetValue<string>()));
         Assert.Equal(12, fiscalYear["periods"]!.AsArray().Count);
-        Assert.Equal("""{"key":"2026-01","label":"Jan 2026","startDate":"2026-01-20","endDate":"2026-02-26"}""",
+        Assert.Equal("""{"key":"2026-01","label":"Feb 2026","startDate":"2026-01-20","endDate":"2026-02-26"}""",
             fiscalYear["periods"]![0]!.ToJsonString());
     }
 
@@ -213,7 +213,7 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(("2026-01", "FY 2026", "2026-01-27", "2027-01-26", false),
             (fy["id"]!.GetValue<string>(), fy["label"]!.GetValue<string>(), fy["startDate"]!.GetValue<string>(),
                 fy["endDate"]!.GetValue<string>(), fy["isTransition"]!.GetValue<bool>()));
-        Assert.Equal("Dec 2026", fy["periods"]![11]!["label"]!.GetValue<string>());
+        Assert.Equal("Jan 2027", fy["periods"]![11]!["label"]!.GetValue<string>());
     }
 
     // Plan's FY selector (owner's choice, M8): every FY, oldest first, in the plans response.

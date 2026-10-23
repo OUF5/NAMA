@@ -3,16 +3,19 @@ import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { Me, Profile } from '../../core/me';
 import { IncomeCounts } from '../../shared/income-months';
+import { MonthNaming } from '../../shared/month-label';
 import { BankAccount } from '../add-entry/entry-api';
 import { FiscalYear } from '../plan/plan-api';
 
 // PRD 5.7 Settings. Amounts are decimals in JSON (R-MON-01); every sum comes from the API.
 
-// STG-02, R-CAL-07: the settings apply from the FY after the latest stored one. nextFiscalYear is
-// that FY as it would be created now.
+// STG-02, R-CAL-07: the start month and payday apply from the FY after the latest stored one.
+// nextFiscalYear is that FY as it would be created now. monthNaming applies right away (R-CAL-11).
 export interface Calendar {
   fiscalStartMonth: number;
   paydayDay: number;
+  monthNaming: MonthNaming;
+  monthKeyOffset: number;
   takesEffectFrom: string;
   nextFiscalYear: FiscalYear;
 }
@@ -117,8 +120,8 @@ export class SettingsApi {
     return firstValueFrom(this.http.put<Me>('/api/profile', change));
   }
 
-  updateCalendar(fiscalStartMonth: number, paydayDay: number): Promise<Calendar> {
-    return firstValueFrom(this.http.put<Calendar>('/api/settings/calendar', { fiscalStartMonth, paydayDay }));
+  updateCalendar(fiscalStartMonth: number, paydayDay: number, monthNaming: MonthNaming): Promise<Calendar> {
+    return firstValueFrom(this.http.put<Calendar>('/api/settings/calendar', { fiscalStartMonth, paydayDay, monthNaming }));
   }
 
   // Add's Income (INC-01): the month pickers and the current month, without the rest of Settings.

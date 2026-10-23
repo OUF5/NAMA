@@ -55,6 +55,16 @@
             <mat-error>Enter a day from 1 to 31.</mat-error>
           }
         </mat-form-field>
+        <!-- R-CAL-11 (owner note 19) -->
+        <mat-form-field>
+          <mat-label>Name each month by</mat-label>
+          <mat-select formControlName="monthNaming">
+            @for (option of namings; track option.value) {
+              <mat-option [value]="option.value">{{ option.label }}</mat-option>
+            }
+          </mat-select>
+          <mat-hint>{{ namingHint() }}</mat-hint>
+        </mat-form-field>
         @if (preview(); as p) {
           <p class="note" aria-live="polite">
             {{ p.fiscalYear.label }}: {{ formatDate(p.fiscalYear.startDate) }} to {{ formatDate(p.fiscalYear.endDate) }}.
@@ -306,7 +316,8 @@
           <dd>{{ project.value.projectName }} · {{ project.value.displayName }} · {{ currency() }}</dd>
           <dt>Fiscal year</dt>
           <dd>
-            Starts in {{ monthName(calendar.value.fiscalStartMonth) }}, payday {{ calendar.value.paydayDay }}
+            Starts in {{ monthName(calendar.value.fiscalStartMonth) }}, payday {{ calendar.value.paydayDay }}, months named by
+            {{ namingLabel() }}
             @if (preview(); as p) {
               <br />{{ p.fiscalYear.label }}: {{ formatDate(p.fiscalYear.startDate) }} to {{ formatDate(p.fiscalYear.endDate) }}
               <br />You are in {{ periodWithDates(p.currentPeriod) }}

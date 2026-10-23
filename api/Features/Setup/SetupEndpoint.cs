@@ -10,8 +10,9 @@ namespace Api.Features.Setup;
 // PRD 5.2 setup wizard: the live preview (step 2) and POST /api/setup (SET-02).
 public static class SetupEndpoint
 {
-    // The FY's months give step 3's income month pickers (R-INC-03).
-    public record PreviewResponse(FiscalYearsEndpoint.FiscalYearDto FiscalYear, MeEndpoint.PeriodDto CurrentPeriod);
+    // The FY's months give step 3's income month pickers (R-INC-03). MonthKeyOffset names month keys
+    // as /api/me's does (R-CAL-11).
+    public record PreviewResponse(FiscalYearsEndpoint.FiscalYearDto FiscalYear, MeEndpoint.PeriodDto CurrentPeriod, int MonthKeyOffset);
 
     public static IEndpointRouteBuilder MapSetup(this IEndpointRouteBuilder api)
     {
@@ -21,6 +22,7 @@ public static class SetupEndpoint
             [Range(1, 12)] int fiscalStartMonth,
             [Range(1, 31)] int paydayDay,
             string timezone,
+            [AllowedValues(null, "end", "payday")] string? monthNaming,
             TimeProvider time) =>
         {
             if (!TimeZoneInfo.TryFindSystemTimeZoneById(timezone, out _))
@@ -28,19 +30,22 @@ public static class SetupEndpoint
                 return Results.ValidationProblem(new Dictionary<string, string[]> { ["timezone"] = ["Time zone is unknown."] });
             }
             var today = FiscalCalendar.Today(time, timezone);
-            var fiscalYear = FiscalCalendar.FirstFiscalYear(today, fiscalStartMonth, paydayDay);
+            var naming = FirestoreDocuments.ToMonthNaming(monthNaming);
+            var fiscalYear = FiscalCalendar.Named(FiscalCalendar.FirstFiscalYear(today, fiscalStartMonth, paydayDay), naming);
             return Results.Ok(new PreviewResponse(
                 FiscalYearsEndpoint.FiscalYearDto.From(fiscalYear),
-                MeEndpoint.PeriodDto.From(FiscalCalendar.PeriodContaining(today, paydayDay))));
+                MeEndpoint.PeriodDto.From(FiscalCalendar.Named(FiscalCalendar.PeriodContaining(today, paydayDay), naming)),
+                FiscalCalendar.KeyOffset(naming, paydayDay)));
         });
 
         api.MapPost("/setup", async (SetupRequest request, ClaimsPrincipal user, IUserStore store, TimeProvider time, EmailAllowlist admins) =>
         {
             // AUTH-03: the user id and email come from the token, never from the body.
             var uid = user.FindFirstValue("sub")!;
-            // R-CAL-05: the first FY contains today in the chosen time zone.
-            var fiscalYear = FiscalCalendar.FirstFiscalYear(
-                FiscalCalendar.Today(time, request.Timezone!), request.FiscalStartMonth, request.PaydayDay);
+            // R-CAL-05: the first FY contains today in the chosen time zone. R-CAL-11: named as chosen.
+            var fiscalYear = FiscalCalendar.Named(
+                FiscalCalendar.FirstFiscalYear(FiscalCalendar.Today(time, request.Timezone!), request.FiscalStartMonth, request.PaydayDay),
+                FirestoreDocuments.ToMonthNaming(request.MonthNaming));
             if (MonthErrors(request, fiscalYear) is { Count: > 0 } errors)
             {
                 return Results.ValidationProblem(errors);
@@ -105,7 +110,8 @@ public static class SetupEndpoint
             FiscalStartMonth: request.FiscalStartMonth,
             PaydayDay: request.PaydayDay,
             SetupCompleted: true,
-            LastBankAccountId: null);
+            LastBankAccountId: null,
+            MonthNaming: FirestoreDocuments.ToMonthNaming(request.MonthNaming));
 
         var accounts = request.BankAccounts!
             .Select(account => (Account: new BankAccount(DocumentIds.New(), Names.Normalize(account.Name), Opening:

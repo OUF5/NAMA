@@ -1,4 +1,5 @@
 import { IncomeCounts } from '../../shared/income-months';
+import { MonthNaming } from '../../shared/month-label';
 
 // SET-03: typed wizard values survive a page refresh. One draft per Google account, removed on
 // Finish and on sign-out. Storage can be missing or blocked, so every call is guarded.
@@ -8,6 +9,8 @@ export interface SetupDraft {
   currency: string;
   fiscalStartMonth: number | null;
   paydayDay: number | null;
+  // R-CAL-11 (owner note 19); drafts saved before it have none (end).
+  monthNaming?: MonthNaming;
   salary: string;
   // from and to are month keys of the first FY; to is '' for Once and for no end (R-INC-03).
   // counts is R-INC-04 (owner note 17); drafts saved before it have none (both).

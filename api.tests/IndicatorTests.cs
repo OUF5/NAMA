@@ -12,7 +12,7 @@ namespace Api.Tests;
 public class IndicatorTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     // The hand check of the M5 "Done when":
-    // Groceries planned 1,500 in Sep 2026 (27 Sep to 26 Oct) and 1,000 in Aug 2026 (27 Aug to 26 Sep).
+    // Groceries planned 1,500 in Oct 2026 (27 Sep to 26 Oct) and 1,000 in Sep 2026 (27 Aug to 26 Sep).
     // Entries: Groceries 400 on 1 Oct and 799.99 on 17 Oct (Sep), Groceries 50 on 10 Sep (Aug),
     // and Fuel 100 on 1 Oct (Sep, another sub-category).
     // Aug: planned 1,000, spent 50, remaining 950, percent 5.
@@ -71,7 +71,7 @@ public class IndicatorTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         Assert.Equal((950m, 1500m, 2450m, 1199.99m, 1250.01m, (int?)48), Numbers(indicator));
         Assert.Equal(
-            """{"key":"2026-09","label":"Sep 2026","startDate":"2026-09-27","endDate":"2026-10-26"}""",
+            """{"key":"2026-09","label":"Oct 2026","startDate":"2026-09-27","endDate":"2026-10-26"}""",
             indicator["period"]!.ToJsonString());
     }
 

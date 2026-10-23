@@ -56,7 +56,8 @@ public static class FiscalYearsEndpoint
                     detail: $"{latest.Label} ends on {Format(latest.EndDate)}. The next fiscal year can be started from {Format(latest.Periods[^1].StartDate)}.");
             }
 
-            var next = FiscalCalendar.NextFiscalYear(latest, profile.FiscalStartMonth, profile.PaydayDay);
+            var next = FiscalCalendar.Named(
+                FiscalCalendar.NextFiscalYear(latest, profile.FiscalStartMonth, profile.PaydayDay), profile.MonthNaming);
             var plans = request.CopyPlans == true ? await CopyPlansAsync(uid, fiscalYears, next, store) : [];
             if (!await store.StartFiscalYearAsync(uid, next, plans))
             {
