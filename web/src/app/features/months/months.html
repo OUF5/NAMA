@@ -1,8 +1,8 @@
 <!-- Tracker: plan vs actual (owner's choice, 20 Oct 2026). Edit plan goes back to Plan for the same FY. -->
 <div class="page-head">
-  <h1>Plan vs actual</h1>
+  <h1>Actual vs projection</h1>
   @if (data(); as d) {
-    <a routerLink="/plan" [queryParams]="{ fyId: d.fyId }">Edit plan</a>
+    <a routerLink="/plan" [queryParams]="{ fyId: d.fyId, tab: 'planning' }">Edit plan</a>
   }
 </div>
 
@@ -97,7 +97,7 @@
       <section class="card empty">
         <h2>Nothing planned or spent in {{ fiscalYear()?.label }} yet</h2>
         <p class="note">
-          Plan amounts on <a routerLink="/plan">Plan</a>, and add spending on
+          Plan amounts on <a routerLink="/plan" [queryParams]="{ tab: 'planning' }">Plan</a>, and add spending on
           <a routerLink="/add">Add</a>.
         </p>
       </section>

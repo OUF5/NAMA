@@ -21,17 +21,18 @@ import { PlanDialog, PlanDialogData } from './plan-dialog';
 
 const PHONE = '(max-width: 767.98px)';
 
-// Owner note 9: three tabs, in the URL as ?tab= so a link can open one.
+// Owner note 9: three tabs, in the URL as ?tab= so a link can open one. Owner note 25: Allocating
+// first, and /plan with no tab opens it; links about editing amounts name ?tab=planning.
 export const PLAN_TABS = [
-  { id: 'planning', label: 'Planning' },
   { id: 'allocating', label: 'Allocating' },
+  { id: 'planning', label: 'Planning' },
   { id: 'categories', label: 'Categories' },
 ] as const;
 
 export type PlanTab = (typeof PLAN_TABS)[number]['id'];
 
-// PRD 5.3 Plan (PLN-01 to PLN-06), in three tabs (owner note 9): Planning (each sub-category's amount
-// in one month, a month at a time), Allocating (the PLN-03 totals) and Categories (STG-05, moved from
+// PRD 5.3 Plan (PLN-01 to PLN-06), in three tabs (owner note 9): Allocating (the PLN-03 totals, the
+// default, owner note 25), Planning (each sub-category's amount in one month, a month at a time) and Categories (STG-05, moved from
 // Settings). Owner's choice (M8), so the page stays short as it grows:
 // - PLN-03 totals are one table turned sideways that reads top to bottom: Income - Planned = Unassigned
 //   this month (the month on its own), added up from the FY's first month = Accumulated Planned
@@ -66,7 +67,7 @@ export class Plan {
 
   protected readonly formatDate = formatDate;
   protected readonly tabs = PLAN_TABS;
-  protected readonly tab = signal<PlanTab>('planning');
+  protected readonly tab = signal<PlanTab>('allocating');
   protected readonly formatDay = formatDay;
 
   protected readonly loadError = signal('');
@@ -175,7 +176,7 @@ export class Plan {
   constructor() {
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       const tab = params.get('tab');
-      this.tab.set(PLAN_TABS.some((item) => item.id === tab) ? (tab as PlanTab) : 'planning');
+      this.tab.set(PLAN_TABS.some((item) => item.id === tab) ? (tab as PlanTab) : 'allocating');
       // Switching tabs keeps the FY and needs no call.
       if (this.data() && params.get('fyId') === this.urlFyId) {
         return;

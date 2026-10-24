@@ -1,12 +1,25 @@
-<!-- Owner note 18: Plan's Allocating table with what really happened. -->
+<!-- Owner note 18: Plan's Allocating table with what really happened; owner note 23: and its projection. -->
 <section class="card totals-card" aria-labelledby="totals-title">
   <div class="card-head">
     <h2 id="totals-title">Totals per month <span class="caption">({{ currency() }})</span></h2>
-    @if (fiscalYearColumn().savedMoney; as saved) {
-      <p class="saved-kpi">
-        <span class="caption">Accumulated savings{{ soFar() ? ' so far' : '' }} in {{ fiscalYearLabel() }}</span>
-        <span class="money" [class.ok]="!fiscalYearColumn().over" [class.danger]="fiscalYearColumn().over">{{ saved }}</span>
-      </p>
+    @if (fiscalYearColumn().savedMoney || fiscalYearColumn().projectedMoney) {
+      <div class="kpis">
+        @if (fiscalYearColumn().savedMoney; as saved) {
+          <p class="saved-kpi">
+            <span class="caption">Accumulated savings{{ soFar() ? ' so far' : '' }} in {{ fiscalYearLabel() }}</span>
+            <span class="money" [class.ok]="!fiscalYearColumn().over" [class.danger]="fiscalYearColumn().over">{{ saved }}</span>
+          </p>
+        }
+        <!-- Owner note 23: where the savings end if the rest of the FY goes as planned. -->
+        @if (fiscalYearColumn().projectedMoney; as projected) {
+          <p class="saved-kpi projected-kpi">
+            <span class="caption">Projected by the end of {{ fiscalYearLabel() }}</span>
+            <span class="money" [class.ok]="!fiscalYearColumn().projectedOver" [class.danger]="fiscalYearColumn().projectedOver">{{
+              projected
+            }}</span>
+          </p>
+        }
+      </div>
     }
   </div>
   <div class="scroll">
@@ -36,24 +49,18 @@
             }
             <td class="money fy-col">{{ fy.income }}</td>
           </tr>
-          @if (showPlannedIncome()) {
-            <!-- R-INC-04: Plan's income, when an item counts in only one of the two. -->
-            <tr class="secondary">
-              <th scope="row">Planned income</th>
-              @for (column of columns(); track column.key) {
-                <td class="money" [class.now]="column.now">{{ column.plannedIncome }}</td>
-              }
-              <td class="money fy-col">{{ fy.plannedIncome }}</td>
-            </tr>
-          }
+          <!-- Owner note 23: the Actual and Both additional income items, already in Income. -->
+          <tr class="secondary">
+            <th scope="row">
+              Additional income
+              <span class="formula">Actual and Both, in Income</span>
+            </th>
+            @for (column of columns(); track column.key) {
+              <td class="money" [class.now]="column.now">{{ column.additionalIncome ?? '–' }}</td>
+            }
+            <td class="money fy-col">{{ fy.additionalIncome ?? '–' }}</td>
+          </tr>
         }
-        <tr>
-          <th scope="row">Planned</th>
-          @for (column of columns(); track column.key) {
-            <td class="money" [class.now]="column.now">{{ column.planned }}</td>
-          }
-          <td class="money fy-col">{{ fy.planned }}</td>
-        </tr>
         <tr>
           <th scope="row">Spent</th>
           @for (column of columns(); track column.key) {
@@ -76,6 +83,9 @@
                 [class.danger]="column.unspentOver"
               >
                 {{ column.unspent ?? '–' }}
+                @if (column.projected) {
+                  <span class="caption">Projected</span>
+                }
               </td>
             }
             <td class="money fy-col" [class.ok]="fy.saved !== null && !fy.over" [class.danger]="fy.over">
@@ -98,6 +108,13 @@
                 [class.danger]="column.savedOver"
               >
                 {{ column.saved ?? '–' }}
+                @if (column.projected) {
+                  <span class="caption">Projected</span>
+                }
+                @if (column.savedThen; as then) {
+                  <span class="then" [class.ok]="!column.savedThenOver" [class.danger]="column.savedThenOver">{{ then }}</span>
+                  <span class="caption">Projected</span>
+                }
               </td>
             }
             <td
@@ -166,7 +183,8 @@
       Unspent is income that was not spent. Accumulated savings adds up each month's unspent from
       {{ firstMonth() }}, the first month of {{ fiscalYearLabel() }}, with what you entered for months
       before you started NAMA. It is not your balance: Balance starts from the balances you set on Banks.
-      Months yet to come show –.
+      Projected: the rest of this month's plan is spent, then each month yet to come adds its income
+      minus its plan (on Plan), so every expense or income you add moves it.
     } @else {
       Income, savings and the balance belong to the whole budget, so they are hidden while a category is
       picked.

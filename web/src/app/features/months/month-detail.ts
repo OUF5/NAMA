@@ -1,5 +1,5 @@
 import { NgTemplateOutlet } from '@angular/common';
-import { Component, computed, input, output } from '@angular/core';
+import { Component, computed, input, output, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -70,32 +70,57 @@ export class MonthDetail {
   });
 
   // Plan vs spent: the categories and sub-categories with a plan, spending or a carry this month
-  // (owner's choice, M7); with "Over plan only", only what went over.
+  // (owner's choice, M7); with "Over plan only", only what went over. Owner note 26: one line each,
+  // over plan first, then near the limit, then the largest share spent (Plan's order for ties). A
+  // category opens to its sub-categories; one with a single sub-category does not repeat it, and
+  // says its name beside the category's when it differs.
   protected readonly categories = computed(() => {
     const i = this.index();
     const names = this.names();
     if (i < 0) {
       return [];
     }
-    return this.overview()
-      .rows.map((row) => ({
-        id: row.categoryId,
-        name: names.categories.get(row.categoryId) ?? '',
-        line: this.line(row.months[i]),
-        subs: row.subCategories
-          .filter((sub) =>
-            this.overOnly()
-              ? this.line(sub.months[i]).status === 'danger'
-              : this.hasMoney(sub.months[i]),
-          )
-          .map((sub) => ({
-            id: sub.subCategoryId,
-            name: names.subs.get(sub.subCategoryId) ?? '',
-            line: this.line(sub.months[i]),
-          })),
-      }))
-      .filter((category) => category.subs.length > 0);
+    return byAttention(
+      this.overview()
+        .rows.map((row) => {
+          const name = names.categories.get(row.categoryId) ?? '';
+          const subs = byAttention(
+            row.subCategories
+              .filter((sub) =>
+                this.overOnly()
+                  ? this.line(sub.months[i]).status === 'danger'
+                  : this.hasMoney(sub.months[i]),
+              )
+              .map((sub) => ({
+                id: sub.subCategoryId,
+                name: names.subs.get(sub.subCategoryId) ?? '',
+                line: this.line(sub.months[i]),
+              })),
+          );
+          return {
+            id: row.categoryId,
+            name,
+            line: this.line(row.months[i]),
+            subs,
+            single: subs.length === 1 ? { detail: subs[0].name === name ? null : subs[0].name } : null,
+          };
+        })
+        .filter((category) => category.subs.length > 0),
+    );
   });
+
+  // Owner note 26: the opened categories; with "Over plan only" every category is open.
+  private readonly opened = signal<ReadonlySet<string>>(new Set());
+  protected isOpen(id: string): boolean {
+    return this.overOnly() || this.opened().has(id);
+  }
+  protected toggle(id: string): void {
+    const next = new Set(this.opened());
+    if (!next.delete(id)) {
+      next.add(id);
+    }
+    this.opened.set(next);
+  }
 
   protected readonly data = computed(() => this.detail()?.data ?? null);
 
@@ -200,4 +225,11 @@ export class MonthDetail {
   private line(cell: Cell): SpendLine {
     return spendLine(availableMinor(cell), toMinor(cell.spent), this.currency());
   }
+}
+
+// Owner note 26: over plan first, then near the limit, then the largest share spent; ties keep
+// their order (Array.prototype.sort is stable).
+function byAttention<T extends { line: SpendLine }>(items: T[]): T[] {
+  const rank = (line: SpendLine) => (line.status === 'danger' ? 0 : line.status === 'warn' ? 1 : 2);
+  return [...items].sort((a, b) => rank(a.line) - rank(b.line) || (b.line.bar ?? 0) - (a.line.bar ?? 0));
 }

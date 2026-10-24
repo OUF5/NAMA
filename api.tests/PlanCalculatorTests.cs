@@ -94,6 +94,31 @@ public class PlanCalculatorTests
         Assert.Empty(PlanCalculator.RunningSaved([]));
     }
 
+    // Owner note 23: Mar is in progress with 900,000 saved and 200,000 of its plan left, so it ends at
+    // 700,000; Apr adds 1,700,000 − 1,500,000 and May 1,700,000 − 1,900,000.
+    [Fact]
+    public void Projected_savings_spend_the_rest_of_this_month_then_follow_the_plan()
+    {
+        var saved = PlanCalculator.RunningSaved([("2026-01", 1_700_000, 1_420_000), ("2026-02", 1_700_000, 1_850_000), ("2026-03", 1_700_000, 930_000)]);
+        (string, long, long)[] future = [("2026-04", 1_700_000, 1_500_000), ("2026-05", 1_700_000, 1_900_000)];
+
+        var months = PlanCalculator.ProjectSaved(saved, inProgress: true, stillToSpend: 200_000, future);
+
+        Assert.Equal(["2026-03", "2026-04", "2026-05"], months.Select(month => month.PeriodKey));
+        Assert.Equal([570_000L, 200_000, -200_000], months.Select(month => month.ThisMonth));
+        Assert.Equal([700_000L, 900_000, 700_000], months.Select(month => month.Saved));
+    }
+
+    // Before the FY starts nothing is saved yet; after it ends nothing is left to project.
+    [Fact]
+    public void Projected_savings_start_from_zero_and_stop_at_the_FYs_end()
+    {
+        (string, long, long)[] future = [("2026-01", 1_700_000, 1_500_000), ("2026-02", 1_700_000, 1_500_000)];
+
+        Assert.Equal([200_000L, 400_000], PlanCalculator.ProjectSaved([], inProgress: false, 0, future).Select(month => month.Saved));
+        Assert.Empty(PlanCalculator.ProjectSaved(PlanCalculator.RunningSaved([("2026-01", 1_700_000, 0)]), inProgress: false, 0, []));
+    }
+
     // R-PLN-03: more planned than received so far stays negative until later income covers it.
     [Fact]
     public void A_negative_unassigned_carries_too()

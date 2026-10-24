@@ -112,35 +112,89 @@
   }
 }
 
+// Owner note 26: one 44px line each: the chevron (or its space), the name with a chip only when near
+// or over the limit, a thin bar, then "SAR 1,240 of 2,000". On phones the bar goes under the name.
 .spend-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px 0;
+  display: grid;
+  // A fixed amount column, so every row's bar starts and ends at the same place.
+  grid-template-columns: 24px minmax(0, 1fr) minmax(64px, 160px) 152px;
+  align-items: center;
+  gap: 4px 12px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: 6px 0;
+}
 
-  &.sub {
-    padding-left: 16px;
+// A category with sub-categories is one button that opens them.
+.fold-row {
+  margin: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--surface-2);
   }
 }
 
-.line-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+.chevron {
+  width: 24px;
+  height: 24px;
+  font-size: 24px;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.subs {
+  padding-bottom: 6px;
 }
 
 .line-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
   font-weight: 500;
-  overflow-wrap: anywhere;
+  // Wraps between words, never inside one ("Entertainment").
+  overflow-wrap: break-word;
 }
 
 .sub .line-name {
+  padding-left: 12px;
   font-weight: 400;
 }
 
+.empty-bar {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+}
+
 .line-amounts {
-  margin: 0;
+  white-space: nowrap;
+  text-align: right;
+}
+
+@media (max-width: 479.98px) {
+  .spend-row {
+    grid-template-columns: 24px minmax(0, 1fr) auto;
+  }
+
+  .line-bar {
+    grid-row: 2;
+    grid-column: 2 / -1;
+  }
 }
 
 // A name (with a caption under it) and an amount; 48px rows.

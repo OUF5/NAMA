@@ -16,13 +16,13 @@ import { LoanTotals, LoansApi } from '../loans/loans-api';
 import { PlanApi } from '../plan/plan-api';
 import { BankBar } from './bank-bar';
 import { MonthBars } from './month-bars';
-import { Projection } from './projection';
 
-// PRD 5.9 Dashboard (DSH-01 to DSH-06) and the FY-01 banner (owner note 8). It shows the FY that
-// contains today, else the latest; there is no FY selector. One call: the overview (NFR-01), plus
-// GET /api/fiscal-years only when no FY contains today. The projection, today's day of the month and
-// the bank balances come from the top bar's summary (UX-08), so they cost no call. The API makes every
-// sum (R-MON-01); this page picks, ranks and formats.
+// PRD 5.9 Dashboard (DSH-01 to DSH-04, DSH-06, DSH-07) and the FY-01 banner (owner note 8). It shows
+// the FY that contains today, else the latest; there is no FY selector. One call: the overview
+// (NFR-01), plus GET /api/fiscal-years only when no FY contains today. Today's day of the month and
+// the bank balances come from the top bar's summary (UX-08), so they cost no call. Plan vs actual and
+// the saving count from the FY's first month, as Tracker and Plan do (owner note 24). The API makes
+// every sum (R-MON-01); this page picks, ranks and formats.
 @Component({
   selector: 'app-dashboard',
   imports: [
@@ -34,7 +34,6 @@ import { Projection } from './projection';
     MatSelectModule,
     BankBar,
     MonthBars,
-    Projection,
     RolloverBanner,
   ],
   templateUrl: './dashboard.html',
@@ -98,7 +97,8 @@ export class Dashboard {
   });
 
   // DSH-01: the month in progress, its status line and today's marker (from the summary, when it is
-  // the same month).
+  // the same month). Owner note 24: no "From last month"; what carried in is said under Remaining, and
+  // Income (actual) says how much of it is additional income.
   protected readonly current = computed(() => {
     const month = this.data()?.months.find((m) => m.status === 'inProgress');
     if (!month) {
@@ -112,11 +112,19 @@ export class Dashboard {
       line,
       dates: `${formatDay(month.period.startDate)} to ${formatDay(month.period.endDate)}`,
       remaining: this.money(month.remaining),
+      carried: toMinor(month.carriedIn) === 0 ? null : `incl. ${this.money(month.carriedIn)} from last month`,
       kpis: [
-        { label: 'From last month', value: this.money(month.carriedIn) },
-        { label: 'Planned', value: this.money(month.planned) },
-        { label: 'Spent', value: this.money(month.spent) },
-        ...(month.income === null ? [] : [{ label: 'Income', value: this.money(month.income) }]),
+        { label: 'Planned', value: this.money(month.planned), note: null },
+        { label: 'Spent', value: this.money(month.spent), note: null },
+        ...(month.income === null
+          ? []
+          : [
+              {
+                label: 'Income',
+                value: this.money(month.income),
+                note: toMinor(month.additionalIncome ?? 0) === 0 ? null : `incl. ${this.money(month.additionalIncome!)} additional`,
+              },
+            ]),
       ],
       day: day
         ? {
@@ -180,112 +188,148 @@ export class Dashboard {
     return `${fiscalYear.label} starts on ${formatDate(fiscalYear.startDate)}.`;
   });
 
-  // DSH-02 "to date" (owner's choice, M9): the months that started (Closed and In progress), from the
-  // first month that carries (R-PLN-06: months before NAMA was set up were never tracked).
-  protected readonly toDateRange = computed(() => {
+  // Owner note 24, DSH-02 Plan vs actual: the started months from the FY's first month (the one in
+  // progress in full), planned next to actual for income, spent and the accumulated saving, each with
+  // the difference in words and a color (UX-07: color is never the only signal).
+  protected readonly versus = computed(() => {
     const data = this.data();
-    const months = data?.months ?? [];
-    const from = Math.max(0, months.findIndex((m) => m.period.key === data?.carryFromPeriodKey));
-    const started = months.slice(from).filter((m) => m.status !== 'yetToCome');
-    if (started.length === 0) {
-      return 'No month has started yet';
-    }
-    const range =
-      started.length === 1
-        ? started[0].period.label
-        : `${started[0].period.label} to ${started.at(-1)!.period.label}`;
-    // Owner note 11: "1 of 12 months" read as if Oct were the FY's first month.
-    return from > 0 ? `${range} · since you started NAMA` : `${range} · ${started.length} of ${months.length} months`;
-  });
-
-  protected readonly toDate = computed(() => {
-    const toDate = this.data()?.toDate;
-    if (!toDate) {
+    const vs = data?.planVsActual;
+    if (!data || !vs) {
       return null;
     }
     const currency = this.currency();
-    const under = toMinor(toDate.planned) - toMinor(toDate.spent);
-    // Owner note 11: while a month is in progress, its unspent plan is still to spend (leftovers carry,
-    // R-PLN-05), not under plan or saved ahead. It is DSH-06's "Still to spend this month".
-    const current = (this.data()?.months ?? []).find((m) => m.status === 'inProgress');
-    const left = current ? Math.max(0, under) : 0;
-    const ahead = toMinor(toDate.saved) - toMinor(toDate.plannedSaved) - left;
+    const started = data.months.filter((month) => month.status !== 'yetToCome');
+    const current = started.find((month) => month.status === 'inProgress');
+    const still = toMinor(vs.stillToSpend);
+    const stillNote = current && still > 0 ? `${formatMoney(still, currency)} still to spend in ${current.period.label}` : null;
+    const income = toMinor(vs.income) - toMinor(vs.plannedIncome);
+    const left = toMinor(vs.planned) - toMinor(vs.spent);
+    // Owner note 12: the month in progress's unspent plan is still to spend, so it is not ahead yet.
+    const ahead = toMinor(vs.saved) - still - toMinor(vs.plannedSaved);
+    const additional = toMinor(vs.additionalIncome);
+    const spentLine = spendLine(toMinor(vs.planned), toMinor(vs.spent), currency);
     return {
-      income: this.money(toDate.income),
-      planned: this.money(toDate.planned),
-      spent: this.money(toDate.spent),
-      // Owner note 12: income minus spent is only saved once the month is over; before, it is
-      // "Unspent income", and part of it is still planned for this month.
-      savedLabel: current ? 'Unspent income' : 'Saved',
-      saved: this.money(toDate.saved),
-      negative: toDate.saved < 0,
-      // How spent compares with the plan, in words (UX-07: color is never the only signal).
-      spentVersus:
-        under === 0
-          ? 'On plan'
-          : left > 0
-            ? `${formatMoney(left, currency)} of the plan left this month`
-            : under > 0
-              ? `${formatMoney(under, currency)} under plan`
-              : `${formatMoney(-under, currency)} over plan`,
-      spentOver: under < 0,
-      // R-PLN-03: the Unassigned of the latest started month, what the plan meant to keep by now.
-      // In progress it splits: what is still to spend in the month, and what is left to keep.
-      savedVersus:
-        ahead === 0
-          ? left > 0
-            ? `${formatMoney(left, currency)} still to spend in ${current!.period.label} · ` +
-              `${formatMoney(toMinor(toDate.saved) - left, currency)} to keep (as planned)`
-            : 'As planned'
-          : ahead > 0
-            ? `${formatMoney(ahead, currency)} more than planned`
-            : `${formatMoney(-ahead, currency)} less than planned`,
+      range:
+        started.length === 0
+          ? 'No month has started yet'
+          : `${started.length === 1 ? started[0].period.label : `${started[0].period.label} to ${started.at(-1)!.period.label}`}` +
+            ` · ${started.length} of ${data.months.length} months`,
+      rows: [
+        {
+          key: 'income',
+          label: 'Income',
+          sub: null,
+          planned: this.money(vs.plannedIncome),
+          actual: this.money(vs.income),
+          ok: income >= 0,
+          verdict:
+            income === 0
+              ? 'As planned'
+              : income > 0
+                ? `${formatMoney(income, currency)} more than planned`
+                : `${formatMoney(-income, currency)} less than planned`,
+          note: additional === 0 ? null : `Actual incl. ${formatMoney(additional, currency)} additional income`,
+          bar: null,
+          status: null,
+        },
+        {
+          key: 'spent',
+          label: 'Spent',
+          sub: null,
+          planned: this.money(vs.planned),
+          actual: this.money(vs.spent),
+          ok: left >= 0,
+          // Owner note 11: while a month is in progress, what is left of its plan is still to spend,
+          // so it is "left", not "under plan".
+          verdict:
+            left === 0
+              ? 'On plan'
+              : left < 0
+                ? `${formatMoney(-left, currency)} over plan`
+                : current
+                  ? `${formatMoney(left, currency)} of the plan left`
+                  : `${formatMoney(left, currency)} under plan`,
+          // Said once: the verdict already is what is left when nothing else is.
+          note: stillNote && still !== left ? stillNote : null,
+          bar: spentLine.bar,
+          status: spentLine.status,
+        },
+        {
+          key: 'saved',
+          label: 'Saving',
+          sub: 'accumulated',
+          planned: this.money(vs.plannedSaved),
+          actual: this.money(vs.saved),
+          ok: ahead >= 0,
+          verdict:
+            ahead === 0
+              ? 'As planned'
+              : ahead > 0
+                ? `${formatMoney(ahead, currency)} ahead of plan`
+                : `${formatMoney(-ahead, currency)} behind plan`,
+          // Owner note 12: part of what is unspent is still planned for this month.
+          note: stillNote ? `Actual incl. ${stillNote}` : null,
+          bar: null,
+          status: null,
+        },
+      ],
     };
   });
 
-  // DSH-05, from the top bar's summary: null until it loads; its projection is null when no FY
-  // contains today.
-  protected readonly projection = computed(() => {
-    const summary = this.summaryService.summary();
-    if (!summary) {
-      return null;
-    }
-    const projection = summary.projection;
-    return {
-      data: projection,
-      monthLabel: summary.month?.period.label ?? '',
-      end: projection ? `End of ${projection.fiscalYearLabel} · ${formatDate(projection.endDate)}` : '',
-    };
-  });
-
-  // DSH-06, R-PLN-08: planned saving at the FY's end next to the projected saving. Leftovers are spent
-  // (they carry), so the projection is lower only by what was overspent.
+  // Owner note 24, DSH-06: Plan's Accumulated Planned Savings at the FY's end next to Tracker's
+  // projected Accumulated savings, the difference in words, and the progress so far: saved against
+  // the FY's planned saving, with where the plan expects you to be by now.
   protected readonly saving = computed(() => {
-    const projection = this.summaryService.summary()?.projection;
-    if (!projection) {
+    const data = this.data();
+    const vs = data?.planVsActual;
+    const fiscalYear = this.fiscalYear();
+    if (!data || !vs || !fiscalYear) {
       return null;
     }
     const currency = this.currency();
-    const below = toMinor(projection.plannedSaved) - toMinor(projection.projectedSaving);
+    const planned = toMinor(vs.plannedSavedAtEnd);
+    const projected = toMinor(vs.projectedSaved);
+    const difference = projected - planned;
+    const current = data.months.find((month) => month.status === 'inProgress');
+    const share = (amount: number) => Math.max(0, Math.min(100, (amount * 100) / planned));
     return {
-      fy: projection.fiscalYearLabel,
-      // Owner note 11: say which months Planned saving covers (R-PLN-06), so it is not taken for the
-      // whole FY (Plan's Accumulated Planned Savings is).
-      covers: projection.countedFrom
-        ? `from ${projection.countedFrom.label}, when you started NAMA, to the end of ${projection.fiscalYearLabel}`
-        : 'for the whole year',
-      planned: this.money(projection.plannedSaved),
-      projected: this.money(projection.projectedSaving),
-      plannedNegative: projection.plannedSaved < 0,
-      projectedNegative: projection.projectedSaving < 0,
-      onTrack: below <= 0,
-      verdict: below <= 0 ? 'On track' : `${formatMoney(below, currency)} below plan`,
-      reason: below <= 0 ? 'Your plan is covered so far.' : 'You have spent more than planned so far.',
+      fy: fiscalYear.label,
+      first: data.months[0]?.period.label ?? '',
+      planned: this.money(vs.plannedSavedAtEnd),
+      projected: this.money(vs.projectedSaved),
+      plannedNegative: planned < 0,
+      projectedNegative: projected < 0,
+      ok: difference >= 0,
+      verdict:
+        difference === 0
+          ? 'On track'
+          : difference > 0
+            ? `${formatMoney(difference, currency)} above plan`
+            : `${formatMoney(-difference, currency)} below plan`,
+      reason:
+        difference === 0
+          ? 'Your plan is covered so far.'
+          : difference > 0
+            ? 'More came in or less went out than planned so far.'
+            : 'Less came in or more went out than planned so far.',
+      // Progress toward the FY's planned saving; only when there is a positive plan to measure against.
+      progress:
+        planned > 0
+          ? {
+              value: share(toMinor(vs.saved)),
+              marker: share(toMinor(vs.plannedSaved)),
+              text: `Saved so far ${this.money(vs.saved)} of ${this.money(vs.plannedSavedAtEnd)}`,
+              byNow: `Plan by now ${this.money(vs.plannedSaved)}`,
+            }
+          : null,
       lines: [
-        // Owner note 12: the same number as FY to date's "Unspent income" (the month is not over).
-        { op: '', label: 'Unspent income', value: this.money(projection.savedToDate) },
-        { op: '−', label: 'Still to spend this month', value: this.money(projection.stillToSpend) },
-        { op: '+', label: 'Future unallocated', value: this.money(projection.futureUnallocated) },
+        { op: '', label: 'Accumulated savings so far', value: this.money(vs.saved) },
+        {
+          op: '−',
+          label: current ? `Still to spend in ${current.period.label}` : 'Still to spend this month',
+          value: this.money(vs.stillToSpend),
+        },
+        { op: '+', label: 'Months to come: income − plan', value: this.money(vs.futureUnspent) },
       ],
     };
   });

@@ -21,13 +21,13 @@
     </p>
   }
 
-  <!-- Owner note 9: Planning, Allocating and Categories, in the URL (?tab=). -->
+  <!-- Owner note 9: Allocating (the default, owner note 25), Planning and Categories, in the URL (?tab=). -->
   <nav class="tabs" aria-label="Plan sections">
     @for (item of tabs; track item.id) {
       <a
         class="tab"
         routerLink="/plan"
-        [queryParams]="{ tab: item.id === 'planning' ? null : item.id }"
+        [queryParams]="{ tab: item.id === 'allocating' ? null : item.id }"
         queryParamsHandling="merge"
         [class.active]="tab() === item.id"
         [attr.aria-current]="tab() === item.id ? 'page' : null"

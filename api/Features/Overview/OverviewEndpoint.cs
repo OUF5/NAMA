@@ -30,18 +30,24 @@ public static class OverviewEndpoint
 
     // Status is "closed", "inProgress" or "yetToCome" (R-STA-01), worked out with today in the
     // profile time zone (R-CAL-10). Income is the actual income and PlannedIncome Plan's (R-INC-01,
-    // owner note 17); both null with a filter. Unspent is the month's income minus its spent and Saved
+    // owner note 17); both null with a filter. AdditionalIncome is the part of Income from additional
+    // items (Actual and Both, R-INC-04), null with a filter (owner note 23). Unspent is the month's income minus its spent and Saved
     // that added up from the FY's first month (owner note 18, Tracker's Totals); both null with a
-    // filter and for a month yet to come.
+    // filter and for a month yet to come. ProjectedUnspent and ProjectedSaved are the same carried on to
+    // the FY's end (owner note 23, PlanCalculator.ProjectSaved): for the month in progress and the months
+    // yet to come, null for a closed month and with a filter.
     public record MonthDto(
-        MeEndpoint.PeriodDto Period, string Status, decimal? Income, decimal? PlannedIncome, decimal CarriedIn, decimal Planned,
-        decimal Spent, decimal Remaining, decimal? Unspent, decimal? Saved);
+        MeEndpoint.PeriodDto Period, string Status, decimal? Income, decimal? PlannedIncome, decimal? AdditionalIncome, decimal CarriedIn, decimal Planned,
+        decimal Spent, decimal Remaining, decimal? Unspent, decimal? Saved, decimal? ProjectedUnspent, decimal? ProjectedSaved);
 
     // The FY: remaining is FY planned - FY spent (the last month's remaining). PlannedSaved is the
     // last month's Unassigned (R-PLN-04, planned income), null with a filter like income. Saved is the
     // latest started month's Saved (owner note 18), null with a filter or before the FY starts.
+    // ProjectedSaved is the accumulated savings projected at the FY's end (owner note 23), null with a
+    // filter or once every month is closed.
     public record TotalsDto(
-        decimal? Income, decimal? PlannedIncome, decimal Planned, decimal Spent, decimal Remaining, decimal? PlannedSaved, decimal? Saved);
+        decimal? Income, decimal? PlannedIncome, decimal? AdditionalIncome, decimal Planned, decimal Spent, decimal Remaining, decimal? PlannedSaved, decimal? Saved,
+        decimal? ProjectedSaved);
 
     // DSH-02 (owner's choice, M9): the months that started on or before today, each with its full
     // actual income (R-INC-01) and every entry in it, from the first month that carries (R-PLN-06: months before NAMA was
@@ -51,10 +57,21 @@ public static class OverviewEndpoint
     // income minus spent of the closed months only: what the FY added to the banks (DSH-04).
     public record ToDateDto(decimal Income, decimal Planned, decimal Spent, decimal Saved, decimal PlannedSaved, decimal SavedClosed);
 
+    // Owner note 24, Dashboard's "Plan vs actual" (DSH-02) and "Saving: plan vs projection" (DSH-06),
+    // from the FY's first month like Tracker's Totals and Plan's Allocating. The started months (the
+    // one in progress in full): PlannedIncome and Income (actual, AdditionalIncome the part from
+    // additional items), Planned and Spent, PlannedSaved (Plan's Accumulated Planned Savings, R-PLN-03)
+    // and Saved (Tracker's Accumulated savings). StillToSpend is what is left of the month in progress's
+    // plan (R-PLN-07). At the FY's end: PlannedSavedAtEnd (Plan's) and ProjectedSaved (Tracker's, owner
+    // note 23; Saved once every month is closed), which is Saved - StillToSpend + FutureUnspent.
+    public record PlanVsActualDto(
+        decimal PlannedIncome, decimal Income, decimal AdditionalIncome, decimal Planned, decimal Spent, decimal StillToSpend,
+        decimal PlannedSaved, decimal Saved, decimal FutureUnspent, decimal PlannedSavedAtEnd, decimal ProjectedSaved);
+
     // FiscalYears (oldest first) feed the MON-03 selector; Categories is GET /api/categories, for
     // the names and the edit dialog's pickers. Rollover is the FY-01 banner (null when hidden).
     // ToDate is Dashboard's "FY to date" (DSH-02). CarryFromPeriodKey is the first month that carries
-    // (R-PLN-06), null when none of this FY's months does.
+    // (R-PLN-06), null when none of this FY's months does. PlanVsActual is null with a filter.
     public record OverviewResponse(
         IReadOnlyList<FiscalYearsEndpoint.FiscalYearDto> FiscalYears,
         string FyId,
@@ -63,6 +80,7 @@ public static class OverviewEndpoint
         IReadOnlyList<CategoryRowDto> Rows,
         TotalsDto Totals,
         ToDateDto ToDate,
+        PlanVsActualDto? PlanVsActual,
         FiscalYearsEndpoint.RolloverDto? Rollover,
         string? CarryFromPeriodKey);
 
@@ -106,6 +124,8 @@ public static class OverviewEndpoint
         var incomes = await store.GetIncomesAsync(uid);
         var plannedIncome = IncomeCalculator.PlannedTotals(incomes, periods);
         var income = IncomeCalculator.ActualTotals(incomes, periods);
+        // Owner note 23: the part of it from additional items.
+        var additionalIncome = IncomeCalculator.ActualTotals(incomes.Where(item => item.Kind == IncomeKind.Additional).ToList(), periods);
         // PRD 7.4 "Reads": the FY's entries in one query (the Entries query), added up in memory.
         var allEntries = await store.GetFiscalYearEntriesAsync(uid, fiscalYear.Id);
         var categories = (await store.GetCategoriesAsync(uid)).OrderBy(category => category.SortOrder).ToList();
@@ -205,6 +225,40 @@ public static class OverviewEndpoint
         var saved = savedMonths.ToDictionary(month => month.PeriodKey);
         decimal? Saved(string periodKey, Func<SavedMonth, long> value) =>
             scope is null && saved.TryGetValue(periodKey, out var month) ? Money.FromMinor(value(month)) : null;
+        // Owner note 23: the month in progress spends the rest of its whole-budget plan (R-PLN-07), and
+        // each month yet to come gets its actual income minus its planned.
+        var current = periods.ToList().FindIndex(period => FiscalCalendar.Status(period, today) == PeriodStatus.InProgress);
+        var stillToSpend = current >= 0 ? Math.Max(0, months[current].Remaining) : 0;
+        var projectedMonths = PlanCalculator.ProjectSaved(
+            savedMonths,
+            current >= 0,
+            stillToSpend,
+            periods.Select((period, i) => (period, i))
+                .Where(month => FiscalCalendar.Status(month.period, today) == PeriodStatus.YetToCome)
+                .Select(month => (month.period.Key, income[month.period.Key], unassigned[month.i].Planned)));
+        var projected = projectedMonths.ToDictionary(month => month.PeriodKey);
+        decimal? Projected(string periodKey, Func<SavedMonth, long> value) =>
+            scope is null && projected.TryGetValue(periodKey, out var month) ? Money.FromMinor(value(month)) : null;
+
+        // Owner note 24: the started months from the FY's first month, and Plan's running Unassigned
+        // from there too (owner note 10), whatever month NAMA was set up in.
+        var startedFromFirst = periods.Select((period, i) => (period, i)).Where(month => FiscalCalendar.HasStarted(month.period, today)).ToList();
+        var planFromFirst = PlanCalculator.RunningUnassigned(periods, plannedIncome, allPlans);
+        var savedSoFar = savedMonths.Count > 0 ? savedMonths[^1].Saved : 0;
+        var planVsActual = scope is null
+            ? new PlanVsActualDto(
+                Money.FromMinor(startedFromFirst.Sum(month => plannedIncome[month.period.Key])),
+                Money.FromMinor(startedFromFirst.Sum(month => income[month.period.Key])),
+                Money.FromMinor(startedFromFirst.Sum(month => additionalIncome[month.period.Key])),
+                Money.FromMinor(startedFromFirst.Sum(month => months[month.i].Planned)),
+                Money.FromMinor(startedFromFirst.Sum(month => months[month.i].Spent)),
+                Money.FromMinor(stillToSpend),
+                Money.FromMinor(startedFromFirst.Count > 0 ? planFromFirst[startedFromFirst[^1].i].Unassigned : 0),
+                Money.FromMinor(savedSoFar),
+                Money.FromMinor(projectedMonths.Where(month => !saved.ContainsKey(month.PeriodKey)).Sum(month => month.ThisMonth)),
+                Money.FromMinor(PlanCalculator.PlannedSaved(planFromFirst)),
+                Money.FromMinor(projectedMonths.Count > 0 ? projectedMonths[^1].Saved : savedSoFar))
+            : null;
 
         return new OverviewResponse(
             fiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
@@ -214,22 +268,27 @@ public static class OverviewEndpoint
                 StatusName(FiscalCalendar.Status(period, today)),
                 scope is null ? Money.FromMinor(income[period.Key]) : null,
                 scope is null ? Money.FromMinor(plannedIncome[period.Key]) : null,
+                scope is null ? Money.FromMinor(additionalIncome[period.Key]) : null,
                 Money.FromMinor(months[i].CarriedIn),
                 Money.FromMinor(months[i].Planned),
                 Money.FromMinor(months[i].Spent),
                 Money.FromMinor(months[i].Remaining),
                 Saved(period.Key, month => month.ThisMonth),
-                Saved(period.Key, month => month.Saved))).ToList(),
+                Saved(period.Key, month => month.Saved),
+                Projected(period.Key, month => month.ThisMonth),
+                Projected(period.Key, month => month.Saved))).ToList(),
             categories.Select(category => CategoriesEndpoint.ToDto(category, subCategories)).ToList(),
             rows,
             new TotalsDto(
                 scope is null ? Money.FromMinor(income.Values.Sum()) : null,
                 scope is null ? Money.FromMinor(plannedIncome.Values.Sum()) : null,
+                scope is null ? Money.FromMinor(additionalIncome.Values.Sum()) : null,
                 Money.FromMinor(totalPlanned),
                 Money.FromMinor(totalSpent),
                 Money.FromMinor(PlanCalculator.Remaining(totalPlanned, totalSpent)),
                 scope is null ? Money.FromMinor(PlanCalculator.PlannedSaved(unassigned)) : null,
-                scope is null && savedMonths.Count > 0 ? Money.FromMinor(savedMonths[^1].Saved) : null),
+                scope is null && savedMonths.Count > 0 ? Money.FromMinor(savedMonths[^1].Saved) : null,
+                scope is null && projectedMonths.Count > 0 ? Money.FromMinor(projectedMonths[^1].Saved) : null),
             new ToDateDto(
                 Money.FromMinor(incomeToDate),
                 Money.FromMinor(plannedToDate),
@@ -237,6 +296,7 @@ public static class OverviewEndpoint
                 Money.FromMinor(PlanCalculator.Saved(incomeToDate, spentToDate)),
                 Money.FromMinor(plannedSavedToDate),
                 Money.FromMinor(savedClosed)),
+            planVsActual,
             FiscalYearsEndpoint.Rollover(fiscalYears, profile, today),
             carryStart < periods.Count ? periods[carryStart].Key : null);
     }

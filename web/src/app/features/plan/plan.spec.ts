@@ -90,7 +90,8 @@ describe('Plan (PRD 5.3)', () => {
     TestBed.inject(ApplicationRef).tick();
   }
 
-  async function open(categories: Category[], plans: PlansResponse, url = '/plan'): Promise<HTMLElement> {
+  // Most tests are about Planning; /plan alone opens Allocating (owner note 25).
+  async function open(categories: Category[], plans: PlansResponse, url = '/plan?tab=planning'): Promise<HTMLElement> {
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl(url);
     (await vi.waitFor(() => http.expectOne('/api/categories'))).flush(categories);
@@ -145,22 +146,23 @@ describe('Plan (PRD 5.3)', () => {
     return Array.from(root.querySelectorAll<HTMLAnchorElement>('nav.tabs a'));
   }
 
-  // Owner note 9: three tabs in the URL; Planning first. PLN-06 on Planning.
-  it('opens on Planning and switches tabs without a call', async () => {
-    const root = await open([food], plansResponse());
+  // Owner note 9: three tabs in the URL. Owner note 25: Allocating first, and /plan opens it. PLN-06
+  // on Planning.
+  it('opens on Allocating and switches tabs without a call', async () => {
+    const root = await open([food], plansResponse(), '/plan');
 
-    expect(tabs(root).map((tab) => text(tab))).toEqual(['Planning', 'Allocating', 'Categories']);
+    expect(tabs(root).map((tab) => text(tab))).toEqual(['Allocating', 'Planning', 'Categories']);
     expect(tabs(root).map((tab) => tab.getAttribute('aria-current'))).toEqual(['page', null, null]);
-    expect(tabs(root)[1].getAttribute('href')).toBe('/plan?tab=allocating');
+    expect(tabs(root).map((tab) => tab.getAttribute('href'))).toEqual(['/plan', '/plan?tab=planning', '/plan?tab=categories']);
+    expect(root.querySelector('table.totals')).not.toBeNull();
+    expect(root.querySelector('#list-title')).toBeNull();
+
+    await harness.navigateByUrl('/plan?tab=planning');
+    await settle();
+    expect(tabs(root).map((tab) => tab.getAttribute('aria-current'))).toEqual([null, 'page', null]);
     expect(text(root)).toContain('Add your first sub-category');
     expect(text(root.querySelector('#list-title'))).toBe('Planned in Sep 2026 27 Sep to 26 Oct');
     expect(root.querySelector('table.totals')).toBeNull();
-
-    await harness.navigateByUrl('/plan?tab=allocating');
-    await settle();
-    expect(tabs(root).map((tab) => tab.getAttribute('aria-current'))).toEqual([null, 'page', null]);
-    expect(root.querySelector('table.totals')).not.toBeNull();
-    expect(root.querySelector('#list-title')).toBeNull();
 
     await harness.navigateByUrl('/plan?tab=categories');
     await settle();
@@ -232,7 +234,7 @@ describe('Plan (PRD 5.3)', () => {
     await harness.navigateByUrl('/plan?tab=allocating');
     await settle();
     root.querySelectorAll<HTMLButtonElement>('thead button.month')[0].click();
-    await harness.navigateByUrl('/plan');
+    await harness.navigateByUrl('/plan?tab=planning');
     await settle();
     category().click();
     await settle();

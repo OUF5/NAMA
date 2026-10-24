@@ -181,6 +181,32 @@ public static class PlanCalculator
         return result;
     }
 
+    // Owner note 23: Tracker's Totals carried on to the FY's end. The month in progress, the last of
+    // saved, also spends what is left of its plan (stillToSpend, R-PLN-07); each month yet to come gets
+    // its actual income minus its planned, in Spent. Unlike R-PLN-08 (Dashboard), the actual income:
+    // the Income Tracker shows, so an Actual item counts as soon as it is added and a Planned one never
+    // does (owner's choice, 24 Oct 2026). Returns the month in progress, if any, then the months yet to
+    // come; the last one's Saved is the projected accumulated savings at the FY's end.
+    public static IReadOnlyList<SavedMonth> ProjectSaved(
+        IReadOnlyList<SavedMonth> saved, bool inProgress, long stillToSpend, IEnumerable<(string PeriodKey, long Income, long Planned)> futureMonths)
+    {
+        var result = new List<SavedMonth>();
+        var carried = saved.Count == 0 ? 0 : saved[^1].Saved;
+        if (inProgress)
+        {
+            var current = saved[^1] with { Spent = saved[^1].Spent + stillToSpend };
+            result.Add(current);
+            carried = current.Saved;
+        }
+        foreach (var (periodKey, income, planned) in futureMonths)
+        {
+            var month = new SavedMonth(periodKey, carried, income, planned);
+            result.Add(month);
+            carried = month.Saved;
+        }
+        return result;
+    }
+
     // ENT-01: available minus spent; negative means over plan.
     public static long Remaining(long available, long spent) => available - spent;
 

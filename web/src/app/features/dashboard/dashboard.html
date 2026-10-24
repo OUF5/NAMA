@@ -42,7 +42,7 @@
         <div class="empty">
           <p class="empty-title">Nothing planned or spent in {{ fiscalYear()?.label }} yet</p>
           <p class="note">
-            Plan amounts on <a routerLink="/plan">Plan</a>, and add spending on
+            Plan amounts on <a routerLink="/plan" [queryParams]="{ tab: 'planning' }">Plan</a>, and add spending on
             <a routerLink="/add">Add</a>.
           </p>
         </div>
@@ -68,6 +68,10 @@
             <span class="chip" [class]="c.line.status">{{ c.line.chip }}</span>
           }
         </div>
+        <!-- Owner note 24: what carried in (R-PLN-05), now that "From last month" is not a number below. -->
+        @if (c.carried) {
+          <p class="caption carried">{{ c.carried }}</p>
+        }
         <div class="bar">
           @if (c.line.bar !== null) {
             <mat-progress-bar
@@ -91,6 +95,9 @@
             <div>
               <span class="caption">{{ kpi.label }}</span>
               <span class="money">{{ kpi.value }}</span>
+              @if (kpi.note) {
+                <span class="caption">{{ kpi.note }}</span>
+              }
             </div>
           }
         </div>
@@ -118,68 +125,66 @@
       }
     </section>
 
-    <!-- DSH-05: the projection (R-PLN-07). -->
-    @if (projection(); as p) {
-      <section class="card" aria-labelledby="projection-title">
+    <!-- Owner note 24, DSH-02: plan vs actual, from the FY's first month, head to head. -->
+    @if (versus(); as v) {
+      <section class="card" aria-labelledby="versus-title">
         <div class="card-head">
           <div class="title">
-            <h2 id="projection-title">Projection</h2>
-            <span class="caption">{{ p.end }}</span>
+            <h2 id="versus-title">Plan vs actual</h2>
+            <span class="caption">{{ v.range }}</span>
           </div>
         </div>
-        @if (p.data; as data) {
-          <app-projection [projection]="data" [monthLabel]="p.monthLabel" [currency]="currency()" />
-        } @else {
-          <p class="note">The projection shows while a month of a fiscal year is in progress.</p>
-        }
+        <table class="versus">
+          <thead>
+            <tr>
+              <td></td>
+              <th scope="col" class="caption">Planned</th>
+              <th scope="col" class="caption">Actual</th>
+            </tr>
+          </thead>
+          @for (row of v.rows; track row.key) {
+            <tbody [class]="row.key">
+              <tr>
+                <th scope="row">
+                  {{ row.label }}
+                  @if (row.sub) {
+                    <span class="caption">{{ row.sub }}</span>
+                  }
+                </th>
+                <td class="money planned">{{ row.planned }}</td>
+                <td class="money actual">{{ row.actual }}</td>
+              </tr>
+              <tr class="versus-note">
+                <td colspan="3">
+                  @if (row.bar !== null) {
+                    <mat-progress-bar
+                      mode="determinate"
+                      [class]="row.status"
+                      [value]="row.bar"
+                      [attr.aria-label]="'Share of the plan spent: ' + row.verdict"
+                    />
+                  }
+                  <span class="chip" [class.ok]="row.ok" [class.danger]="!row.ok">{{ row.verdict }}</span>
+                  @if (row.note) {
+                    <span class="caption">{{ row.note }}</span>
+                  }
+                </td>
+              </tr>
+            </tbody>
+          }
+        </table>
       </section>
     }
 
-    <!-- DSH-02: FY to date. -->
-    @if (toDate(); as t) {
-      <section class="card" aria-labelledby="to-date-title">
-        <div class="card-head">
-          <div class="title">
-            <h2 id="to-date-title">{{ fiscalYear()?.label }} to date</h2>
-            <span class="caption">{{ toDateRange() }}</span>
-          </div>
-        </div>
-        <div class="kpis">
-          <div class="kpi">
-            <span class="caption">Income</span>
-            <span class="money value">{{ t.income }}</span>
-          </div>
-          <div class="kpi">
-            <span class="caption">Planned until now</span>
-            <span class="money value">{{ t.planned }}</span>
-          </div>
-          <div class="kpi spent">
-            <span class="caption">Spent</span>
-            <span class="money value">{{ t.spent }}</span>
-            <span class="caption" [class.danger]="t.spentOver">{{ t.spentVersus }}</span>
-          </div>
-          <div class="kpi saved">
-            <span class="caption">{{ t.savedLabel }}</span>
-            <span class="money value" [class.danger]="t.negative">{{ t.saved }}</span>
-            @if (t.negative) {
-              <span class="caption danger">Spent more than income</span>
-            } @else {
-              <span class="caption">{{ t.savedVersus }}</span>
-            }
-          </div>
-        </div>
-      </section>
-    }
-
-    <!-- DSH-06: planned saving vs projection (R-PLN-08). -->
+    <!-- Owner note 24, DSH-06: Plan's saving at the FY's end vs Tracker's projection, with the progress so far. -->
     @if (saving(); as s) {
-      <section class="card" aria-labelledby="saving-title">
+      <section class="card wide" aria-labelledby="saving-title">
         <div class="card-head">
           <div class="title">
             <h2 id="saving-title">Saving: plan vs projection</h2>
             <span class="caption">By the end of {{ s.fy }}</span>
           </div>
-          <span class="chip" [class.ok]="s.onTrack" [class.danger]="!s.onTrack">{{ s.verdict }}</span>
+          <span class="chip" [class.ok]="s.ok" [class.danger]="!s.ok">{{ s.verdict }}</span>
         </div>
         <div class="kpis two">
           <div class="kpi">
@@ -191,6 +196,23 @@
             <span class="money value" [class.danger]="s.projectedNegative">{{ s.projected }}</span>
           </div>
         </div>
+        @if (s.progress; as progress) {
+          <div class="progress">
+            <div class="bar">
+              <mat-progress-bar
+                mode="determinate"
+                class="ok"
+                [value]="progress.value"
+                [attr.aria-label]="progress.text + ' · ' + progress.byNow"
+              />
+              <span class="marker" [style.left.%]="progress.marker" aria-hidden="true"></span>
+            </div>
+            <p class="caption progress-text">
+              <span>{{ progress.text }}</span>
+              <span>{{ progress.byNow }}</span>
+            </p>
+          </div>
+        }
         <p class="caption reason">{{ s.reason }}</p>
         <button mat-button type="button" class="fold" [attr.aria-expanded]="savingHow()" (click)="savingHow.set(!savingHow())">
           <mat-icon class="chevron" [class.open]="savingHow()" aria-hidden="true">chevron_right</mat-icon>
@@ -210,8 +232,10 @@
             </div>
           </dl>
           <p class="caption">
-            Planned saving is your plan's income minus planned {{ s.covers }}. Leftovers carry into the next
-            month, so they count as still to spend.
+            Planned saving is Plan's Accumulated Planned Savings: planned income minus planned, every month
+            from {{ s.first }} to the end of {{ s.fy }}. Projected saving is Tracker's: what really
+            happened so far, the rest of this month's plan spent, then each month to come's income minus
+            its plan.
           </p>
         }
       </section>

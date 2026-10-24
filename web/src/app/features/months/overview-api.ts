@@ -15,18 +15,24 @@ export type MonthStatus = 'closed' | 'inProgress' | 'yetToCome';
 // income is the actual income and plannedIncome Plan's (R-INC-01, owner note 17); both null when
 // Tracker is filtered to a category: income belongs to the whole budget. unspent is the month's
 // income minus its spent and saved that added up from the FY's first month (owner note 18, Totals);
-// both null with a filter and for a month yet to come.
+// both null with a filter and for a month yet to come. projectedUnspent and projectedSaved carry them
+// on to the FY's end (owner note 23): the month in progress also spends the rest of its plan, a month
+// yet to come is its income minus its planned; null for a closed month and with a filter.
+// additionalIncome is the part of income from additional items (Actual and Both), null with a filter.
 export interface MonthOverview {
   period: PeriodInfo;
   status: MonthStatus;
   income: number | null;
   plannedIncome: number | null;
+  additionalIncome: number | null;
   carriedIn: number;
   planned: number;
   spent: number;
   remaining: number;
   unspent: number | null;
   saved: number | null;
+  projectedUnspent: number | null;
+  projectedSaved: number | null;
 }
 
 export interface Cell {
@@ -55,15 +61,18 @@ export interface CategoryRow {
 
 // The FY: remaining is FY planned - FY spent. plannedSaved (R-PLN-04) is the last month's Unassigned,
 // null with a filter. saved is the latest started month's saved (owner note 18), null with a filter or
-// before the FY starts.
+// before the FY starts. projectedSaved is the accumulated savings projected at the FY's end (owner
+// note 23), null with a filter or once every month is closed.
 export interface Totals {
   income: number | null;
   plannedIncome: number | null;
+  additionalIncome: number | null;
   planned: number;
   spent: number;
   remaining: number;
   plannedSaved: number | null;
   saved: number | null;
+  projectedSaved: number | null;
 }
 
 // DSH-02 (owner's choice, M9): the months that started on or before today, each with its full income
@@ -80,9 +89,30 @@ export interface ToDate {
   savedClosed: number;
 }
 
+// Owner note 24, Dashboard's "Plan vs actual" (DSH-02) and "Saving: plan vs projection" (DSH-06),
+// from the FY's first month. The started months: planned and actual income (additionalIncome the part
+// from additional items), planned and spent, plannedSaved (Plan's Accumulated Planned Savings) and
+// saved (Tracker's Accumulated savings); stillToSpend is what is left of the month in progress's plan.
+// At the FY's end: plannedSavedAtEnd (Plan's) and projectedSaved (Tracker's) = saved - stillToSpend +
+// futureUnspent.
+export interface PlanVsActual {
+  plannedIncome: number;
+  income: number;
+  additionalIncome: number;
+  planned: number;
+  spent: number;
+  stillToSpend: number;
+  plannedSaved: number;
+  saved: number;
+  futureUnspent: number;
+  plannedSavedAtEnd: number;
+  projectedSaved: number;
+}
+
 // fiscalYears (oldest first) feed the MON-03 selector; categories is GET /api/categories (names and
-// the edit dialog's pickers). rollover is the FY-01 banner (null when hidden). toDate is Dashboard's
-// "FY to date".
+// the edit dialog's pickers). rollover is the FY-01 banner (null when hidden). toDate is the FY to
+// date from the first month that carries (DSH-04 uses its savedClosed); planVsActual is null with a
+// filter.
 export interface OverviewResponse {
   fiscalYears: FiscalYear[];
   fyId: string;
@@ -91,6 +121,7 @@ export interface OverviewResponse {
   rows: CategoryRow[];
   totals: Totals;
   toDate: ToDate;
+  planVsActual: PlanVsActual | null;
   rollover: Rollover | null;
   // R-PLN-06: the first month that carries; earlier months stand alone, and to date starts there.
   carryFromPeriodKey: string | null;

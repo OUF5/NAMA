@@ -49,7 +49,7 @@
       <h2>Add a sub-category first</h2>
       <p class="note">
         Every entry belongs to a sub-category, for example Groceries under Food.
-        <a routerLink="/plan">Open Plan</a> to add one.
+        <a routerLink="/plan" [queryParams]="{ tab: 'planning' }">Open Plan</a> to add one.
       </p>
     </section>
   } @else if (!hasAccounts()) {

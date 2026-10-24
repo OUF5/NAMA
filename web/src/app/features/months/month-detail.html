@@ -48,7 +48,8 @@
     </section>
 
     <!-- R-PLN-05: plan vs spent, what carried in counted. -->
-    <section class="card" aria-labelledby="plan-title">
+    <!-- Owner note 26: across the page, like Spending by day, with Compared with last month under it. -->
+    <section class="card wide" aria-labelledby="plan-title">
       <div class="card-head">
         <h2 id="plan-title">Plan vs spent</h2>
       </div>
@@ -58,26 +59,49 @@
           {{ m.period.label }}.
         </p>
       } @else {
+        <!-- Owner note 26: one line each; a category opens to its sub-categories. -->
         <ul class="categories">
           @for (category of categories(); track category.id) {
             <li>
-              <div class="spend-row">
-                <ng-container
-                  *ngTemplateOutlet="
-                    spendRow;
-                    context: { name: category.name, line: category.line }
-                  "
-                />
-              </div>
-              <ul class="subs">
-                @for (sub of category.subs; track sub.id) {
-                  <li class="spend-row sub">
-                    <ng-container
-                      *ngTemplateOutlet="spendRow; context: { name: sub.name, line: sub.line }"
-                    />
-                  </li>
+              @if (category.single; as single) {
+                <div class="spend-row">
+                  <span class="fold-space" aria-hidden="true"></span>
+                  <ng-container
+                    *ngTemplateOutlet="
+                      spendRow;
+                      context: { name: category.name, detail: single.detail, line: category.line }
+                    "
+                  />
+                </div>
+              } @else {
+                <button
+                  type="button"
+                  class="spend-row fold-row"
+                  [attr.aria-expanded]="isOpen(category.id)"
+                  [attr.aria-controls]="'subs-' + category.id"
+                  (click)="toggle(category.id)"
+                >
+                  <mat-icon class="chevron" [class.open]="isOpen(category.id)" aria-hidden="true">chevron_right</mat-icon>
+                  <ng-container
+                    *ngTemplateOutlet="
+                      spendRow;
+                      context: { name: category.name, detail: null, line: category.line }
+                    "
+                  />
+                </button>
+                @if (isOpen(category.id)) {
+                  <ul class="subs" [id]="'subs-' + category.id">
+                    @for (sub of category.subs; track sub.id) {
+                      <li class="spend-row sub">
+                        <span class="fold-space" aria-hidden="true"></span>
+                        <ng-container
+                          *ngTemplateOutlet="spendRow; context: { name: sub.name, detail: null, line: sub.line }"
+                        />
+                      </li>
+                    }
+                  </ul>
                 }
-              </ul>
+              }
             </li>
           }
         </ul>
@@ -85,7 +109,7 @@
     </section>
 
     <!-- Each category against the month before. -->
-    <section class="card" aria-labelledby="change-title">
+    <section class="card wide" aria-labelledby="change-title">
       <div class="card-head">
         <div class="title">
           <h2 id="change-title">Compared with last month</h2>
@@ -187,22 +211,30 @@
   </div>
 
   <!-- docs/DESIGN.md "Category rows on phones": name and chip, progress bar, "SAR 1,240 of 2,000". -->
-  <ng-template #spendRow let-name="name" let-line="line">
-    <div class="line-head">
-      <span class="line-name">{{ name }}</span>
-      @if (line.status) {
+  <!-- Owner note 26: name (a chip only when near or over the limit), a thin bar, "SAR 1,240 of 2,000". -->
+  <ng-template #spendRow let-name="name" let-detail="detail" let-line="line">
+    <span class="line-name">
+      {{ name }}
+      @if (detail) {
+        <span class="caption">{{ detail }}</span>
+      }
+      @if (line.status === 'warn' || line.status === 'danger') {
         <span class="chip" [class]="line.status">{{ line.chip }}</span>
       }
-    </div>
-    @if (line.bar !== null) {
-      <mat-progress-bar
-        mode="determinate"
-        [class]="line.status"
-        [value]="line.bar"
-        [attr.aria-label]="name + ': ' + line.chip"
-      />
-    }
-    <p class="caption money line-amounts">{{ line.spent }} {{ line.of }}</p>
+    </span>
+    <span class="line-bar">
+      @if (line.bar !== null) {
+        <mat-progress-bar
+          mode="determinate"
+          [class]="line.status"
+          [value]="line.bar"
+          [attr.aria-label]="name + ': ' + line.chip"
+        />
+      } @else {
+        <span class="empty-bar"></span>
+      }
+    </span>
+    <span class="caption money line-amounts">{{ line.spent }} {{ line.of }}</span>
   </ng-template>
 
   <!-- One line per entry: day, sub-category, amount, edit (TBL-02 in a dialog). -->

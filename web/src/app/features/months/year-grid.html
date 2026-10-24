@@ -4,7 +4,7 @@
   <section class="card empty">
     <h2>Nothing planned or spent in {{ fiscalYearLabel() }} yet</h2>
     <p class="note">
-      Plan amounts on <a routerLink="/plan">Plan</a>, and add spending on
+      Plan amounts on <a routerLink="/plan" [queryParams]="{ tab: 'planning' }">Plan</a>, and add spending on
       <a routerLink="/add">Add</a>.
     </p>
   </section>

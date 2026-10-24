@@ -26,9 +26,9 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
     // Groceries 1,500 every month and Fuel 400 from Sep (M4). Entries as in M5: Groceries 400 and
     // 799.99 in Sep, 50 in Aug; Fuel 100 in Sep.
-    private async Task<string> SetUp()
+    private async Task<string> SetUp(IncomeItem[]? incomes = null)
     {
-        var sub = await SetUpUser(factory, Incomes);
+        var sub = await SetUpUser(factory, incomes ?? Incomes);
         await factory.Store.AddSubCategoryAsync(sub, new SubCategory("groceries", "food", "Groceries", 0));
         await factory.Store.AddSubCategoryAsync(sub, new SubCategory("fuel", "transport", "Fuel", 0));
         await factory.Store.SetPlanAsync(sub, Fy, new PlanAmounts("groceries", "food", Months2026.ToDictionary(key => key, _ => 150_000L)));
@@ -163,6 +163,97 @@ public class OverviewTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         Assert.All(overview["months"]!.AsArray(), month => Assert.Null(month!["saved"]));
         Assert.Null(overview["totals"]!["saved"]);
+        // Owner note 23: every month is projected, from 0, so the FY ends at Plan's planned saved.
+        Assert.Equal(15_500m, Dec(Month(overview, "2026-01")["projectedSaved"]));
+        Assert.Equal(184_900.25m, Dec(overview["totals"]!["projectedSaved"]));
+    }
+
+    // Owner note 23 (R-PLN-08 from the FY's first month): Sep is in progress with 152,150.26 saved and
+    // 12,550.01 of the plan left (R-PLN-05), so it ends at 139,600.25 (its unspent 16,200.26 −
+    // 12,550.01 = 3,650.25); Oct to Dec add 17,000 − 1,900 = 15,100 each. Nothing overspent and every
+    // income came as planned, so the FY ends at planned saved, 184,900.25. Closed months are not projected.
+    [Fact]
+    public async Task Projected_savings_spend_the_rest_of_this_month_then_follow_the_plan()
+    {
+        var overview = await GetOk(await SetUp());
+
+        var months = overview["months"]!.AsArray();
+        Assert.All(months.Take(8), month => Assert.Equal((null, null), (month!["projectedUnspent"], month["projectedSaved"])));
+        Assert.Equal([3_650.25m, 15_100m, 15_100m, 15_100m], months.Skip(8).Select(month => Dec(month!["projectedUnspent"])));
+        Assert.Equal([139_600.25m, 154_700.25m, 169_800.25m, 184_900.25m], months.Skip(8).Select(month => Dec(month!["projectedSaved"])));
+        Assert.Equal(16_200.26m, Dec(Month(overview, "2026-09")["unspent"])); // the real numbers stay
+        Assert.Equal((152_150.26m, 184_900.25m), (Dec(overview["totals"]!["saved"]), Dec(overview["totals"]!["projectedSaved"])));
+    }
+
+    // An overspend leaves nothing to spend this month (R-PLN-07) and stays in the projection:
+    // 20,000 more in Jan makes Sep's carried remaining 12,550.01 − 20,000 < 0, so Sep ends at its
+    // 132,150.26 and the FY at 132,150.26 + 3 × 15,100 = 177,450.26.
+    [Fact]
+    public async Task Projected_savings_keep_an_overspend()
+    {
+        var sub = await SetUp();
+        await AddEntry(sub, "groceries", "2026-02-10", 20_000m); // Jan 2026
+
+        var overview = await GetOk(sub);
+
+        Assert.Equal(132_150.26m, Dec(Month(overview, "2026-09")["projectedSaved"]));
+        Assert.Equal(177_450.26m, Dec(overview["totals"]!["projectedSaved"]));
+    }
+
+    // Owner note 23 (owner's choice): months yet to come are projected with the Income Tracker shows, the
+    // actual income. A gift of 1,000 (Actual) in Nov counts right away: Nov 18,000 − 1,900 = 16,100. A
+    // bonus of 3,000 counted only in the plan (Planned) in Dec does not. So the FY ends 1,000 above the
+    // hand check. Additional income is the Rent 2,000, plus the Bonus 500.25 in Sep and the gift in Nov.
+    [Fact]
+    public async Task Projected_savings_use_the_actual_income_and_show_the_additional_part()
+    {
+        var sub = await SetUp([
+            .. Incomes,
+            new("g", IncomeKind.Additional, "Gift", 100_000, "2026-11", "2026-11", IncomeCounts.Actual),
+            new("p", IncomeKind.Additional, "Expected", 300_000, "2026-12", "2026-12", IncomeCounts.Planned),
+        ]);
+
+        var overview = await GetOk(sub);
+
+        Assert.Equal([3_650.25m, 15_100m, 16_100m, 15_100m], overview["months"]!.AsArray().Skip(8).Select(month => Dec(month!["projectedUnspent"])));
+        Assert.Equal(185_900.25m, Dec(overview["totals"]!["projectedSaved"]));
+        Assert.Equal([2_000m, 2_500.25m, 2_000m, 3_000m, 2_000m],
+            new[] { "2026-01", "2026-09", "2026-10", "2026-11", "2026-12" }.Select(key => Dec(Month(overview, key)["additionalIncome"])));
+        Assert.Equal(25_500.25m, Dec(overview["totals"]!["additionalIncome"]));
+        Assert.Null((await GetOk(sub, query: "?categoryId=food"))["totals"]!["additionalIncome"]);
+    }
+
+    // Owner note 24 (Dashboard's Plan vs actual): Jan to Sep, the started months. Planned and actual
+    // income 8 × 17,000 + 17,500.25, of it additional 8 × 2,000 + 2,500.25; planned 8 × 1,500 + 1,900,
+    // spent 1,349.99. Plan's Accumulated Planned Savings by Sep is 139,600.25; 152,150.26 is kept so far,
+    // with 12,550.01 of Sep's plan still to spend; Oct to Dec add 3 × 15,100. Null with a filter.
+    [Fact]
+    public async Task Plan_vs_actual_matches_the_hand_check()
+    {
+        var sub = await SetUp();
+        var vs = (await GetOk(sub))["planVsActual"]!;
+
+        Assert.Equal((153_500.25m, 153_500.25m, 18_500.25m), (Dec(vs["plannedIncome"]), Dec(vs["income"]), Dec(vs["additionalIncome"])));
+        Assert.Equal((13_900m, 1_349.99m, 12_550.01m), (Dec(vs["planned"]), Dec(vs["spent"]), Dec(vs["stillToSpend"])));
+        Assert.Equal((139_600.25m, 152_150.26m, 45_300m), (Dec(vs["plannedSaved"]), Dec(vs["saved"]), Dec(vs["futureUnspent"])));
+        Assert.Equal((184_900.25m, 184_900.25m), (Dec(vs["plannedSavedAtEnd"]), Dec(vs["projectedSaved"])));
+        Assert.Null((await GetOk(sub, query: "?categoryId=food"))["planVsActual"]);
+    }
+
+    // With a filter, savings belong to the whole budget (MON-05); once the FY is over, nothing is projected.
+    [Fact]
+    public async Task Projected_savings_are_null_with_a_filter_and_after_the_FY()
+    {
+        var sub = await SetUp();
+
+        var filtered = await GetOk(sub, query: "?categoryId=food");
+        Assert.All(filtered["months"]!.AsArray(), month => Assert.Null(month!["projectedSaved"]));
+        Assert.Null(filtered["totals"]!["projectedSaved"]);
+
+        var after = await GetOk(sub, utcNow: new DateTimeOffset(2027, 2, 10, 9, 0, 0, TimeSpan.Zero));
+        Assert.All(after["months"]!.AsArray(), month => Assert.Null(month!["projectedSaved"]));
+        Assert.Null(after["totals"]!["projectedSaved"]);
+        Assert.NotNull(after["totals"]!["saved"]);
     }
 
     // DSH-02 "planned until now": Jan to Aug 8 × 1,500 + Sep 1,900 = 13,900. DSH-04: the closed months

@@ -110,7 +110,27 @@ public class StartMonthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((121_000m, 12_000m, 109_000m), (Dec(fy["income"]), Dec(fy["planned"]), Dec(fy["plannedSaved"])));
     }
 
-    // Dashboard still counts from Oct (R-PLN-06): its FY Planned saved is Oct to Jul, 91,000.
+    // Owner note 24: Dashboard's Plan vs actual and Saving cards count from Aug, the FY's first month,
+    // like Tracker and Plan. Aug to Oct planned 3 × 10,000 income and 3 × 1,000 spending; 750 was spent
+    // in Sep. Plan meant to keep 27,000 by Oct; 29,250 is kept so far, with Oct's 1,000 still to spend.
+    // The months to come add 9 × 9,000 + the 1,000 bonus = 82,000, so the FY ends at 110,250, 1,250
+    // above Plan's 109,000 (Aug kept 1,000 and Sep 250 more than planned).
+    [Fact]
+    public async Task Dashboard_plan_vs_actual_counts_from_the_fiscal_years_first_month()
+    {
+        var sub = await SetUp();
+        await factory.Store.AddEntryAsync(sub, new Entry("e1", new DateOnly(2026, 9, 5), "2026-09", Fy, "food", "rent", "rajhi", 75_000, ""));
+
+        var vs = (await Get(sub, $"/api/fiscal-years/{Fy}/overview"))["planVsActual"]!;
+
+        Assert.Equal((30_000m, 30_000m, 0m), (Dec(vs["plannedIncome"]), Dec(vs["income"]), Dec(vs["additionalIncome"])));
+        Assert.Equal((3_000m, 750m, 1_000m), (Dec(vs["planned"]), Dec(vs["spent"]), Dec(vs["stillToSpend"])));
+        Assert.Equal((27_000m, 29_250m), (Dec(vs["plannedSaved"]), Dec(vs["saved"])));
+        Assert.Equal((82_000m, 109_000m, 110_250m), (Dec(vs["futureUnspent"]), Dec(vs["plannedSavedAtEnd"]), Dec(vs["projectedSaved"])));
+    }
+
+    // The totals' Planned saved (R-PLN-04) still counts from Oct (R-PLN-06): Oct to Jul, 91,000.
+    // Dashboard no longer shows it (owner note 24).
     [Fact]
     public async Task Dashboard_planned_saved_still_counts_from_October()
     {

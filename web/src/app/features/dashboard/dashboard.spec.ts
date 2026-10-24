@@ -92,8 +92,11 @@ function months(statuses = 'CCCCCCCCIYYY'): MonthOverview[] {
       planned,
       spent,
       remaining: carried / 100,
+      additionalIncome: i === 8 ? 2500.25 : 2000,
       unspent: null,
       saved: null,
+      projectedUnspent: null,
+      projectedSaved: null,
     };
   });
 }
@@ -152,7 +155,7 @@ function overview(statuses?: string): OverviewResponse {
         subCategories: [{ subCategoryId: 'fuel', months: fuel, planned: 1600, spent: 99.99 }],
       },
     ],
-    totals: { income: 204500.25, plannedIncome: 204500.25, planned: 19600, spent: 1349.99, remaining: 18250.01, plannedSaved: 184900.25, saved: null },
+    totals: { income: 204500.25, plannedIncome: 204500.25, planned: 19600, spent: 1349.99, remaining: 18250.01, plannedSaved: 184900.25, saved: null, projectedSaved: null, additionalIncome: null },
     toDate: {
       income: 153500.25,
       planned: 13900,
@@ -160,6 +163,20 @@ function overview(statuses?: string): OverviewResponse {
       saved: 152150.26,
       plannedSaved: 139600.25,
       savedClosed: 135950,
+    },
+    // The API's OverviewTests hand check (owner note 24), Jan to Sep from the FY's first month.
+    planVsActual: {
+      plannedIncome: 153500.25,
+      income: 153500.25,
+      additionalIncome: 18500.25,
+      planned: 13900,
+      spent: 1349.99,
+      stillToSpend: 12550.01,
+      plannedSaved: 139600.25,
+      saved: 152150.26,
+      futureUnspent: 45300,
+      plannedSavedAtEnd: 184900.25,
+      projectedSaved: 184900.25,
     },
     rollover: null,
     carryFromPeriodKey: '2026-01',
@@ -315,13 +332,14 @@ describe('Dashboard (PRD 5.9)', () => {
     expect(Array.from(root().querySelectorAll('.cards > section')).map((el) => el.getAttribute('aria-labelledby'))).toEqual([
       'bars-title',
       'current-title',
-      'projection-title',
-      'to-date-title',
+      'versus-title',
       'saving-title',
       'banks-title',
       'loans-title',
     ]);
-    expect(root().querySelectorAll('.cards > section.card').length).toBe(7);
+    expect(root().querySelectorAll('.cards > section.card').length).toBe(6);
+    // Owner note 24: no Projection card; the saving card goes across the page.
+    expect(card('saving').classList).toContain('wide');
     expect(root().querySelector('app-rollover-banner')).toBeNull();
   });
 
@@ -339,11 +357,12 @@ describe('Dashboard (PRD 5.9)', () => {
     ); // 9%
     expect(current.querySelector<HTMLElement>('.marker')!.style.left).toBe('70%');
     expect(text(current.querySelector('.day'))).toBe('Day 21 of 30 · 10 days left');
+    // Owner note 24: what carried in is said under Remaining, and Income says its additional part.
+    expect(text(current.querySelector('.carried'))).toBe('incl. SAR 11,950 from last month');
     expect(lines(current, '.mini > div')).toEqual([
-      'From last month SAR 11,950',
       'Planned SAR 1,900',
       'Spent SAR 1,299.99',
-      'Income SAR 17,500.25',
+      'Income SAR 17,500.25 incl. SAR 2,500.25 additional',
     ]);
     expect(text(current.querySelector('.note'))).toBe('Every sub-category is within plan.');
   });
@@ -353,7 +372,6 @@ describe('Dashboard (PRD 5.9)', () => {
 
     expect(card('current').querySelector('.marker')).toBeNull();
     expect(card('current').querySelector('.day')).toBeNull();
-    expect(card('projection')).toBeNull();
     expect(card('banks')).toBeNull();
   });
 
@@ -377,165 +395,115 @@ describe('Dashboard (PRD 5.9)', () => {
     );
   });
 
-  // DSH-05, R-PLN-07: the projected balance and the lines that make it; "How?" explains and lists the
-  // months yet to come.
-  it('shows the projection and how it adds up', async () => {
+  // Owner note 24, DSH-02: planned and actual head to head from the FY's first month. Sep is in
+  // progress: 12,550.01 of its plan is left to spend, so the saving is as planned, not ahead.
+  it('shows plan vs actual head to head', async () => {
     await open();
 
-    const projection = card('projection');
-    expect(text(projection.querySelector('.card-head'))).toBe('Projection End of FY 2026 · 26 Jan 2027');
-    expect(text(projection.querySelector('.hero'))).toBe('SAR 34,550');
-    expect(lines(projection, '.breakdown > div')).toEqual([
-      'Balance today SAR 300.01',
-      '− Still to spend in Sep 2026 SAR 12,250.01',
-      '+ Future unallocated SAR 46,500',
-      '= Projected balance SAR 34,550',
+    const versus = card('versus');
+    expect(text(versus.querySelector('.card-head'))).toBe('Plan vs actual Jan 2026 to Sep 2026 · 9 of 12 months');
+    expect(lines(versus, 'thead th')).toEqual(['Planned', 'Actual']);
+    expect(lines(versus, 'tbody')).toEqual([
+      'Income SAR 153,500.25 SAR 153,500.25 As planned Actual incl. SAR 18,500.25 additional income',
+      'Spent SAR 13,900 SAR 1,349.99 SAR 12,550.01 of the plan left',
+      'Saving accumulated SAR 139,600.25 SAR 152,150.26 As planned Actual incl. SAR 12,550.01 still to spend in Sep 2026',
     ]);
-    expect(projection.querySelector('.danger')).toBeNull();
-
-    const fold = button(projection, 'chevron_right How?');
-    expect(fold.getAttribute('aria-expanded')).toBe('false');
-    expect(projection.querySelector('.months')).toBeNull();
-    fold.click();
-    harness.detectChanges();
-    expect(fold.getAttribute('aria-expanded')).toBe('true');
-    expect(lines(projection, '.months > div')).toEqual([
-      'Oct 2026 SAR 15,500',
-      'Nov 2026 SAR 15,500',
-      'Dec 2026 SAR 15,500',
-    ]);
+    expect(versus.querySelector('.spent mat-progress-bar')!.getAttribute('aria-valuenow')).toBe(String((134999 * 100) / 1390000));
+    expect(versus.querySelector('.chip.danger')).toBeNull();
   });
 
-  // UX-07: a projected balance below 0 says so in words.
-  it('says when the projected balance is below 0', async () => {
-    const data = summary();
-    data.projection = { ...data.projection!, projectedBalance: -1200, futureUnallocated: -500 };
-    await open(overview(), data);
-
-    const projection = card('projection');
-    expect(text(projection.querySelector('.hero'))).toBe('SAR -1,200');
-    expect(projection.querySelector('.hero')!.classList).toContain('danger');
-    expect(text(projection.querySelector('.sub'))).toBe('Below 0 · if you spend exactly what is planned from now on');
-  });
-
-  // BNK-05: without a complete balance there is nothing to project from.
-  it('asks for the balances before it projects', async () => {
-    const data = summary();
-    data.projection = { ...data.projection!, balanceToday: null, projectedBalance: null };
-    await open(overview(), data);
-
-    const projection = card('projection');
-    expect(text(projection.querySelector('.note'))).toBe(
-      'Set the opening balance of every account and the income split on Banks to see the projection.',
-    );
-    expect(projection.querySelector('.note a')!.getAttribute('href')).toBe('/banks');
-    expect(projection.querySelector('.breakdown')).toBeNull();
-  });
-
-  it('explains when no month is in progress', async () => {
-    await open(overview(), { ...summary(), month: null, projection: null });
-
-    expect(text(card('projection'))).toBe('Projection The projection shows while a month of a fiscal year is in progress.');
-    expect(card('saving')).toBeNull();
-  });
-
-  // DSH-02 (owner's choice, M9): the started months, Jan to Sep on 17 Oct 2026, with planned until now.
-  it('shows the FY to date', async () => {
-    await open();
-
-    const toDate = card('to-date');
-    expect(text(toDate.querySelector('.card-head'))).toBe('FY 2026 to date Jan 2026 to Sep 2026 · 9 of 12 months');
-    expect(lines(toDate, '.kpi')).toEqual([
-      'Income SAR 153,500.25',
-      'Planned until now SAR 13,900',
-      // 13,900 − 1,349.99: Sep is in progress, so what is left of the plan is still to spend (owner note 11).
-      'Spent SAR 1,349.99 SAR 12,550.01 of the plan left this month',
-      // R-PLN-03: Sep's Unassigned is 139,600.25. Sep is not over, so it is Unspent income, not Saved
-      // (owner note 12): 152,150.26 − 12,550.01 still to spend = 139,600.25 to keep.
-      'Unspent income SAR 152,150.26 SAR 12,550.01 still to spend in Sep 2026 · SAR 139,600.25 to keep (as planned)',
-    ]);
-    expect(toDate.querySelector('.danger')).toBeNull();
-  });
-
-  // A FY with no month in progress: what was not spent is really under plan and saved.
-  it('says under plan and more than planned once the months are closed', async () => {
-    const data = overview();
-    data.months = data.months.map((m) => ({ ...m, status: m.status === 'yetToCome' ? m.status : 'closed' }));
+  // UX-07: less income, overspending and a saving behind plan have words, not only a color.
+  it('says less, over and behind plan in words once the months are closed', async () => {
+    const data = overview('CCCCCCCCCYYY');
+    data.planVsActual = { ...data.planVsActual!, income: 150000, spent: 15000, stillToSpend: 0, saved: 135000 };
     await open(data);
 
-    expect(lines(card('to-date'), '.kpi').slice(2)).toEqual([
-      'Spent SAR 1,349.99 SAR 12,550.01 under plan',
-      'Saved SAR 152,150.26 SAR 12,550.01 more than planned',
+    const versus = card('versus');
+    expect(lines(versus, '.versus-note')).toEqual([
+      'SAR 3,500.25 less than planned Actual incl. SAR 18,500.25 additional income',
+      'SAR 1,100 over plan',
+      'SAR 4,600.25 behind plan',
+    ]);
+    expect(versus.querySelectorAll('.versus-note .chip.danger').length).toBe(3);
+  });
+
+  it('says more than planned, under plan and ahead of plan', async () => {
+    const data = overview('CCCCCCCCCYYY');
+    data.planVsActual = { ...data.planVsActual!, income: 155000, spent: 13000, stillToSpend: 0, saved: 142000 };
+    await open(data);
+
+    expect(lines(card('versus'), '.versus-note .chip')).toEqual([
+      'SAR 1,499.75 more than planned',
+      'SAR 900 under plan',
+      'SAR 2,399.75 ahead of plan',
     ]);
   });
 
-  // R-PLN-06: set up in Sep 2026, so to date starts there.
-  it('counts to date from the month NAMA was set up', async () => {
-    await open({ ...overview(), carryFromPeriodKey: '2026-09' });
-
-    // Owner note 11: not "1 of 12 months", which read as if Sep were the FY's first month.
-    expect(text(card('to-date').querySelector('.card-head'))).toBe('FY 2026 to date Sep 2026 · since you started NAMA');
-  });
-
-  // UX-07: overspending and a negative saved have a text label, not only a color.
-  it('says when more was spent than planned or earned', async () => {
-    const data = overview();
-    data.toDate = { ...data.toDate, spent: 201349.99, saved: -47849.74 };
-    await open(data);
-
-    const toDate = card('to-date');
-    expect(text(toDate.querySelector('.spent'))).toBe('Spent SAR 201,349.99 SAR 187,449.99 over plan');
-    expect(text(toDate.querySelector('.saved'))).toBe('Unspent income SAR -47,849.74 Spent more than income');
-    expect(toDate.querySelector('.saved .value')!.classList).toContain('danger');
-  });
-
-  // DSH-06, R-PLN-08: on track while nothing is overspent.
+  // Owner note 24, DSH-06: Plan's saving at the FY's end vs Tracker's projection, the progress so far
+  // with where the plan is by now, and "How?" with the lines that make the projection.
   it('compares the planned saving with the projection', async () => {
     await open();
 
     const saving = card('saving');
     expect(text(saving.querySelector('.card-head'))).toBe('Saving: plan vs projection By the end of FY 2026 On track');
     expect(saving.querySelector('.card-head .chip')!.classList).toContain('ok');
-    expect(lines(saving, '.kpi')).toEqual(['Planned saving SAR 186,000', 'Projected saving SAR 186,000']);
+    expect(lines(saving, '.kpi')).toEqual(['Planned saving SAR 184,900.25', 'Projected saving SAR 184,900.25']);
+    expect(lines(saving, '.progress-text span')).toEqual(['Saved so far SAR 152,150.26 of SAR 184,900.25', 'Plan by now SAR 139,600.25']);
+    expect(saving.querySelector('.progress mat-progress-bar')!.getAttribute('aria-valuenow')).toBe(String((15215026 * 100) / 18490025));
+    expect(saving.querySelector<HTMLElement>('.progress .marker')!.style.left).toBe(`${(13960025 * 100) / 18490025}%`);
     expect(text(saving.querySelector('.reason'))).toBe('Your plan is covered so far.');
 
     button(saving, 'chevron_right How?').click();
     harness.detectChanges();
     expect(lines(saving, '.breakdown > div')).toEqual([
-      'Unspent income SAR 151,750.01',
-      '− Still to spend this month SAR 12,250.01',
-      '+ Future unallocated SAR 46,500',
-      '= Projected saving SAR 186,000',
+      'Accumulated savings so far SAR 152,150.26',
+      '− Still to spend in Sep 2026 SAR 12,550.01',
+      '+ Months to come: income − plan SAR 45,300',
+      '= Projected saving SAR 184,900.25',
     ]);
     expect(text(saving.querySelector('.breakdown + .caption'))).toBe(
-      "Planned saving is your plan's income minus planned for the whole year. Leftovers carry into the next month, so they count as still to spend.",
+      "Planned saving is Plan's Accumulated Planned Savings: planned income minus planned, every month from Jan 2026 " +
+        "to the end of FY 2026. Projected saving is Tracker's: what really happened so far, the rest of this month's " +
+        "plan spent, then each month to come's income minus its plan.",
     );
   });
 
-  // Owner note 11, R-PLN-06: set up in Sep, so Planned saving is not the whole FY, and it says so.
-  it('says which months the planned saving covers', async () => {
-    const data = summary();
-    data.projection = { ...data.projection!, countedFrom: periods[8] };
-    await open(overview(), data);
+  it('says how far above plan the projection is', async () => {
+    const above = overview();
+    above.planVsActual = { ...above.planVsActual!, projectedSaved: 192826.25 };
+    await open(above);
 
     const saving = card('saving');
-    button(saving, 'chevron_right How?').click();
-    harness.detectChanges();
-    expect(text(saving.querySelector('.breakdown + .caption'))).toBe(
-      "Planned saving is your plan's income minus planned from Sep 2026, when you started NAMA, to the end of FY 2026. " +
-        'Leftovers carry into the next month, so they count as still to spend.',
-    );
+    expect(text(saving.querySelector('.card-head .chip'))).toBe('SAR 7,926 above plan');
+    expect(saving.querySelector('.card-head .chip')!.classList).toContain('ok');
+    expect(text(saving.querySelector('.reason'))).toBe('More came in or less went out than planned so far.');
   });
 
-  it('says how far below plan an overspend leaves the saving', async () => {
-    const data = summary();
-    data.projection = { ...data.projection!, stillToSpend: 0, savedToDate: 139000, projectedSaving: 185500 };
-    await open(overview(), data);
+  it('says how far below plan the projection is', async () => {
+    const below = overview();
+    below.planVsActual = { ...below.planVsActual!, projectedSaved: 184400.25 };
+    await open(below);
 
     const saving = card('saving');
     expect(text(saving.querySelector('.card-head .chip'))).toBe('SAR 500 below plan');
     expect(saving.querySelector('.card-head .chip')!.classList).toContain('danger');
-    expect(text(saving.querySelector('.reason'))).toBe('You have spent more than planned so far.');
+    expect(text(saving.querySelector('.reason'))).toBe('Less came in or more went out than planned so far.');
+  });
+
+  // Nothing to measure progress against when the plan saves nothing.
+  it('shows no progress without a planned saving', async () => {
+    const none = overview();
+    none.planVsActual = { ...none.planVsActual!, plannedSavedAtEnd: 0 };
+    await open(none);
+
+    expect(card('saving').querySelector('.progress')).toBeNull();
+  });
+
+  it('shows neither card without the numbers', async () => {
+    await open({ ...overview(), planVsActual: null });
+
+    expect(card('versus')).toBeNull();
+    expect(card('saving')).toBeNull();
   });
 
   // DSH-03: a column chart, one Planned and one Spent column per month, on one scale (the largest
@@ -612,7 +580,7 @@ describe('Dashboard (PRD 5.9)', () => {
     const empty = card('bars').querySelector('.empty')!;
     expect(text(empty.querySelector('.empty-title'))).toBe('Nothing planned or spent in FY 2026 yet');
     expect(Array.from(empty.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
-      '/plan',
+      '/plan?tab=planning',
       '/add',
     ]);
     expect(root().querySelector('app-month-bars')).toBeNull();

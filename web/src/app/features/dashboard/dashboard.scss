@@ -151,9 +151,14 @@
   margin: 8px 0 0;
 }
 
+// Owner note 24: what carried into the month, under Remaining.
+.carried {
+  margin: 4px 0 0;
+}
+
 .mini {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px 16px;
   margin-top: 16px;
   padding-top: 16px;
@@ -250,6 +255,108 @@
 
 .reason {
   margin: 12px 0 0;
+}
+
+// Owner note 24, DSH-02: Planned and Actual head to head, each line with its difference under it. The
+// two amount columns are equal and centered under their heads, as Plan's and Tracker's month columns
+// (an exception to "right-align money", so a head and its amounts read as one column).
+.versus {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+
+  th,
+  td {
+    padding: 0;
+    text-align: center;
+    vertical-align: baseline;
+  }
+
+  thead td {
+    width: 28%;
+  }
+
+  thead th {
+    padding-bottom: 4px;
+    font-weight: 400;
+  }
+
+  tbody + tbody tr:first-child > * {
+    padding-top: 12px;
+    border-top: 1px solid var(--divider);
+  }
+
+  tbody th {
+    text-align: left;
+    font-weight: 500;
+
+    .caption {
+      display: block;
+      font-weight: 400;
+    }
+  }
+
+  .money {
+    padding: 0 4px;
+    font-size: 17px;
+    white-space: nowrap;
+  }
+
+  .planned {
+    color: var(--text-2);
+  }
+
+  .actual {
+    font-weight: 600;
+  }
+
+  .versus-note td {
+    padding: 6px 0 12px;
+    text-align: left;
+
+    mat-progress-bar {
+      margin-bottom: 8px;
+    }
+
+    .chip {
+      display: inline-block;
+      margin-right: 8px;
+    }
+
+    .caption {
+      display: inline-block;
+    }
+  }
+}
+
+// Owner note 24, DSH-06: saved so far toward the FY's planned saving, the marker where the plan is by now.
+.progress {
+  margin-top: 4px;
+
+  .bar {
+    margin-top: 16px;
+  }
+}
+
+// Phones: the two amounts still fit side by side at 320px.
+@media (max-width: 479.98px) {
+  .versus {
+    thead td {
+      width: 22%;
+    }
+
+    .money {
+      font-size: 14px;
+    }
+  }
+}
+
+.progress-text {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin: 8px 0 0;
 }
 
 .fold {

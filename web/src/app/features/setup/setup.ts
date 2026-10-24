@@ -368,7 +368,8 @@ export class Setup {
       const me = await firstValueFrom(this.http.post<Me>('/api/setup', this.request()));
       clearDraft(this.uid);
       this.meService.set(me);
-      await this.router.navigate(['/plan']);
+      // PRD 5.2: right after the wizard, the amounts are what is left to do (Planning, owner note 25).
+      await this.router.navigate(['/plan'], { queryParams: { tab: 'planning' } });
     } catch (error: unknown) {
       if (error instanceof HttpErrorResponse && error.status === 409) {
         // Already set up (for example in another tab): reload /api/me and go to the Dashboard.

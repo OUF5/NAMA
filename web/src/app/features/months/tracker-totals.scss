@@ -25,6 +25,15 @@
   }
 }
 
+// Owner note 23: "so far" and "Projected by the end of the FY" side by side, stacked on phones.
+.kpis {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px 24px;
+  margin-left: auto;
+}
+
 .ok {
   color: var(--ok);
 }
@@ -39,7 +48,7 @@
   cursor: default;
 }
 
-// The planned income is a side note to Income.
+// Additional income is a side note to Income: it is already in it (owner note 23).
 .totals .secondary {
   th,
   td {
@@ -59,6 +68,20 @@
     display: block;
     font-size: 11px;
   }
+}
+
+// Owner note 23: the caption under a projected amount, and the month in progress's projected
+// Accumulated under its real one.
+.totals .subtotal td:not(.fy-col) .caption,
+.totals .result td:not(.fy-col) .caption,
+.totals .result td .then {
+  display: block;
+  font-size: 11px;
+}
+
+.totals .result td .then {
+  margin-top: 4px;
+  font-size: 12px;
 }
 
 .totals td.row-note {
