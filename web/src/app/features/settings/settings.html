@@ -229,6 +229,47 @@
             </section>
           }
         }
+        @case ('connected-apps') {
+          <!-- STG-08, MCP-05: connections is null while the connector is off (MCP-06). -->
+          <section class="card" aria-labelledby="apps-title">
+            <div class="card-head">
+              <h2 id="apps-title">Connected apps</h2>
+            </div>
+            @if (d.connections; as connections) {
+              <p class="caption">
+                Apps you allowed to read your NAMA data, such as Claude Code. They cannot change anything.
+                Disconnect stops one on its next call.
+              </p>
+              @if (connections.length === 0) {
+                <p class="note">No apps connected. To connect Claude Code, run this in a terminal, then sign in from /mcp:</p>
+                <code class="command">{{ connectCommand }}</code>
+              }
+              <ul class="list">
+                @for (connection of connections; track connection.id) {
+                  <li class="item">
+                    <span class="name">
+                      {{ connection.clientName }}
+                      <span class="caption below">
+                        Connected {{ formatDate(connection.connectedOn) }} · Last active {{ formatDate(connection.lastActiveOn) }}
+                      </span>
+                    </span>
+                    <button
+                      mat-stroked-button
+                      type="button"
+                      [disabled]="busy()"
+                      [attr.aria-label]="'Disconnect ' + connection.clientName"
+                      (click)="disconnect(connection)"
+                    >
+                      Disconnect
+                    </button>
+                  </li>
+                }
+              </ul>
+            } @else {
+              <p class="note">Connecting apps is not turned on for this NAMA yet.</p>
+            }
+          </section>
+        }
       }
     </div>
   }

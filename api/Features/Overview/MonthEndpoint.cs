@@ -41,50 +41,56 @@ public static class MonthEndpoint
         // An unknown FY, or a month that is not one of its months, is 404.
         api.MapGet("/fiscal-years/{fyId}/months/{periodKey}", async (
             string fyId, string periodKey, string? categoryId, string? subCategoryId, ClaimsPrincipal user, IUserStore store) =>
-        {
-            var uid = user.FindFirstValue("sub")!;
-            var fiscalYears = await store.GetFiscalYearsAsync(uid);
-            var fiscalYear = fiscalYears.FirstOrDefault(item => item.Id == fyId);
-            var period = fiscalYear?.Periods.FirstOrDefault(item => item.Key == periodKey);
-            if (fiscalYear is null || period is null)
-            {
-                return Results.NotFound();
-            }
-            var scope = new EntryFilter(null, null, categoryId, subCategoryId, null, null);
-            var fyEntries = await store.GetFiscalYearEntriesAsync(uid, fyId);
-            var previous = FiscalCalendar.PreviousPeriod(fiscalYears, periodKey);
-            // The month before is in this FY, except for its first month (one more query then).
-            var previousEntries = previous is not { } found ? []
-                : found.FiscalYear.Id == fyId ? fyEntries
-                : await store.GetFiscalYearEntriesAsync(uid, found.FiscalYear.Id);
-
-            var breakdown = MonthBreakdownCalculator.For(
-                FiscalCalendar.Days(period),
-                fyEntries.Where(entry => entry.PeriodKey == periodKey && scope.Matches(entry)).ToList(),
-                previousEntries.Where(entry => entry.PeriodKey == previous?.Period.Key && scope.Matches(entry)).ToList());
-
-            return Results.Ok(new MonthResponse(
-                MeEndpoint.PeriodDto.From(period),
-                previous is { } before ? MeEndpoint.PeriodDto.From(before.Period) : null,
-                Money.FromMinor(breakdown.Total),
-                breakdown.Count,
-                breakdown.Days.Select(day => new DayDto(day.Date, Money.FromMinor(day.Spent))).ToList(),
-                breakdown.Accounts.Select(account => new AccountDto(account.BankAccountId, Money.FromMinor(account.Spent))).ToList(),
-                breakdown.Categories
-                    .Select(change => new CategoryDto(change.CategoryId, Money.FromMinor(change.Spent), Money.FromMinor(change.LastSpent)))
-                    .ToList(),
-                breakdown.Latest.Select(EntriesEndpoint.EntryDto.From).ToList(),
-                breakdown.Biggest.Select(EntriesEndpoint.EntryDto.From).ToList(),
-                BankAccountsEndpoint.Sorted(await store.GetBankAccountsAsync(uid)),
-                string.IsNullOrEmpty(categoryId) && string.IsNullOrEmpty(subCategoryId)
-                    ? (await store.GetIncomesAsync(uid))
-                        .Where(item => item.Kind == IncomeKind.Additional && IncomeCalculator.IsActive(item, periodKey))
-                        .OrderByDescending(item => item.AmountMinor)
-                        .ThenBy(item => item.Label, StringComparer.OrdinalIgnoreCase)
-                        .Select(IncomeEndpoint.IncomeItemDto.From)
-                        .ToList()
-                    : []));
-        });
+            await LoadAsync(user.FindFirstValue("sub")!, fyId, periodKey, categoryId, subCategoryId, store) is { } month
+                ? Results.Ok(month)
+                : Results.NotFound());
         return api;
+    }
+
+    // Null for an unknown FY or month. Also the Claude connector's get_month (MCP-04).
+    public static async Task<MonthResponse?> LoadAsync(
+        string uid, string fyId, string periodKey, string? categoryId, string? subCategoryId, IUserStore store)
+    {
+        var fiscalYears = await store.GetFiscalYearsAsync(uid);
+        var fiscalYear = fiscalYears.FirstOrDefault(item => item.Id == fyId);
+        var period = fiscalYear?.Periods.FirstOrDefault(item => item.Key == periodKey);
+        if (fiscalYear is null || period is null)
+        {
+            return null;
+        }
+        var scope = new EntryFilter(null, null, categoryId, subCategoryId, null, null);
+        var fyEntries = await store.GetFiscalYearEntriesAsync(uid, fyId);
+        var previous = FiscalCalendar.PreviousPeriod(fiscalYears, periodKey);
+        // The month before is in this FY, except for its first month (one more query then).
+        var previousEntries = previous is not { } found ? []
+            : found.FiscalYear.Id == fyId ? fyEntries
+            : await store.GetFiscalYearEntriesAsync(uid, found.FiscalYear.Id);
+
+        var breakdown = MonthBreakdownCalculator.For(
+            FiscalCalendar.Days(period),
+            fyEntries.Where(entry => entry.PeriodKey == periodKey && scope.Matches(entry)).ToList(),
+            previousEntries.Where(entry => entry.PeriodKey == previous?.Period.Key && scope.Matches(entry)).ToList());
+
+        return new MonthResponse(
+            MeEndpoint.PeriodDto.From(period),
+            previous is { } before ? MeEndpoint.PeriodDto.From(before.Period) : null,
+            Money.FromMinor(breakdown.Total),
+            breakdown.Count,
+            breakdown.Days.Select(day => new DayDto(day.Date, Money.FromMinor(day.Spent))).ToList(),
+            breakdown.Accounts.Select(account => new AccountDto(account.BankAccountId, Money.FromMinor(account.Spent))).ToList(),
+            breakdown.Categories
+                .Select(change => new CategoryDto(change.CategoryId, Money.FromMinor(change.Spent), Money.FromMinor(change.LastSpent)))
+                .ToList(),
+            breakdown.Latest.Select(EntriesEndpoint.EntryDto.From).ToList(),
+            breakdown.Biggest.Select(EntriesEndpoint.EntryDto.From).ToList(),
+            BankAccountsEndpoint.Sorted(await store.GetBankAccountsAsync(uid)),
+            string.IsNullOrEmpty(categoryId) && string.IsNullOrEmpty(subCategoryId)
+                ? (await store.GetIncomesAsync(uid))
+                    .Where(item => item.Kind == IncomeKind.Additional && IncomeCalculator.IsActive(item, periodKey))
+                    .OrderByDescending(item => item.AmountMinor)
+                    .ThenBy(item => item.Label, StringComparer.OrdinalIgnoreCase)
+                    .Select(IncomeEndpoint.IncomeItemDto.From)
+                    .ToList()
+                : []);
     }
 }

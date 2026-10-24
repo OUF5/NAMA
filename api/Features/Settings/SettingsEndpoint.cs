@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using Api.Domain;
+using Api.Features.Connect;
 using Api.Features.FiscalYears;
 using Api.Features.Income;
 using Api.Features.People;
@@ -25,11 +26,14 @@ public static class SettingsEndpoint
         MeEndpoint.ProfileDto Profile,
         CalendarDto Calendar,
         IncomeEndpoint.IncomeResponse Income,
-        PeopleEndpoint.PeopleDto? People);
+        PeopleEndpoint.PeopleDto? People,
+        // STG-08, MCP-05: null while the Claude connector is off (MCP-06).
+        IReadOnlyList<ConnectionsEndpoint.ConnectionDto>? Connections);
 
     public static IEndpointRouteBuilder MapSettings(this IEndpointRouteBuilder api)
     {
-        api.MapGet("/settings", async (ClaimsPrincipal user, IUserStore store, TimeProvider time, IAccessStore access, EmailAllowlist admins) =>
+        api.MapGet("/settings", async (ClaimsPrincipal user, IUserStore store, TimeProvider time, IAccessStore access, EmailAllowlist admins,
+            IConnectionStore connections, IConfiguration config) =>
         {
             var uid = user.FindFirstValue("sub")!;
             var profile = await store.GetProfileAsync(uid);
@@ -43,7 +47,8 @@ public static class SettingsEndpoint
                 MeEndpoint.ProfileDto.From(profile),
                 calendar,
                 income,
-                admins.IsAdmin(user) ? await PeopleEndpoint.LoadAsync(access, admins, time, profile.Timezone) : null));
+                admins.IsAdmin(user) ? await PeopleEndpoint.LoadAsync(access, admins, time, profile.Timezone) : null,
+                McpAuth.Origin(config) is null ? null : await ConnectionsEndpoint.LoadAsync(uid, connections, time, profile.Timezone)));
         });
 
         // STG-02, R-CAL-07: saved right away, applied when the next FY is started. Stored FYs keep

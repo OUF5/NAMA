@@ -122,19 +122,29 @@ public static class LoansEndpoint
     // reads them (BalancesEndpoint), from the FY that contains today.
     public static async Task<IResult> ResultAsync(string uid, IUserStore store, TimeProvider time, bool created = false)
     {
+        if (await LoadAsync(uid, store, time) is not { } response)
+        {
+            return Results.NotFound();
+        }
+        return created ? Results.Created("/api/loans", response) : Results.Ok(response);
+    }
+
+    // Null when the user has no profile. Also the Claude connector's get_loans (MCP-04).
+    public static async Task<LoansResponse?> LoadAsync(string uid, IUserStore store, TimeProvider time)
+    {
         var profile = await store.GetProfileAsync(uid);
         if (profile is null)
         {
-            return Results.NotFound();
+            return null;
         }
         var fiscalYear = FiscalCalendar.FindPeriod(await store.GetFiscalYearsAsync(uid), FiscalCalendar.Today(time, profile.Timezone))?.FiscalYear;
         if (await BanksEndpoint.LoadAsync(uid, store, time, fiscalYear?.StartDate) is not { } data)
         {
-            return Results.NotFound();
+            return null;
         }
         var loans = await store.GetLoansAsync(uid);
         var months = fiscalYear is null ? [] : await BalancesEndpoint.MonthEndsAsync(uid, store, data, fiscalYear);
-        var response = new LoansResponse(
+        return new LoansResponse(
             data.Today,
             loans.Select(LoanDto.From).ToList(),
             TotalsDto.From(LoanCalculator.Totals(loans)),
@@ -151,7 +161,6 @@ public static class LoansEndpoint
             data.Complete && data.Total is { } total ? Money.FromMinor(total) : null,
             months.Select(end => new MonthDto(MeEndpoint.PeriodDto.From(end.Period),
                 end.Balance is { } amount ? Money.FromMinor(amount) : null, end.Projected)).ToList());
-        return created ? Results.Created("/api/loans", response) : Results.Ok(response);
     }
 
     // R-LON-01: pickers hide archived accounts, so the API refuses them too, except the one an edited

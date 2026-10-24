@@ -35,12 +35,7 @@ public static class PlansEndpoint
     public static IEndpointRouteBuilder MapPlans(this IEndpointRouteBuilder api)
     {
         api.MapGet("/fiscal-years/{fyId}/plans", async (string fyId, ClaimsPrincipal user, IUserStore store) =>
-        {
-            var uid = user.FindFirstValue("sub")!;
-            var fiscalYears = await FiscalYearsAsync(uid, store);
-            var fiscalYear = fiscalYears.FirstOrDefault(fiscalYear => fiscalYear.Id == fyId);
-            return fiscalYear is null ? Results.NotFound() : Results.Ok(await LoadAsync(uid, fiscalYears, fiscalYear, store));
-        });
+            await LoadAsync(user.FindFirstValue("sub")!, fyId, store) is { } plans ? Results.Ok(plans) : Results.NotFound());
 
         // PLN-04, R-STA-02: any month of the FY can be set, closed months included.
         api.MapPut("/fiscal-years/{fyId}/plans/{subCategoryId}", async (
@@ -72,6 +67,14 @@ public static class PlansEndpoint
         });
 
         return api;
+    }
+
+    // Null for an unknown FY. Also the Claude connector's get_plans (MCP-04).
+    public static async Task<PlansResponse?> LoadAsync(string uid, string fyId, IUserStore store)
+    {
+        var fiscalYears = await FiscalYearsAsync(uid, store);
+        var fiscalYear = fiscalYears.FirstOrDefault(fiscalYear => fiscalYear.Id == fyId);
+        return fiscalYear is null ? null : await LoadAsync(uid, fiscalYears, fiscalYear, store);
     }
 
     private static async Task<IReadOnlyList<FiscalYear>> FiscalYearsAsync(string uid, IUserStore store) =>

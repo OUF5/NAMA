@@ -152,6 +152,17 @@
   display: block;
 }
 
+// Connected apps (MCP-05): the command to connect Claude Code, copied as it is.
+.command {
+  display: block;
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+
 .chevron {
   flex: none;
   transition: transform 0.15s;

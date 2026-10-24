@@ -77,12 +77,23 @@ export interface CreatedInvite {
   people: People;
 }
 
-// Owner's choice (M8, NFR-01): every section in one call. people is null unless you are an admin.
+// MCP-05: an app allowed to read your data. Dates are YYYY-MM-DD in your time zone; lastActiveOn is
+// its last sign-in or token refresh. The id is the connection's, not a user id.
+export interface Connection {
+  id: string;
+  clientName: string;
+  connectedOn: string;
+  lastActiveOn: string;
+}
+
+// Owner's choice (M8, NFR-01): every section in one call. people is null unless you are an admin;
+// connections is null while the Claude connector is off (MCP-06).
 export interface SettingsResponse {
   profile: Profile;
   calendar: Calendar;
   income: Income;
   people: People | null;
+  connections: Connection[] | null;
 }
 
 export interface ProfileChange {
@@ -156,5 +167,10 @@ export class SettingsApi {
 
   removePerson(memberId: string): Promise<{ people: People }> {
     return firstValueFrom(this.http.delete<{ people: People }>(`/api/people/${memberId}`));
+  }
+
+  // MCP-05: answers with the connections left.
+  disconnect(id: string): Promise<{ connections: Connection[] }> {
+    return firstValueFrom(this.http.delete<{ connections: Connection[] }>(`/api/connections/${id}`));
   }
 }

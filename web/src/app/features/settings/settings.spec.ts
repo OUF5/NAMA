@@ -13,7 +13,7 @@ import { Settings } from './settings';
 import { IncomeItemDialog, IncomeItemDialogData } from './income-item-dialog';
 import { IncomeItemContext } from './income-item-fields';
 import { InviteLinkDialog, RemovePersonDialog } from './people-dialogs';
-import { People, SettingsResponse } from './settings-api';
+import { Connection, People, SettingsResponse } from './settings-api';
 import { settingsMatcher } from './settings-sections';
 
 // FY 2026 with payday 27; today is 17 Oct 2026, so the current month is Sep 2026.
@@ -46,7 +46,11 @@ const people: People = {
   ],
 };
 
-function settings(currentPeriodKey: string | null = '2026-09', peopleList: People | null = null): SettingsResponse {
+function settings(
+  currentPeriodKey: string | null = '2026-09',
+  peopleList: People | null = null,
+  connections: Connection[] | null = [],
+): SettingsResponse {
   return {
     profile: {
       displayName: 'Owner',
@@ -78,6 +82,7 @@ function settings(currentPeriodKey: string | null = '2026-09', peopleList: Peopl
       bankAccounts: [{ id: 'snb', name: 'SNB', archived: false }],
     },
     people: peopleList,
+    connections,
   };
 }
 
@@ -191,6 +196,7 @@ describe('Settings (PRD 5.7)', () => {
       'person Profile Home budget · SAR chevron_right',
       'event Fiscal year Starts in July · Payday 27 chevron_right',
       'payments Income SAR 11,500.25 this month chevron_right',
+      'link Connected apps No apps connected chevron_right',
     ]);
     expect(text(root.querySelector('.version'))).toBe('Version 3e8c699');
     expect(rows[2].getAttribute('href')).toBe('/settings/income');
@@ -233,6 +239,63 @@ describe('Settings (PRD 5.7)', () => {
     const root = await open('/settings/income', settings(null));
 
     expect(text(root)).toContain('No fiscal year contains today.');
+  });
+
+  // STG-08, MCP-05: the apps allowed to read your data, each with Disconnect.
+  const claudeCode: Connection = { id: 'c1', clientName: 'Claude Code (nama)', connectedOn: '2026-10-17', lastActiveOn: '2026-10-19' };
+
+  it('lists the connected apps with when they connected and were last active', async () => {
+    const root = await open('/settings/connected-apps', settings('2026-09', null, [claudeCode]));
+
+    expect(root.querySelector('h1')?.textContent).toBe('Connected apps');
+    expect(Array.from(root.querySelectorAll('.item')).map((item) => text(item))).toEqual([
+      'Claude Code (nama) Connected 17 Oct 2026 · Last active 19 Oct 2026 Disconnect',
+    ]);
+    expect(root.querySelector('.command')).toBeNull();
+  });
+
+  it('disconnects an app straight away', async () => {
+    const root = await open('/settings/connected-apps', settings('2026-09', null, [claudeCode]));
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Disconnect Claude Code (nama)"]')!.click();
+    const request = http.expectOne('/api/connections/c1');
+    expect(request.request.method).toBe('DELETE');
+    request.flush({ connections: [] });
+    await settle();
+
+    expect(dialogOpen).not.toHaveBeenCalled();
+    expect(text(root.querySelector('.status'))).toBe('Disconnected Claude Code (nama).');
+    expect(root.querySelectorAll('.item').length).toBe(0);
+    expect(text(root.querySelector('.command'))).toBe(`claude mcp add --transport http nama ${location.origin}/api/mcp`);
+  });
+
+  it('reads the list again when the app was already disconnected', async () => {
+    const root = await open('/settings/connected-apps', settings('2026-09', null, [claudeCode]));
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Disconnect Claude Code (nama)"]')!.click();
+    http.expectOne('/api/connections/c1').flush(null, { status: 404, statusText: 'Not Found' });
+    await settle();
+    http.expectOne('/api/settings').flush(settings('2026-09', null, []));
+    await settle();
+
+    expect(text(root.querySelector('.status'))).toBe('That changed in the meantime. The list is up to date now.');
+    expect(root.querySelectorAll('.item').length).toBe(0);
+  });
+
+  // MCP-06
+  it('says so when connecting apps is off', async () => {
+    const root = await open('/settings/connected-apps', settings('2026-09', null, null));
+
+    expect(text(root.querySelector('.card .note'))).toBe('Connecting apps is not turned on for this NAMA yet.');
+  });
+
+  it('lists Connected apps on phones with how many are connected', async () => {
+    phone = true;
+    const root = await open('/settings', settings('2026-09', null, [claudeCode]));
+
+    const rows = Array.from(root.querySelectorAll<HTMLAnchorElement>('a.menu-row'));
+    expect(text(rows[rows.length - 1])).toBe('link Connected apps 1 app connected chevron_right');
+    expect(rows[rows.length - 1].getAttribute('href')).toBe('/settings/connected-apps');
   });
 
   // STG-07: People is for admins only. /api/settings sends people: null to everyone else.

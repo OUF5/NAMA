@@ -15,6 +15,13 @@ export const routes: Routes = [
     title: 'NAMA · Invite',
     loadComponent: () => import('./features/sign-in/sign-in').then((m) => m.SignIn),
   },
+  // MCP-01: an app such as Claude Code asks for read-only access (the connector's OAuth authorize
+  // page). Public: the page signs in itself, so the request in its address is kept.
+  {
+    path: 'connect',
+    title: 'NAMA · Connect',
+    loadComponent: () => import('./features/connect/connect').then((m) => m.Connect),
+  },
   {
     path: 'no-access',
     title: 'NAMA · Access not allowed',

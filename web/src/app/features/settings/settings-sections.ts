@@ -9,6 +9,8 @@ export const SETTINGS_SECTIONS = [
   { id: 'fiscal-year', label: 'Fiscal year', icon: 'event' },
   { id: 'income', label: 'Income', icon: 'payments' },
   { id: 'people', label: 'People', icon: 'group' },
+  // STG-08, MCP-05: always listed; it says so when the connector is off (MCP-06).
+  { id: 'connected-apps', label: 'Connected apps', icon: 'link' },
 ] as const;
 
 export type SettingsSectionId = (typeof SETTINGS_SECTIONS)[number]['id'];

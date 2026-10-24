@@ -19,6 +19,7 @@ public static class FirestoreSetup
         }.Build());
         services.AddSingleton<IUserStore, FirestoreUserStore>();
         services.AddSingleton<IAccessStore, FirestoreAccessStore>();
+        services.AddSingleton<IConnectionStore, FirestoreConnectionStore>();
         return services;
     }
 }

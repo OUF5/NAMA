@@ -205,7 +205,7 @@ describe('App', () => {
 
     expect(settings.getAttribute('aria-expanded')).toBe('true');
     const subs = Array.from(compiled.querySelectorAll<HTMLAnchorElement>('.sub-nav a'));
-    expect(subs.map((a) => a.textContent?.trim())).toEqual(['Profile', 'Fiscal year', 'Income']);
+    expect(subs.map((a) => a.textContent?.trim())).toEqual(['Profile', 'Fiscal year', 'Income', 'Connected apps']);
     expect(subs[2].classList).toContain('active');
     expect(subs[2].getAttribute('href')).toBe('/settings/income');
 

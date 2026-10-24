@@ -1,11 +1,13 @@
 using Api.Features.BankAccounts;
 using Api.Features.Banks;
 using Api.Features.Categories;
+using Api.Features.Connect;
 using Api.Features.Entries;
 using Api.Features.FiscalYears;
 using Api.Features.Income;
 using Api.Features.Indicator;
 using Api.Features.Loans;
+using Api.Features.Mcp;
 using Api.Features.Overview;
 using Api.Features.People;
 using Api.Features.Plans;
@@ -32,6 +34,15 @@ builder.Services.AddValidation();
 // R-CAL-10: tests replace it to fake "today".
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddFirestore();
+// MCP-03, MCP-04: the Claude connector's token scheme and its read-only tools (stateless Streamable HTTP).
+builder.Services.AddMcpAuth();
+builder.Services.AddMcpServer(options =>
+{
+    options.ServerInfo = new() { Name = "NAMA", Version = builder.Configuration["APP_VERSION"] ?? "dev" };
+    options.ServerInstructions = NamaTools.Instructions;
+})
+    .WithHttpTransport()
+    .WithTools<NamaTools>();
 
 var app = builder.Build();
 
@@ -84,5 +95,14 @@ api.MapOverview();
 api.MapMonth();
 api.MapBalances();
 api.MapPeople();
+
+// MCP-06: the Claude connector exists only when PUBLIC_ORIGIN is set (locally; not in production yet).
+if (McpAuth.Origin(app.Configuration) is { } origin)
+{
+    app.MapOAuthMetadata(origin);
+    api.MapOAuth(origin);
+    api.MapConnections();
+    api.MapMcp("/mcp").RequireAuthorization(McpAuth.Policy);
+}
 
 app.Run();

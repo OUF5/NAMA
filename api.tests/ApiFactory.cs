@@ -19,11 +19,25 @@ public class ApiFactory : WebApplicationFactory<Program>
     public InMemoryUserStore Store { get; } = new();
     public InMemoryAccessStore Access { get; } = new();
     public TestTime Time { get; } = new();
+    public InMemoryConnectionStore Connections { get; }
+
+    // The test server's own address, so the connector's URLs point at it (MCP-06).
+    public const string Origin = "http://localhost";
+
+    public ApiFactory()
+    {
+        Connections = new InMemoryConnectionStore(Time);
+    }
+
+    // MCP-06: null turns the Claude connector off.
+    protected virtual string? PublicOrigin => Origin;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("FIREBASE_PROJECT_ID", ProjectId);
         builder.UseSetting("ALLOWED_EMAILS", $" {AllowedEmail} , {SecondAllowedEmail},");
+        // Also replaces appsettings.Development.json's local origin.
+        builder.UseSetting("PUBLIC_ORIGIN", PublicOrigin ?? "");
         builder.ConfigureTestServices(services =>
         {
             services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
@@ -33,6 +47,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             });
             services.AddSingleton<IUserStore>(Store);
             services.AddSingleton<IAccessStore>(Access);
+            services.AddSingleton<IConnectionStore>(Connections);
             services.AddSingleton<TimeProvider>(Time);
         });
     }

@@ -79,69 +79,72 @@ public static class SummaryEndpoint
     public static IEndpointRouteBuilder MapSummary(this IEndpointRouteBuilder api)
     {
         api.MapGet("/summary", async (ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
-        {
-            var uid = user.FindFirstValue("sub")!;
-            var profile = await store.GetProfileAsync(uid);
-            if (profile is null)
-            {
-                return Results.NotFound();
-            }
-            var current = FiscalCalendar.FindPeriod(await store.GetFiscalYearsAsync(uid), FiscalCalendar.Today(time, profile.Timezone));
-            var data = (await BanksEndpoint.LoadAsync(uid, store, time, current?.FiscalYear.StartDate))!;
-
-            var balance = data.Complete && data.Total is { } total ? total : (long?)null;
-            MonthDto? month = null;
-            ProjectionDto? projection = null;
-            if (current is { } found)
-            {
-                var (remaining, unassigned, projected) = await CurrentMonthAsync(uid, store, data, found, balance);
-                month = new MonthDto(
-                    MeEndpoint.PeriodDto.From(found.Period),
-                    data.Today.DayNumber - found.Period.StartDate.DayNumber + 1,
-                    found.Period.EndDate.DayNumber - found.Period.StartDate.DayNumber + 1,
-                    found.Period.EndDate.DayNumber - data.Today.DayNumber + 1,
-                    Money.FromMinor(data.Income.Actual.GetValueOrDefault(found.Period.Key)),
-                    Money.FromMinor(remaining.CarriedIn),
-                    Money.FromMinor(remaining.Planned),
-                    Money.FromMinor(remaining.Spent),
-                    Money.FromMinor(remaining.Remaining),
-                    Money.FromMinor(unassigned.Unassigned));
-
-                projection = new ProjectionDto(
-                    found.FiscalYear.Label,
-                    found.FiscalYear.EndDate,
-                    projected.BalanceToday is { } today ? Money.FromMinor(today) : null,
-                    Money.FromMinor(projected.StillToSpend),
-                    Money.FromMinor(projected.FutureUnallocated),
-                    projected.FutureMonths
-                        .Select(future => new FutureMonthDto(
-                            MeEndpoint.PeriodDto.From(found.FiscalYear.Periods.Single(period => period.Key == future.PeriodKey)),
-                            Money.FromMinor(future.ThisMonth)))
-                        .ToList(),
-                    projected.ProjectedBalance is { } end ? Money.FromMinor(end) : null,
-                    Money.FromMinor(projected.SavedToDate),
-                    Money.FromMinor(projected.PlannedSaved),
-                    Money.FromMinor(projected.ProjectedSaving),
-                    PlanCalculator.CarryStart(found.FiscalYear.Periods, data.Profile.StartedOn) is var start and > 0
-                        ? MeEndpoint.PeriodDto.From(found.FiscalYear.Periods[Math.Min(start, found.FiscalYear.Periods.Count - 1)])
-                        : null);
-            }
-
-            return Results.Ok(new SummaryResponse(
-                balance is { } known ? Money.FromMinor(known) : null,
-                data.Complete,
-                data.Accounts
-                    .Where(account => !account.Archived)
-                    .OrderBy(account => Names.Lower(account.Name), StringComparer.Ordinal)
-                    .Select(account => new AccountDto(
-                        account.Id,
-                        account.Name,
-                        data.Balances.TryGetValue(account.Id, out var balance) ? Money.FromMinor(balance.Balance) : null,
-                        account.Opening?.Date))
-                    .ToList(),
-                month,
-                projection));
-        });
+            await LoadAsync(user.FindFirstValue("sub")!, store, time) is { } summary ? Results.Ok(summary) : Results.NotFound());
         return api;
+    }
+
+    // Null when the user has no profile. Also the Claude connector's get_summary (MCP-04).
+    public static async Task<SummaryResponse?> LoadAsync(string uid, IUserStore store, TimeProvider time)
+    {
+        var profile = await store.GetProfileAsync(uid);
+        if (profile is null)
+        {
+            return null;
+        }
+        var current = FiscalCalendar.FindPeriod(await store.GetFiscalYearsAsync(uid), FiscalCalendar.Today(time, profile.Timezone));
+        var data = (await BanksEndpoint.LoadAsync(uid, store, time, current?.FiscalYear.StartDate))!;
+
+        var balance = data.Complete && data.Total is { } total ? total : (long?)null;
+        MonthDto? month = null;
+        ProjectionDto? projection = null;
+        if (current is { } found)
+        {
+            var (remaining, unassigned, projected) = await CurrentMonthAsync(uid, store, data, found, balance);
+            month = new MonthDto(
+                MeEndpoint.PeriodDto.From(found.Period),
+                data.Today.DayNumber - found.Period.StartDate.DayNumber + 1,
+                found.Period.EndDate.DayNumber - found.Period.StartDate.DayNumber + 1,
+                found.Period.EndDate.DayNumber - data.Today.DayNumber + 1,
+                Money.FromMinor(data.Income.Actual.GetValueOrDefault(found.Period.Key)),
+                Money.FromMinor(remaining.CarriedIn),
+                Money.FromMinor(remaining.Planned),
+                Money.FromMinor(remaining.Spent),
+                Money.FromMinor(remaining.Remaining),
+                Money.FromMinor(unassigned.Unassigned));
+
+            projection = new ProjectionDto(
+                found.FiscalYear.Label,
+                found.FiscalYear.EndDate,
+                projected.BalanceToday is { } today ? Money.FromMinor(today) : null,
+                Money.FromMinor(projected.StillToSpend),
+                Money.FromMinor(projected.FutureUnallocated),
+                projected.FutureMonths
+                    .Select(future => new FutureMonthDto(
+                        MeEndpoint.PeriodDto.From(found.FiscalYear.Periods.Single(period => period.Key == future.PeriodKey)),
+                        Money.FromMinor(future.ThisMonth)))
+                    .ToList(),
+                projected.ProjectedBalance is { } end ? Money.FromMinor(end) : null,
+                Money.FromMinor(projected.SavedToDate),
+                Money.FromMinor(projected.PlannedSaved),
+                Money.FromMinor(projected.ProjectedSaving),
+                PlanCalculator.CarryStart(found.FiscalYear.Periods, data.Profile.StartedOn) is var start and > 0
+                    ? MeEndpoint.PeriodDto.From(found.FiscalYear.Periods[Math.Min(start, found.FiscalYear.Periods.Count - 1)])
+                    : null);
+        }
+
+        return new SummaryResponse(
+            balance is { } known ? Money.FromMinor(known) : null,
+            data.Complete,
+            data.Accounts
+                .Where(account => !account.Archived)
+                .OrderBy(account => Names.Lower(account.Name), StringComparer.Ordinal)
+                .Select(account => new AccountDto(
+                    account.Id,
+                    account.Name,
+                    data.Balances.TryGetValue(account.Id, out var balance) ? Money.FromMinor(balance.Balance) : null,
+                    account.Opening?.Date))
+                .ToList(),
+            month,
+            projection);
     }
 }

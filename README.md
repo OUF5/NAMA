@@ -27,9 +27,19 @@ firebase emulators:start --only firestore
 #    FIRESTORE_EMULATOR_HOST=localhost:8080; the admin emails are given on the command line.
 cd api && ALLOWED_EMAILS=you@gmail.com dotnet run
 
-# 3. Web on http://localhost:4200; /api is proxied to the API (web/proxy.conf.json)
+# 3. Web on http://localhost:4200; /api and /.well-known are proxied to the API (web/proxy.conf.json)
 cd web && npm install && npm start
 ```
+
+### Ask Claude about your data (MCP-01, read-only)
+
+With the three above running, in a terminal:
+
+```sh
+claude mcp add --transport http nama http://localhost:4200/api/mcp
+```
+
+Then in Claude Code run `/mcp`, choose nama → Authenticate, and press Allow on the Connect page that opens. Ask away ("How much did I spend on groceries this month?"). Claude can only read. Settings → Connected apps lists the connection and has Disconnect; `claude mcp remove nama` removes it from Claude Code. The connector is on only where `PUBLIC_ORIGIN` is set (`appsettings.Development.json`), so not in production yet.
 
 Real Google sign-in works on `localhost`. The Firebase web config (public, not a secret) is in [web/src/environments/environment.ts](web/src/environments/environment.ts).
 
@@ -58,6 +68,7 @@ curl http://localhost:8080/api/health
 | `FIREBASE_PROJECT_ID` | Firebase project whose ID tokens are accepted. Required: the API does not start without it |
 | `ALLOWED_EMAILS` | The admins (AUTH-02): comma-separated emails, ignoring case. Admins are always allowed and can invite other people in Settings → People. Empty means no admins |
 | `FIRESTORE_EMULATOR_HOST` | Local only (`localhost:8080`, from `launchSettings.json`). When set, the API uses the emulator instead of production Firestore |
+| `PUBLIC_ORIGIN` | The site's address for the Claude connector's OAuth (MCP-06), `http://localhost:4200` in `appsettings.Development.json`. Not set means the connector is off; production does not set it yet |
 
 ## Deploy
 

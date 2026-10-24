@@ -52,20 +52,7 @@ public static class EntriesEndpoint
 
         // TBL-01, TBL-04: newest first, filtered, with the total of the filtered rows.
         api.MapGet("/entries", async ([AsParameters] EntryFilter filter, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
-        {
-            var uid = user.FindFirstValue("sub")!;
-            if (await SelectAsync(uid, filter, store, time) is not { } selection)
-            {
-                return Results.NotFound();
-            }
-            var accounts = await store.GetBankAccountsAsync(uid);
-            return Results.Ok(new EntriesResponse(
-                selection.FiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
-                selection.FiscalYear.Id,
-                BankAccountsEndpoint.Sorted(accounts),
-                selection.Entries.Select(EntryDto.From).ToList(),
-                Money.FromMinor(selection.Entries.Sum(entry => entry.AmountMinor))));
-        });
+            await LoadAsync(user.FindFirstValue("sub")!, filter, store, time) is { } entries ? Results.Ok(entries) : Results.NotFound());
 
         // TBL-06, NFR-05: the same filters and order as the list.
         api.MapGet("/entries/export.csv", async ([AsParameters] EntryFilter filter, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
@@ -155,6 +142,22 @@ public static class EntriesEndpoint
             request.BankAccountId!,
             Money.ToMinor(request.Amount!.Value),
             (request.Note ?? "").Trim()), null);
+    }
+
+    // Null for an unknown FY. Also the Claude connector's list_entries (MCP-04).
+    public static async Task<EntriesResponse?> LoadAsync(string uid, EntryFilter filter, IUserStore store, TimeProvider time)
+    {
+        if (await SelectAsync(uid, filter, store, time) is not { } selection)
+        {
+            return null;
+        }
+        var accounts = await store.GetBankAccountsAsync(uid);
+        return new EntriesResponse(
+            selection.FiscalYears.Select(FiscalYearsEndpoint.FiscalYearDto.From).ToList(),
+            selection.FiscalYear.Id,
+            BankAccountsEndpoint.Sorted(accounts),
+            selection.Entries.Select(EntryDto.From).ToList(),
+            Money.FromMinor(selection.Entries.Sum(entry => entry.AmountMinor)));
     }
 
     private sealed record Selection(IReadOnlyList<FiscalYear> FiscalYears, FiscalYear FiscalYear, IReadOnlyList<Entry> Entries);

@@ -360,6 +360,7 @@ Page **Settings** (`/settings`). One page with clear sections and no hidden menu
 - **STG-05 Categories and sub-categories:** add and rename. No delete (your rule). Archive (🆕 ADDED · Nice). Moved to Plan's Categories tab (owner note 9, 20 Oct 2026); `/settings/categories` opens it.
 - **STG-06 Session:** sign out. The app version (git commit) is shown at the bottom to confirm deploys. 🆕 ADDED · Nice
 - **STG-07 People** (admins only): see AUTH-07.
+- **STG-08 Connected apps:** see MCP-05. Always listed (the side bar's sections come from `/api/me`, which does not know about the connector); while the connector is off (MCP-06) it says "Connecting apps is not turned on for this NAMA yet."
 
 ### 5.8 Fiscal year rollover (FY) 🆕 ADDED · Must
 
@@ -412,6 +413,17 @@ Page **Loans** (`/loans`), information only (R-LON-02). Two tabs in the URL (`?t
     - for the chosen account and date, what NAMA knows (it does not change, R-LON-02): a date in a month that has started (or before NAMA): the account's balance today (R-BAL-03) and the loan's share of it ("SAR 1,000 is 24% of SNB's SAR 4,100 today"); a date in a month yet to come of the current FY: the total balance projected at that month's end (R-PLN-07, Tracker's Balance row); later: "No projection for that month yet." Until the balance is complete, what is missing, with a link to Banks (BNK-05).
 - **LON-03 All loans:** filters Type (Lent and borrowed, Lent, Borrowed), Status (Open, the default; Settled; All) and a name search. Above the table, **By person**: each name with an open loan (ignoring case), its open Lent and Borrowed, and its count. The table: Date, Name, Type, Amount, Bank account, Status ("Open · 34 days", "Starts 5 Dec 2026" for a date to come, "Returned 12 Nov 2026" or "Paid 12 Nov 2026"), Note, newest first, then the totals of the shown rows: Lent, Borrowed, Lent − Borrowed. Each row: **Mark returned** (Lent) or **Mark paid** (Borrowed), one small dialog with the date (R-LON-03); a settled one has **Mark open**; **Edit** opens the New loan fields in a dialog with Delete (confirmed inside it, UX-04). Phones show one card per loan (TBL-05). Empty: "No loans yet. Add one on New loan." (UX-03)
 
+### 5.13 Claude connector (MCP) ✅ DECIDED (24 Oct 2026, owner's request)
+
+Ask Claude about your NAMA data, the way Notion connects to Claude. NAMA is a remote MCP server ([MCP specification 2025-11-25](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)) that Claude signs in to with OAuth. **Step 1 (this section) is read-only and local:** Claude Code on your laptop connects to `http://localhost:4200/api/mcp`. Writing (Step 2) and production with claude.ai (Step 3) come later and are not built yet.
+
+- **MCP-01 Connect.** In a terminal: `claude mcp add --transport http nama http://localhost:4200/api/mcp`, then `/mcp` → Authenticate ([Claude Code docs](https://code.claude.com/docs/en/mcp)). Claude Code finds NAMA's sign-in by itself (MCP-02) and opens **Connect** (`/connect`) in the browser: you sign in with Google if needed, and the page shows the app's name, where it sends you back ("localhost:PORT" or "claude.ai"), and "Read-only: it can see your budget, but not change it.", with **Allow** (the one filled button) and **Cancel**. Only allowed people (AUTH-02) can allow; anyone else sees no-access. A request that is not valid says why and sends you nowhere; when the app comes back on this computer (localhost), the page adds "Allow only if you started this yourself from Claude Code on this computer." (the MCP spec asks for a warning there).
+- **MCP-02 Sign-in (OAuth 2.1).** NAMA publishes its protected resource metadata (RFC 9728) at `/.well-known/oauth-protected-resource` and `/.well-known/oauth-protected-resource/api/mcp`, and its authorization server metadata (RFC 8414) at `/.well-known/oauth-authorization-server`. The issuer is the site's origin; the authorize page is `/connect`. Clients register with Dynamic Client Registration (RFC 7591). Rules: only Claude's callbacks are accepted: `http://localhost:PORT/callback` and `http://127.0.0.1:PORT/callback` (Claude Code), `https://claude.ai/api/mcp/auth_callback` and `https://claude.com/api/mcp/auth_callback` (claude.ai, Step 3); the redirect URI must match a registered one exactly; PKCE with S256 is required; `resource` must be NAMA's MCP address when sent; the code works once and for 5 minutes. Clients are public (no client secret).
+- **MCP-03 Tokens.** The access token lasts 1 hour and the refresh token 30 days; every refresh gives a new pair and the old refresh token stops working. Tokens are random (as invite links) and only their SHA-256 is stored. A token from Claude works only on `/api/mcp`, and a Firebase ID token does not work there. Every call checks the person is still allowed (AUTH-02) and takes the user id from the connection, never from the request. Scope `nama.read`.
+- **MCP-04 Tools, read-only.** Each answers with what its page's endpoint answers (7.5), so Claude and the app always agree: `get_calendar` (profile, today, current FY and month, every FY with its months), `get_summary` (top bar and Dashboard's projection), `get_overview` (Tracker: plan vs spent per sub-category per month), `get_month` (Tracker's month), `list_entries` (Entries with the same filters; the newest 300 when there are more, with the count and total of all), `get_categories`, `get_plans`, `get_income`, `get_banks` (accounts, balances, split, transfers) and `get_loans` (names included, owner's choice). Without a FY or month, the current one is used. People and invite links are never shown. Every tool is marked read-only.
+- **MCP-05 Connected apps.** Settings → **Connected apps** lists each connection: the app's name, "Connected 24 Oct 2026 · Last active 24 Oct 2026" (last active is the last sign-in or token refresh), and **Disconnect** (no confirmation: connecting again is one sign-in). Disconnecting stops the app on its next call. A connection whose refresh token expired is removed. Empty: "No apps connected. To connect Claude Code, run this in a terminal, then sign in from /mcp:" and the `claude mcp add` command for this site.
+- **MCP-06 Off until set.** The connector, its sign-in and its metadata exist only when the API setting `PUBLIC_ORIGIN` is set (locally `http://localhost:4200`, in `appsettings.Development.json`). Production does not set it in Step 1.
+
 ---
 
 ## 6. Non-functional requirements (NFR)
@@ -420,7 +432,7 @@ Page **Loans** (`/loans`), information only (R-LON-02). Two tabs in the URL (`?t
 - **NFR-02 Cold start.** Cloud Run scales to zero when idle, so the first request after a pause is slower. Keep startup light and turn on startup CPU boost, which Google built to shorten cold starts ([Google Cloud blog](https://cloud.google.com/blog/products/serverless/announcing-startup-cpu-boost-for-cloud-run--cloud-functions)). Optional later: one minimum instance removes the cold start but is billed while idle ([pricing](https://cloud.google.com/run/pricing)). 🆕 ADDED · Tech
 - **NFR-03 Security.**
     - Firestore rules deny all browser access. Only the API touches data; server client libraries bypass security rules and use IAM instead ([Firestore rules](https://cloud.google.com/firestore/docs/security/get-started)). 🆕 ADDED · Must
-    - Every endpoint requires a valid token and an allowed user (AUTH-02), except `GET /api/health`. `POST /api/invites/accept` needs only a valid token with a verified email (AUTH-06).
+    - Every endpoint requires a valid token and an allowed user (AUTH-02), except `GET /api/health`. `POST /api/invites/accept` needs only a valid token with a verified email (AUTH-06). The connector's sign-in metadata, registration and token exchange are open, as OAuth needs, and `/api/mcp` takes only NAMA's own access tokens, with an allowed user (MCP-02, MCP-03).
     - Every query is scoped to the user id from the token.
     - No secrets in the repo. The Firebase web config in Angular is public by design.
     - API responses send `Cache-Control: no-store`. Hosting already does not cache backend responses by default; this is a second safety net ([cache behavior](https://firebase.google.com/docs/hosting/manage-cache)). 🆕 ADDED · Tech
@@ -456,6 +468,7 @@ flowchart LR
 | Backend | `ASP.NET` Core Minimal API on .NET 10 | LTS until 14 Nov 2028 |
 | Validation | Built-in Minimal API validation: `builder.Services.AddValidation()` with DataAnnotations | New in .NET 10; errors come back as ProblemDetails ([ASP.NET team sample](https://github.com/captainsafia/minapi-validation-support)) |
 | Token check | `Microsoft.AspNetCore.Authentication.JwtBearer` | Authority and issuer `https://securetoken.google.com/PROJECT_ID`, audience `PROJECT_ID` |
+| MCP server | `ModelContextProtocol.AspNetCore` 2.3.0, the official C# MCP SDK | MCP-04: `MapMcp` in the same API, stateless Streamable HTTP ([SDK](https://github.com/modelcontextprotocol/csharp-sdk)) |
 | Data access | `Google.Cloud.Firestore` | One `FirestoreDb` singleton. Credentials are automatic on Google Cloud. The emulator is detected from an environment variable ([docs](https://cloud.google.com/dotnet/docs/reference/Google.Cloud.Firestore/latest)) |
 | Tests | xUnit for `api/Domain` (calendar, money, income) | Angular: the build must pass; component tests optional |
 | Hosting | Firebase Hosting with a rewrite to Cloud Run | Hosting rewrites have a 60 second request timeout |
@@ -511,6 +524,8 @@ All data lives under `users/{uid}`. Amounts are `long` minor units. Dates are `Y
 | `users/{uid}/entries/{id}` | `date`, `periodKey`, `fyId`, `categoryId`, `subCategoryId`, `bankAccountId`, `amountMinor`, `note` | `periodKey` and `fyId` are set by the API from `date`. `categoryId` is copied for filtering |
 | `invites/{id}` | `createdByUid`, `createdByEmail`, `expiresAt` | App-level, not under `users/{uid}` (AUTH-06). `id` is the SHA-256 (hex) of the link's random token; the token itself is never stored. The document exists only while the link is unused |
 | `members/{id}` | `uid`, `email`, `joinedAt`, `invitedByEmail` | App-level, not under `users/{uid}` (AUTH-02). `id` is random, so no URL carries a user id. Accept deletes the invite and creates the member in one transaction, so a link works once |
+| `oauthCodes/{id}` | `uid`, `email`, `clientId`, `clientName`, `redirectUri`, `codeChallenge`, `scope`, `expiresAt` | App-level (MCP-02). `id` is the SHA-256 (hex) of the code. The token exchange reads and deletes it in one transaction, so a code works once |
+| `connections/{id}` | `uid`, `email`, `clientId`, `clientName`, `scope`, `accessTokenHash`, `accessExpiresAt`, `refreshTokenHash`, `refreshExpiresAt`, `lastUsedAt` | App-level (MCP-03, MCP-05), looked up by token hash (automatic single-field indexes). `id` is random. A refresh replaces both hashes in one transaction |
 - **Indexes:** single-field indexes are automatic. Add the composite index `entries (fyId asc, date desc)` in `firestore.indexes.json`. Add others only when a query fails with an index link.
 - **Balances (R-BAL-03):** one query, `entries where date >= the earliest opening date` (a range on one field, served by the automatic single-field index), plus all transfers (few) and the small collections. The top bar's summary uses the same query from the current FY's start when that is earlier. A new opening balance with today's date also shortens what this reads.
 - **Reads:** the overview endpoint loads the FY's entries in one query and adds them up in memory. At personal scale this stays inside the 50,000 free reads per day. If the Firestore usage page shows daily reads near that limit, add a 5-minute in-memory cache that is cleared on every write (safe because max instances = 1). Phase 2 can add a summary document if needed. 🆕 ADDED · Tech
@@ -556,6 +571,12 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 | `DELETE /api/invites/{id}` | Revoke an unused link (AUTH-07) | Admins only |
 | `DELETE /api/people/{memberId}` | Remove a person (AUTH-07) | Admins only. Their data is kept |
 | `POST /api/invites/accept` | Join with an invite link (AUTH-06); body has `token` | A signed-in account that is not allowed yet. 404 used, revoked or unknown, 410 expired. Answers with `/api/me` |
+| `GET /.well-known/oauth-protected-resource` (also `…/api/mcp`), `GET /.well-known/oauth-authorization-server` | MCP-02 metadata | No auth. Only when `PUBLIC_ORIGIN` is set (MCP-06) |
+| `POST /api/oauth/register` | Dynamic Client Registration (MCP-02) | No auth. Stores nothing: the client id carries the app's name and redirect URIs, which are checked against Claude's callbacks on every use. 400 `invalid_redirect_uri` |
+| `POST /api/oauth/check`, `POST /api/oauth/authorize` | Connect (MCP-01): check the request, then allow or cancel | An allowed user (Firebase token). Check answers the app's name and where it sends you; authorize answers `redirectTo` (with the code, or `error=access_denied`) |
+| `POST /api/oauth/token` | Code for tokens, or refresh (MCP-03) | No auth, form-encoded. Errors are OAuth's JSON (`invalid_grant`, …) |
+| `POST /api/mcp` | The MCP server (MCP-04), Streamable HTTP, stateless | Only NAMA's access tokens. 401 with `WWW-Authenticate: Bearer resource_metadata=…` |
+| `DELETE /api/connections/{id}` | Disconnect (MCP-05) | Your own connections only, else 404. Answers the list. The list itself is part of `GET /api/settings` (`connections`, null while the connector is off) |
 
 ### 7.6 Sign-in flow
 
@@ -568,7 +589,7 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 
 ### 7.7 Frontend structure
 
-- **Routes:** `/sign-in` (public), `/invite/:token` (public, AUTH-06), `/setup`, `/` (Dashboard), `/add` (`?type=transfer` for TRF-01), `/entries`, `/tracker` (and `/months`, a redirect to it), `/plan` (Allocating; `?tab=planning` or `?tab=categories`), `/banks`, `/settings` (and `/settings/bank-accounts`, a redirect to `/banks`, and `/settings/categories`, a redirect to Plan's Categories tab), `/no-access`.
+- **Routes:** `/sign-in` (public), `/invite/:token` (public, AUTH-06), `/connect` (public, MCP-01; it signs in itself), `/setup`, `/` (Dashboard), `/add` (`?type=transfer` for TRF-01), `/entries`, `/tracker` (and `/months`, a redirect to it), `/plan` (Allocating; `?tab=planning` or `?tab=categories`), `/banks`, `/settings` (and `/settings/bank-accounts`, a redirect to `/banks`, and `/settings/categories`, a redirect to Plan's Categories tab), `/no-access`.
 - **Guards:** `authGuard` waits for the Firebase auth state; `setupGuard` sends you to `/setup` until setup is complete.
 - **State:** small services using signals. No NgRx. 🆕 ADDED · Tech
 - **UI kit:** Angular Material: stepper (wizard), form field, select, datepicker, table (desktop), cards (phone), expansion panel (months), button toggle (Totals, Year or Months), progress bar (indicator), snackbar (messages), chips (status). 🆕 ADDED · Tech
@@ -693,7 +714,8 @@ service cloud.firestore {
 - **Database:** the Firestore emulator (`firebase emulators:start --only firestore`). It needs Java JDK 11 or newer ([emulator docs](https://firebase.google.com/docs/emulator-suite/install_and_configure)). Production data is never touched from your laptop.
 - **API:** `dotnet run` on port 5080 with `FIRESTORE_EMULATOR_HOST` set; build `FirestoreDb` with emulator detection on.
 - **Sign-in:** real Google sign-in works on `localhost`, because Firebase authorizes `localhost` and your Hosting domain by default ([Firebase help](https://support.google.com/firebase/answer/6400741)). Keep `localhost` in the authorized domains, since there is only one Firebase project.
-- **Web:** `npm start` with the dev proxy.
+- **Web:** `npm start` with the dev proxy. It also sends `/.well-known` to the API, for the connector's metadata (MCP-02).
+- **Claude connector:** with the emulator, the API and the web app running, `claude mcp add --transport http nama http://localhost:4200/api/mcp` and `/mcp` → Authenticate (MCP-01).
 - **Seed data:** a development-only script that fills the emulator with sample categories and entries. 🆕 ADDED · Nice
 
 ### 7.12 One-time cloud setup (done by you, once)
@@ -741,6 +763,7 @@ Do them in order. Each milestone ends with its checks passing and a push to `mai
 | **M8** Settings and FY rollover | Profile, calendar settings (next FY), salary history, additional income, accounts, categories, start next FY with plan copy | The rollover examples from 4.1 pass end to end |
 | **M9** Dashboard preview and polish | Dashboard cards and CSS bars, empty states, dark mode, PWA (Nice) | Every Definition of Done item below is ticked |
 | **M10** Invite links | AUTH-02 (changed), AUTH-06, AUTH-07, STG-07: invite links, Settings → People, the no-access text | An admin creates a link and a second Google account joins with it and lands on Setup; a link works once (even with two accepts at the same time) and stops working after 7 days; a revoked link and a removed person are refused, and the removed person's data is kept; the access check reads no Firestore on a normal request; admins always get in; only admins see and use People; strangers see "Ask the person who shared NAMA for an invite link" |
+| **M11** Claude connector, Step 1 (read-only, local) | MCP-01 to MCP-06, STG-08: OAuth metadata, registration, Connect page, token exchange and refresh, `/api/mcp` with the read-only tools, Settings → Connected apps | Claude Code connects to the local app, signs in through Connect and answers questions from the tools; the numbers match the app's pages; a wrong PKCE, redirect, reused or expired code is refused; a stranger cannot allow; Disconnect stops the app on its next call; Claude's token is refused outside `/api/mcp` and a Firebase token inside it |
 
 ## 9. Definition of Done (Phase 1)
 

@@ -90,22 +90,27 @@ public static class OverviewEndpoint
         // category or sub-category, or a sub-category of another category.
         api.MapGet("/fiscal-years/{fyId}/overview", async (
             string fyId, string? categoryId, string? subCategoryId, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
-        {
-            var uid = user.FindFirstValue("sub")!;
-            var fiscalYears = (await store.GetFiscalYearsAsync(uid)).OrderBy(fiscalYear => fiscalYear.StartDate).ToList();
-            var fiscalYear = fiscalYears.FirstOrDefault(fiscalYear => fiscalYear.Id == fyId);
-            var profile = await store.GetProfileAsync(uid);
-            if (fiscalYear is null || profile is null)
-            {
-                return Results.NotFound();
-            }
-            var filter = string.IsNullOrEmpty(categoryId) && string.IsNullOrEmpty(subCategoryId)
-                ? null
-                : new Filter(categoryId, string.IsNullOrEmpty(subCategoryId) ? null : subCategoryId);
-            var response = await LoadAsync(uid, fiscalYears, fiscalYear, profile, FiscalCalendar.Today(time, profile.Timezone), filter, store);
-            return response is null ? Results.NotFound() : Results.Ok(response);
-        });
+            await LoadAsync(user.FindFirstValue("sub")!, fyId, categoryId, subCategoryId, store, time) is { } response
+                ? Results.Ok(response)
+                : Results.NotFound());
         return api;
+    }
+
+    // Null for an unknown FY, category or sub-category. Also the Claude connector's get_overview (MCP-04).
+    public static async Task<OverviewResponse?> LoadAsync(
+        string uid, string fyId, string? categoryId, string? subCategoryId, IUserStore store, TimeProvider time)
+    {
+        var fiscalYears = (await store.GetFiscalYearsAsync(uid)).OrderBy(fiscalYear => fiscalYear.StartDate).ToList();
+        var fiscalYear = fiscalYears.FirstOrDefault(fiscalYear => fiscalYear.Id == fyId);
+        var profile = await store.GetProfileAsync(uid);
+        if (fiscalYear is null || profile is null)
+        {
+            return null;
+        }
+        var filter = string.IsNullOrEmpty(categoryId) && string.IsNullOrEmpty(subCategoryId)
+            ? null
+            : new Filter(categoryId, string.IsNullOrEmpty(subCategoryId) ? null : subCategoryId);
+        return await LoadAsync(uid, fiscalYears, fiscalYear, profile, FiscalCalendar.Today(time, profile.Timezone), filter, store);
     }
 
     private sealed record Filter(string? CategoryId, string? SubCategoryId);

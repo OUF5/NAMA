@@ -21,7 +21,7 @@ import { incomeItemContext } from './income-item-fields';
 import { InviteLinkDialog, InviteLinkDialogData, RemovePersonDialog } from './people-dialogs';
 import { ProfileDialog } from './profile-dialog';
 import { SalaryDialog, SalaryDialogData } from './salary-dialog';
-import { Calendar, Income, IncomeItem, Invite, Member, People, SettingsApi, SettingsResponse } from './settings-api';
+import { Calendar, Connection, Income, IncomeItem, Invite, Member, People, SettingsApi, SettingsResponse } from './settings-api';
 import { monthGroups } from './settings-lines';
 import { SETTINGS_SECTIONS, SettingsSectionId, visibleSections } from './settings-sections';
 
@@ -35,7 +35,7 @@ const PHONE = '(max-width: 767.98px)';
 // /api/settings and GET /api/health (NFR-01), once for every section; each change is one call.
 // Long lists stay short: only the newest salary shows. Categories are on Plan's Categories tab
 // (owner note 9). People (STG-07, AUTH-07) is for admins only: /api/settings sends it
-// only to them.
+// only to them. Connected apps (STG-08, MCP-05) lists the apps allowed to read your data.
 @Component({
   selector: 'app-settings',
   imports: [NgTemplateOutlet, RouterLink, MatButtonModule, MatIconModule],
@@ -53,6 +53,8 @@ export class Settings {
   private readonly document = inject(DOCUMENT);
 
   protected readonly monthNames = MONTH_NAMES;
+  // MCP-01: the command that connects Claude Code to this NAMA.
+  protected readonly connectCommand = `claude mcp add --transport http nama ${this.document.location.origin}/api/mcp`;
   protected readonly formatDate = formatDate;
   // R-CAL-11: names the month keys of income items.
   private readonly keyOffset = computed(() => this.meService.me()?.monthKeyOffset ?? 0);
@@ -125,6 +127,7 @@ export class Settings {
       'fiscal-year': `Starts in ${MONTH_NAMES[d.calendar.fiscalStartMonth - 1]} · Payday ${d.calendar.paydayDay}`,
       income: d.income.currentTotal !== null ? `${this.money(d.income.currentTotal)} this month` : 'No current month',
       people: d.people ? peopleSummary(d.people) : undefined,
+      'connected-apps': appsSummary(d.connections),
     };
   });
 
@@ -250,6 +253,26 @@ export class Settings {
     }
   }
 
+  // MCP-05: connecting again is one sign-in, so Disconnect needs no confirmation. A 404 means it was
+  // already gone: the list is read again.
+  protected async disconnect(connection: Connection): Promise<void> {
+    this.busy.set(true);
+    this.status.set('');
+    try {
+      this.patch({ connections: (await this.api.disconnect(connection.id)).connections });
+      this.status.set(`Disconnected ${connection.clientName}.`);
+    } catch (error: unknown) {
+      if (error instanceof HttpErrorResponse && error.status === 404) {
+        this.patch({ connections: (await this.api.settings().catch(() => this.data()!)).connections });
+        this.status.set('That changed in the meantime. The list is up to date now.');
+      } else {
+        this.status.set('It could not be disconnected. Please try again.');
+      }
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
   // A 404 means the link was used or revoked meanwhile, or the person already removed: the list is
   // read again so it shows what is there now.
   private async peopleChange(call: () => Promise<{ people: People }>, message: string): Promise<void> {
@@ -304,4 +327,15 @@ function peopleSummary(people: People): string {
   const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
   const unused = people.invites.filter((invite) => !invite.expired).length;
   return `${plural(people.members.length, 'person', 'people')} · ${plural(unused, 'unused link', 'unused links')}`;
+}
+
+// "1 app connected" on the phone list.
+function appsSummary(connections: Connection[] | null): string {
+  if (!connections) {
+    return 'Off';
+  }
+  if (connections.length === 0) {
+    return 'No apps connected';
+  }
+  return `${connections.length} ${connections.length === 1 ? 'app' : 'apps'} connected`;
 }

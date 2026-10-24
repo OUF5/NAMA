@@ -13,18 +13,20 @@ public static class CategoriesEndpoint
 
     public record CategoryDto(string Id, string Name, int SortOrder, bool Archived, IReadOnlyList<SubCategoryDto> SubCategories);
 
+    // Also the Claude connector's get_categories (MCP-04).
+    public static async Task<List<CategoryDto>> LoadAsync(string uid, IUserStore store)
+    {
+        var subCategories = await store.GetSubCategoriesAsync(uid);
+        return (await store.GetCategoriesAsync(uid))
+            .OrderBy(category => category.SortOrder)
+            .Select(category => ToDto(category, subCategories))
+            .ToList();
+    }
+
     public static IEndpointRouteBuilder MapCategories(this IEndpointRouteBuilder api)
     {
         // Archived ones are included and flagged.
-        api.MapGet("/categories", async (ClaimsPrincipal user, IUserStore store) =>
-        {
-            var uid = user.FindFirstValue("sub")!;
-            var subCategories = await store.GetSubCategoriesAsync(uid);
-            return (await store.GetCategoriesAsync(uid))
-                .OrderBy(category => category.SortOrder)
-                .Select(category => ToDto(category, subCategories))
-                .ToList();
-        });
+        api.MapGet("/categories", (ClaimsPrincipal user, IUserStore store) => LoadAsync(user.FindFirstValue("sub")!, store));
 
         // PRD 4.7: unique ignoring case per user.
         api.MapPost("/categories", async (CategoryRequest request, ClaimsPrincipal user, IUserStore store) =>
