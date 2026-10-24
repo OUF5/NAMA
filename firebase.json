@@ -4,6 +4,9 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       { "source": "/api/**", "run": { "serviceId": "nama-api", "region": "me-central1" } },
+      { "source": "/.well-known/oauth-authorization-server", "run": { "serviceId": "nama-api", "region": "me-central1" } },
+      { "source": "/.well-known/oauth-protected-resource", "run": { "serviceId": "nama-api", "region": "me-central1" } },
+      { "source": "/.well-known/oauth-protected-resource/**", "run": { "serviceId": "nama-api", "region": "me-central1" } },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [

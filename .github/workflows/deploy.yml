@@ -38,6 +38,7 @@ jobs:
             FIREBASE_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}
             ALLOWED_EMAILS="${{ vars.ALLOWED_EMAILS }}"
             APP_VERSION=${{ github.sha }}
+            PUBLIC_ORIGIN=https://${{ vars.GCP_PROJECT_ID }}.web.app
       - run: npx firebase-tools@latest deploy --only hosting,firestore --project ${{ vars.GCP_PROJECT_ID }} --non-interactive
       # Smoke test: the live API must answer through Hosting with this commit id.
       - run: curl -fsS https://${{ vars.GCP_PROJECT_ID }}.web.app/api/health | tee /dev/stderr | grep -q "${{ github.sha }}"
@@ -45,3 +46,11 @@ jobs:
       - run: test "$(curl -sS -o /dev/null -w '%{http_code}' https://${{ vars.GCP_PROJECT_ID }}.web.app/api/me)" = 401
       # Smoke test: accepting an invite link needs a signed-in Google account (M10, AUTH-06).
       - run: test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST https://${{ vars.GCP_PROJECT_ID }}.web.app/api/invites/accept)" = 401
+      # Smoke test: the Claude connector's sign-in is found through Hosting (MCP-02, MCP-06).
+      - run: |
+          curl -fsS https://${{ vars.GCP_PROJECT_ID }}.web.app/.well-known/oauth-authorization-server | tee /dev/stderr | grep -q '"issuer":"https://${{ vars.GCP_PROJECT_ID }}.web.app"'
+      - run: |
+          curl -fsS https://${{ vars.GCP_PROJECT_ID }}.web.app/.well-known/oauth-protected-resource/api/mcp | tee /dev/stderr | grep -q '"resource":"https://${{ vars.GCP_PROJECT_ID }}.web.app/api/mcp"'
+      # Smoke test: the MCP server refuses a call without a token and says where to sign in (MCP-02, MCP-03).
+      - run: |
+          curl -sS -o /dev/null -D - -X POST https://${{ vars.GCP_PROJECT_ID }}.web.app/api/mcp | tee /dev/stderr | grep -qi '^www-authenticate: Bearer resource_metadata="https://${{ vars.GCP_PROJECT_ID }}.web.app/.well-known/oauth-protected-resource/api/mcp"'
