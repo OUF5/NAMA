@@ -46,11 +46,24 @@ jobs:
       - run: test "$(curl -sS -o /dev/null -w '%{http_code}' https://${{ vars.GCP_PROJECT_ID }}.web.app/api/me)" = 401
       # Smoke test: accepting an invite link needs a signed-in Google account (M10, AUTH-06).
       - run: test "$(curl -sS -o /dev/null -w '%{http_code}' -X POST https://${{ vars.GCP_PROJECT_ID }}.web.app/api/invites/accept)" = 401
-      # Smoke test: the Claude connector's sign-in is found through Hosting (MCP-02, MCP-06).
+      # Smoke test: the Claude connector's sign-in is found through Hosting (MCP-02, MCP-06). Tried for about a
+      # minute, because new Hosting rewrites take a moment to reach the CDN (the first run saw index.html).
       - run: |
+          for attempt in 1 2 3 4 5; do
+            curl -fsS https://${{ vars.GCP_PROJECT_ID }}.web.app/.well-known/oauth-authorization-server | grep -q '"issuer":"https://${{ vars.GCP_PROJECT_ID }}.web.app"' && exit 0
+            sleep 10
+          done
           curl -fsS https://${{ vars.GCP_PROJECT_ID }}.web.app/.well-known/oauth-authorization-server | tee /dev/stderr | grep -q '"issuer":"https://${{ vars.GCP_PROJECT_ID }}.web.app"'
       - run: |
+          for attempt in 1 2 3 4 5; do
+            curl -fsS https://${{ vars.GCP_PROJECT_ID }}.web.app/.well-known/oauth-protected-resource/api/mcp | grep -q '"resource":"https://${{ vars.GCP_PROJECT_ID }}.web.app/api/mcp"' && exit 0
+            sleep 10
+          done
           curl -fsS https://${{ vars.GCP_PROJECT_ID }}.web.app/.well-known/oauth-protected-resource/api/mcp | tee /dev/stderr | grep -q '"resource":"https://${{ vars.GCP_PROJECT_ID }}.web.app/api/mcp"'
       # Smoke test: the MCP server refuses a call without a token and says where to sign in (MCP-02, MCP-03).
       - run: |
+          for attempt in 1 2 3 4 5; do
+            curl -sS -o /dev/null -D - -X POST https://${{ vars.GCP_PROJECT_ID }}.web.app/api/mcp | grep -qi '^www-authenticate: Bearer resource_metadata="https://${{ vars.GCP_PROJECT_ID }}.web.app/.well-known/oauth-protected-resource/api/mcp"' && exit 0
+            sleep 10
+          done
           curl -sS -o /dev/null -D - -X POST https://${{ vars.GCP_PROJECT_ID }}.web.app/api/mcp | tee /dev/stderr | grep -qi '^www-authenticate: Bearer resource_metadata="https://${{ vars.GCP_PROJECT_ID }}.web.app/.well-known/oauth-protected-resource/api/mcp"'
