@@ -48,15 +48,6 @@
   cursor: default;
 }
 
-// Additional income is a side note to Income: it is already in it (owner note 23).
-.totals .secondary {
-  th,
-  td {
-    color: var(--text-muted);
-    font-size: 12px;
-  }
-}
-
 // The Balance row stands apart from the sum above it; projected or actual under each amount.
 .totals .balance {
   th,

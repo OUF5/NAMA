@@ -103,6 +103,8 @@ export class Plan {
         year: period.label.slice(4),
         planned: formatAmount(toMinor(row?.planned ?? 0)),
         income: formatAmount(toMinor(row?.income ?? 0)),
+        // Marks a month with additional income, as Tracker's Totals does; "–" without.
+        additionalIncome: this.nonZero(row?.additionalIncome ?? 0),
         thisMonth: formatAmount(toMinor(row?.thisMonth ?? 0)),
         thisMonthOver: (row?.thisMonth ?? 0) < 0,
         unassigned: formatAmount(toMinor(row?.unassigned ?? 0)),
@@ -120,6 +122,7 @@ export class Plan {
     return fy
       ? {
           income: formatAmount(toMinor(fy.income)),
+          additionalIncome: this.nonZero(fy.additionalIncome),
           planned: formatAmount(toMinor(fy.planned)),
           plannedSaved: formatAmount(toMinor(fy.plannedSaved)),
           plannedSavedMoney: formatMoney(toMinor(fy.plannedSaved), this.currency()),
@@ -189,6 +192,11 @@ export class Plan {
   // "SAR 1,240"; nothing planned shows "–".
   protected money(amount: number): string {
     return amount ? formatMoney(toMinor(amount), this.currency()) : '–';
+  }
+
+  // "2,000", or null for the template's "–".
+  private nonZero(amount: number): string | null {
+    return toMinor(amount) === 0 ? null : formatAmount(toMinor(amount));
   }
 
   // The selected FY lives in the URL, as on Months and Entries (owner's choice, M8); the tab stays.

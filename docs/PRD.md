@@ -305,7 +305,7 @@ Page **Plan** (`/plan`). It opens right after the wizard (on Planning) and is al
 
 - **PLN-01** Select a general category, add a sub-category (name), then enter the planned amount for each month of the FY. The 12 inputs are labeled with month labels and dates.
 - **PLN-02** Helpers: "Same amount for all months" and "Copy from previous month". 🆕 ADDED · Nice (benchmark: Actual Budget "copy last month's budget")
-- **PLN-03** A totals row per month: Income, Planned, Unallocated this month (Income − Planned, the month on its own) and Accumulated Planned Savings (Unallocated this month added up from the FY's first month, R-PLN-03; owner note 10 removed the From last month row, 21 Oct 2026); each computed row shows its formula under its name, and an FY total column whose last row is Planned saved (R-PLN-04), also shown in the card head. The editor's "Planned savings after" preview adds up too. 🆕 ADDED · Nice. ✅ DECIDED (20 Oct 2026)
+- **PLN-03** A totals row per month: Income, Additional income (the part of Income from Planned and Both additional items, R-INC-04, "–" in a month without; a side row that marks them, as Tracker's Totals, owner note 29, ✅ DECIDED 25 Oct 2026), Planned, Unallocated this month (Income − Planned, the month on its own) and Accumulated Planned Savings (Unallocated this month added up from the FY's first month, R-PLN-03; owner note 10 removed the From last month row, 21 Oct 2026); each computed row shows its formula under its name, and an FY total column whose last row is Planned saved (R-PLN-04), also shown in the card head. The editor's "Planned savings after" preview adds up too. 🆕 ADDED · Nice. ✅ DECIDED (20 Oct 2026)
 - **PLN-04** Planned amounts can be edited at any time, for any month, including closed months.
 - **PLN-05** Categories and sub-categories can be added after setup, on the Categories tab (your note; in Settings before owner note 9). A new sub-category opens its planned amounts right away.
 - **PLN-06** After the wizard, an empty state guides you: "Add your first sub-category". 🆕 ADDED · Nice
@@ -554,7 +554,7 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 | `GET /api/categories` | Categories with their sub-categories | Archived ones included and flagged |
 | `POST /api/categories` and `PUT /api/categories/{id}` | Add, rename, archive | No DELETE |
 | `POST /api/sub-categories` and `PUT /api/sub-categories/{id}` | Add (with `categoryId`), rename, archive | No DELETE |
-| `GET /api/fiscal-years/{fyId}/plans` | All plan amounts of an FY, the PLN-03 totals per month (carried in, income, planned, unassigned) and the FY column (income, planned, planned saved) |  |
+| `GET /api/fiscal-years/{fyId}/plans` | All plan amounts of an FY, the PLN-03 totals per month (income, its additional part, planned, this month, unassigned) and the FY column (income, its additional part, planned, planned saved) |  |
 | `PUT /api/fiscal-years/{fyId}/plans/{subCategoryId}` | Set the month amounts of one sub-category |  |
 | `GET /api/bank-accounts`, `POST /api/bank-accounts`, `PUT /api/bank-accounts/{id}` | List, add (with the opening balance), rename, set the opening balance, archive | No DELETE. POST and PUT answer like `GET /api/banks` |
 | `GET /api/income?fyId=` | Salary history, additional items, planned and actual income per month (R-INC-01) |  |

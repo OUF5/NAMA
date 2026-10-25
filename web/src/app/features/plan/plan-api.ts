@@ -39,10 +39,12 @@ export interface PlanItem {
 
 // PLN-03: one row per month, worked out in the API (R-PLN-02, R-PLN-03). thisMonth is the month on its
 // own (income - planned); unassigned ("Accumulated Planned Savings") is every thisMonth added up from
-// the FY's first month (owner note 10).
+// the FY's first month (owner note 10). additionalIncome is the part of income from additional items
+// (Planned and Both, R-INC-04).
 export interface MonthTotals {
   periodKey: string;
   income: number;
+  additionalIncome: number;
   planned: number;
   thisMonth: number;
   unassigned: number;
@@ -52,6 +54,7 @@ export interface MonthTotals {
 // Unassigned (R-PLN-04).
 export interface FiscalYearTotals {
   income: number;
+  additionalIncome: number;
   planned: number;
   plannedSaved: number;
 }

@@ -118,7 +118,7 @@ public sealed class NamaTools(IUserStore store, TimeProvider time, EmailAllowlis
     public Task<List<CategoriesEndpoint.CategoryDto>> GetCategories(ClaimsPrincipal user) => CategoriesEndpoint.LoadAsync(Uid(user), store);
 
     [McpServerTool(Name = "get_plans", Title = "Plan", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("Plan for one FY: the amount planned per sub-category per month, and per month the carried in, planned income, planned and unassigned.")]
+    [Description("Plan for one FY: the amount planned per sub-category per month, and per month the planned income (and its part from additional items), planned and unassigned.")]
     public async Task<PlansEndpoint.PlansResponse> GetPlans(
         ClaimsPrincipal user,
         [Description("The FY's id. Leave out for the current FY.")] string? fyId = null)

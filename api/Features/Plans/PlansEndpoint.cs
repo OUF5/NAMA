@@ -15,11 +15,12 @@ public static class PlansEndpoint
 
     // PLN-03, R-PLN-03: one row per month. ThisMonth is the month on its own (Income - Planned);
     // Unassigned ("Accumulated Planned Savings") is every ThisMonth added up from the FY's first month.
-    public record MonthTotalsDto(string PeriodKey, decimal Income, decimal Planned, decimal ThisMonth, decimal Unassigned);
+    // AdditionalIncome is the part of Income from additional items (Planned and Both, R-INC-04).
+    public record MonthTotalsDto(string PeriodKey, decimal Income, decimal AdditionalIncome, decimal Planned, decimal ThisMonth, decimal Unassigned);
 
     // The FY column of PLN-03, the whole FY, so it adds up: Income - Planned = PlannedSaved, the last
     // month's Unassigned (R-PLN-04).
-    public record FiscalYearTotalsDto(decimal Income, decimal Planned, decimal PlannedSaved);
+    public record FiscalYearTotalsDto(decimal Income, decimal AdditionalIncome, decimal Planned, decimal PlannedSaved);
 
     // CategoryMonthTotals: category id → month key → planned (R-PLN-02), for Plan's month
     // column (owner's choice, M8), so the browser does no sums.
@@ -85,7 +86,10 @@ public static class PlansEndpoint
     {
         var plans = await store.GetPlansAsync(uid, fiscalYear.Id);
         // R-INC-01: Plan uses the planned income (owner note 17).
-        var income = IncomeCalculator.PlannedTotals(await store.GetIncomesAsync(uid), fiscalYear.Periods);
+        var incomes = await store.GetIncomesAsync(uid);
+        var income = IncomeCalculator.PlannedTotals(incomes, fiscalYear.Periods);
+        // The part of it from additional items, as Tracker's Totals shows its actual part (owner note 23).
+        var additionalIncome = IncomeCalculator.PlannedTotals(incomes.Where(item => item.Kind == IncomeKind.Additional).ToList(), fiscalYear.Periods);
 
         var categoryIds = plans.Select(plan => plan.CategoryId).Distinct().ToList();
         var categoryTotals = categoryIds.ToDictionary(
@@ -103,6 +107,7 @@ public static class PlansEndpoint
         var totals = months.Select(month => new MonthTotalsDto(
             month.PeriodKey,
             Money.FromMinor(month.Income),
+            Money.FromMinor(additionalIncome[month.PeriodKey]),
             Money.FromMinor(month.Planned),
             Money.FromMinor(month.ThisMonth),
             Money.FromMinor(month.Unassigned))).ToList();
@@ -120,6 +125,7 @@ public static class PlansEndpoint
             totals,
             new FiscalYearTotalsDto(
                 Money.FromMinor(months.Sum(month => month.Income)),
+                Money.FromMinor(additionalIncome.Values.Sum()),
                 Money.FromMinor(months.Sum(month => month.Planned)),
                 Money.FromMinor(PlanCalculator.PlannedSaved(months))));
     }

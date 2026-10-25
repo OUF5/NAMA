@@ -34,7 +34,7 @@ function plansResponse(amounts: Record<string, number> = {}, fiscalYear = fy2026
   let added = 0;
   const totals = fiscalYear.periods.map((p) => {
     added += 17000 - planned(p.key);
-    return { periodKey: p.key, income: 17000, planned: planned(p.key), thisMonth: 17000 - planned(p.key), unassigned: added };
+    return { periodKey: p.key, income: 17000, additionalIncome: 0, planned: planned(p.key), thisMonth: 17000 - planned(p.key), unassigned: added };
   });
   return {
     fiscalYears,
@@ -45,7 +45,7 @@ function plansResponse(amounts: Record<string, number> = {}, fiscalYear = fy2026
       ? { food: Object.fromEntries(fiscalYear.periods.map((p) => [p.key, planned(p.key)])) }
       : {},
     totals,
-    fiscalYearTotals: { income: 17000 * fiscalYear.periods.length, planned: total, plannedSaved: added },
+    fiscalYearTotals: { income: 17000 * fiscalYear.periods.length, additionalIncome: 0, planned: total, plannedSaved: added },
   };
 }
 
@@ -178,6 +178,7 @@ describe('Plan (PRD 5.3)', () => {
     // R-PLN-03: each computed row has its formula under its name; no From last month (owner note 10).
     expect(Array.from(table.querySelectorAll('tbody th')).map((th) => text(th))).toEqual([
       'Income',
+      'Additional income Planned and Both, in Income',
       'Planned',
       'Unallocated this month Income − Planned',
       'Accumulated Planned Savings Unallocated this month, added up from Jan 2026',
@@ -185,13 +186,14 @@ describe('Plan (PRD 5.3)', () => {
     const rows = Array.from(table.querySelectorAll('tbody tr')).map((tr) => Array.from(tr.querySelectorAll('td')).map((td) => text(td)));
     expect(rows.map((row) => row.slice(0, 2))).toEqual([
       ['17,000', '17,000'],
+      ['–', '–'],
       ['0', '0'],
       ['17,000', '17,000'],
       ['17,000', '34,000'],
     ]);
     // R-PLN-04: the FY column, whose last row is Planned saved, also shown in the card head.
     expect(text(table.querySelector('thead .fy-col'))).toBe('FY total');
-    expect(rows.map((row) => row.at(-1))).toEqual(['204,000', '0', '204,000', '204,000']);
+    expect(rows.map((row) => row.at(-1))).toEqual(['204,000', '–', '0', '204,000', '204,000']);
     expect(text(root.querySelector('.saved-kpi'))).toBe('Accumulated Planned Savings in FY 2026 SAR 204,000');
     const months = Array.from(table.querySelectorAll<HTMLButtonElement>('thead button.month'));
     expect(months.length).toBe(12);
@@ -200,6 +202,20 @@ describe('Plan (PRD 5.3)', () => {
     expect(text(table.querySelectorAll('tbody tr')[0].querySelectorAll('td')[0])).toBe('17,000');
     // The current month (Sep 2026) is selected.
     expect(months[8].getAttribute('aria-pressed')).toBe('true');
+  });
+
+  // R-INC-04: the Planned and Both additional items, a side row under Income, as Tracker's Totals.
+  it('shows the additional part of income under Income on Allocating', async () => {
+    const response = plansResponse();
+    response.totals[1] = { ...response.totals[1], income: 19500.5, additionalIncome: 2500.5 };
+    response.fiscalYearTotals = { ...response.fiscalYearTotals, income: 206500.5, additionalIncome: 2500.5 };
+    const root = await open([food], response, '/plan?tab=allocating');
+
+    const row = root.querySelector('table.totals tr.secondary')!;
+    expect(text(row.querySelector('th'))).toBe('Additional income Planned and Both, in Income');
+    const cells = Array.from(row.querySelectorAll('td')).map((td) => text(td));
+    expect(cells.slice(0, 3)).toEqual(['–', '2,500.50', '–']);
+    expect(cells.at(-1)).toBe('2,500.50');
   });
 
   // Owner note 10: the note says the running total starts in the FY's first month.

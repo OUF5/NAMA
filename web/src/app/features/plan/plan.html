@@ -165,6 +165,17 @@
                 }
                 <td class="money fy-col">{{ fy?.income }}</td>
               </tr>
+              <!-- The Planned and Both additional income items, already in Income. -->
+              <tr class="secondary">
+                <th scope="row">
+                  Additional income
+                  <span class="formula">Planned and Both, in Income</span>
+                </th>
+                @for (column of columns(); track column.period.key) {
+                  <td class="money" [class.selected]="column.period.key === selected()?.key">{{ column.additionalIncome ?? '–' }}</td>
+                }
+                <td class="money fy-col">{{ fy?.additionalIncome ?? '–' }}</td>
+              </tr>
               <tr>
                 <th scope="row">Planned</th>
                 @for (column of columns(); track column.period.key) {

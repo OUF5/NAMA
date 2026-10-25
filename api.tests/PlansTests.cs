@@ -165,6 +165,42 @@ public class PlansTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((0m, 400m), (transport["2026-08"]!.GetValue<decimal>(), transport["2026-09"]!.GetValue<decimal>()));
     }
 
+    // R-INC-01, R-INC-04: Plan's Income has its additional part beside it, from the items that count
+    // in the plan (Planned and Both), as Tracker's Totals shows the actual part. Rent 2,000 (Both) every
+    // month, the bonus 500.25 (Both) in Sep, an expected 3,000 (Planned) in Nov; a gift 1,000 (Actual)
+    // in Nov is not in the plan.
+    [Fact]
+    public async Task Additional_income_is_the_planned_part_of_income()
+    {
+        var sub = await SetUp([
+            .. Incomes,
+            new("g", IncomeKind.Additional, "Gift", 100_000, "2026-11", "2026-11", IncomeCounts.Actual),
+            new("p", IncomeKind.Additional, "Expected", 300_000, "2026-11", "2026-11", IncomeCounts.Planned),
+        ]);
+
+        var body = await Get(sub);
+
+        var months = body["totals"]!.AsArray();
+        Assert.Equal([2000m, 2500.25m, 2000m, 5000m, 2000m],
+            new[] { 0, 8, 9, 10, 11 }.Select(index => months[index]!["additionalIncome"]!.GetValue<decimal>()));
+        Assert.Equal(20000m, months[10]!["income"]!.GetValue<decimal>());
+        // 12 × 2,000 + 500.25 + 3,000.
+        var fy = body["fiscalYearTotals"]!;
+        Assert.Equal((207500.25m, 27500.25m), (fy["income"]!.GetValue<decimal>(), fy["additionalIncome"]!.GetValue<decimal>()));
+    }
+
+    // Without additional items the part is 0, for the web app's "–".
+    [Fact]
+    public async Task Additional_income_is_zero_with_only_a_salary()
+    {
+        var sub = await SetUp([Incomes[0]]);
+
+        var body = await Get(sub);
+
+        Assert.All(body["totals"]!.AsArray(), month => Assert.Equal(0m, month!["additionalIncome"]!.GetValue<decimal>()));
+        Assert.Equal(0m, body["fiscalYearTotals"]!["additionalIncome"]!.GetValue<decimal>());
+    }
+
     // R-PLN-03: Unassigned is negative when more is planned than received so far, and it carries.
     [Fact]
     public async Task Unassigned_is_negative_when_planned_exceeds_income_and_carries()
