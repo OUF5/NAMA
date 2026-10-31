@@ -9,6 +9,7 @@ import { Router, provideRouter } from '@angular/router';
 import { Me, MeService } from '../../core/me';
 import { Summary, SummaryService } from '../../core/summary';
 import { Category } from '../plan/plan-api';
+import { Project } from '../projects/projects-api';
 import { AddEntry } from './add-entry';
 import { BankAccount, Indicator } from './entry-api';
 
@@ -327,7 +328,17 @@ describe('Add transfer and income (PRD 5.4, TRF-01, INC-01)', () => {
     projection: null,
   };
 
-  async function open(url = '/?type=transfer', bankAccounts = accounts): Promise<ComponentFixture<AddEntry>> {
+  // PRJ-06: Car saves in SNB; 500 of this month's 2,000 is in.
+  const car = {
+    id: 'car',
+    name: 'Car',
+    status: 'active',
+    bankAccountId: 'snb',
+    plan: [{ period: sep, amount: 2000 }],
+    months: [{ period: sep, planned: 2000, actual: 500, behind: 1500 }],
+  } as Project;
+
+  async function open(url = '/?type=transfer', bankAccounts = accounts, projects: Project[] = []): Promise<ComponentFixture<AddEntry>> {
     const me = meWith(null);
     TestBed.configureTestingModule({
       imports: [AddEntry],
@@ -344,6 +355,9 @@ describe('Add transfer and income (PRD 5.4, TRF-01, INC-01)', () => {
     const fixture = TestBed.createComponent(AddEntry);
     (await vi.waitFor(() => http.expectOne('/api/categories'))).flush(categories);
     (await vi.waitFor(() => http.expectOne('/api/bank-accounts'))).flush(bankAccounts);
+    if (url.includes('type=transfer')) {
+      (await vi.waitFor(() => http.expectOne('/api/projects'))).flush({ today: '2026-10-17', currentMonth: sep, projects, accounts: [] });
+    }
     await settle(fixture);
     return fixture;
   }
@@ -468,6 +482,50 @@ describe('Add transfer and income (PRD 5.4, TRF-01, INC-01)', () => {
     // Amount and note clear; the accounts and the date stay (as ENT-02).
     expect(await (await select(fixture, 'From account')).getValueText()).toBe('Al Rajhi');
     http.verify();
+  });
+
+  // PRJ-06: a To account with a project names it, and the amount is what is still to put in that month.
+  it('names the project of the To account and fills what is still to put in', async () => {
+    const fixture = await open('/?type=transfer', accounts, [car]);
+    const root = fixture.nativeElement as HTMLElement;
+
+    expect(await (await select(fixture, 'Project')).getValueText()).toBe('Car');
+    const amount = () =>
+      Array.from(root.querySelectorAll('input')).find((el) => el.closest('mat-form-field')?.querySelector('mat-label')?.textContent?.trim() === 'Amount (SAR)')!;
+    expect(amount().value).toBe('1500');
+    await settle(fixture);
+    expect(words(root.querySelector('.project-month'))).toBe(
+      'Car · Sep 2026 Planned SAR 2,000 Put in SAR 500 arrow_forward SAR 2,000 The month is covered.',
+    );
+
+    type(fixture, 'Amount (SAR)', '1000');
+    await settle(fixture);
+    expect(words(root.querySelector('.project-month p:last-child'))).toBe('Still to put in: SAR 500');
+
+    (root.querySelector('button[type="submit"]') as HTMLButtonElement).click();
+    const post = await vi.waitFor(() => http.expectOne('/api/transfers'));
+    expect(post.request.body).toEqual({ fromBankAccountId: 'rajhi', toBankAccountId: 'snb', date: '2026-10-17', amount: 1000, note: '' });
+    post.flush({ ...post.request.body, id: 't1', periodKey: '2026-09', fyId: '2026-01' });
+    // The project's month is read again.
+    (await vi.waitFor(() => http.expectOne('/api/projects'))).flush({ today: '2026-10-17', currentMonth: sep, projects: [car], accounts: [] });
+    await settle(fixture);
+    http.verify();
+
+    // A month whose start is not known says so, never "covered".
+    (fixture.componentInstance as unknown as { projects: { set(value: Project[]): void } }).projects.set([
+      { ...car, months: [{ period: sep, planned: 2000, actual: null, behind: 0 }] },
+    ]);
+    await settle(fixture);
+    expect(words(root.querySelector('.project-month'))).toBe(
+      "Car · Sep 2026 Planned SAR 2,000 Put in Unknown Its account's balance at the start of the month is not known, so what is in so far is not either.",
+    );
+
+    // Without a project on the To account, it is a plain transfer.
+    (root.querySelector('button.swap') as HTMLButtonElement).click();
+    await settle(fixture);
+    expect(Array.from(root.querySelectorAll('mat-label')).map(words)).not.toContain('Project');
+    expect(root.querySelector('div.project-month')).toBeNull();
+    expect(words(root.querySelector('p.project-month'))).toBe('This takes money out of Car: it counts against its month.');
   });
 
   it('swaps the accounts and refuses the same account twice', async () => {

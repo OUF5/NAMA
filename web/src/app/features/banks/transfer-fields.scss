@@ -23,6 +23,22 @@
   }
 }
 
+// PRJ-06: the To account's project, below the balances.
+.project-month {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.ok {
+  color: var(--ok);
+}
+
 .balance-line {
   display: flex;
   align-items: center;

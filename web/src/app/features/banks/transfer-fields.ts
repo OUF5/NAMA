@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, OnInit, computed, inject, input, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, effect, inject, input, signal, untracked } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { ErrorStateMatcher, provideNativeDateAdapter } from '@angular/material/core';
@@ -10,10 +10,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
-import { amountValidator, formatMoney, parseAmount } from '../../shared/money';
-import { formatDate, fromDateString } from '../../shared/month-label';
+import { amountValidator, formatMoney, minorToInput, parseAmount, toMinor } from '../../shared/money';
+import { formatDate, fromDateString, toDateString } from '../../shared/month-label';
 import { BankAccount } from '../add-entry/entry-api';
 import { NOTE_MAX_LENGTH, TouchedErrorStateMatcher } from '../add-entry/entry-fields';
+import { Project } from '../projects/projects-api';
 
 // R-TRF-01: the two accounts must differ. Set on To, so its field shows the message.
 function differentFrom(control: AbstractControl): ValidationErrors | null {
@@ -101,6 +102,8 @@ export class TransferFields implements OnInit {
   // Add: the balances panel beside the fields. The edit dialog has no panel: the balances already
   // include the saved transfer.
   readonly split = input(false);
+  // PRJ-06 (Add only): GET /api/projects, or null while not loaded (then no project shows).
+  readonly projects = input<Project[] | null>(null);
 
   protected readonly noteMax = NOTE_MAX_LENGTH;
 
@@ -115,6 +118,7 @@ export class TransferFields implements OnInit {
 
   private readonly from = signal('');
   private readonly to = signal('');
+  private readonly dateText = signal<string | null>(null);
   private readonly amountText = signal('');
   private readonly noteText = signal('');
   protected readonly noteLength = computed(() => this.noteText().length);
@@ -140,10 +144,67 @@ export class TransferFields implements OnInit {
     return { from: line(from, -amount), to: line(to, amount), amount: amount > 0 ? this.money(amount) : null };
   });
 
+  // PRJ-06: the project that counts the To account (R-PRJ-03: one at most that is not Done). Shown
+  // only, never saved: what reaches the account counts for the project anyway (R-PRJ-06).
+  protected readonly project = new FormControl('', { nonNullable: true });
+  protected readonly toProjects = computed(() =>
+    (this.projects() ?? []).filter((project) => project.status !== 'done' && project.bankAccountId === this.to()),
+  );
+  protected readonly fromProject = computed(
+    () => (this.projects() ?? []).find((project) => project.status !== 'done' && project.bankAccountId === this.from()) ?? null,
+  );
+  private readonly projectId = signal('');
+
+  // PRJ-06: the project's month of the transfer's date: what is planned, what is in so far, and after
+  // this transfer (R-PRJ-05, R-PRJ-06). A month to come has nothing in yet.
+  protected readonly projectMonth = computed(() => {
+    const project = this.toProjects().find((item) => item.id === this.projectId());
+    const date = this.dateText();
+    if (!project || !date) {
+      return null;
+    }
+    const month = project.plan.find((item) => item.period.startDate <= date && date <= item.period.endDate);
+    if (!month) {
+      const first = project.plan[0]?.period.label;
+      const last = project.plan.at(-1)?.period.label;
+      return { name: project.name, label: null, outside: first ? `The date is outside its months (${first} to ${last}).` : 'It has no months.' };
+    }
+    const row = project.months.find((item) => item.period.key === month.period.key);
+    const planned = toMinor(month.amount);
+    const putIn = row ? (row.actual === null ? null : toMinor(row.actual)) : 0;
+    const amount = parseAmount(this.amountText()) ?? 0;
+    const after = putIn === null ? null : putIn + amount;
+    return {
+      name: project.name,
+      label: month.period.label,
+      outside: null,
+      planned: this.money(planned),
+      putIn: putIn === null ? 'Unknown' : this.money(putIn),
+      known: putIn !== null,
+      after: after !== null && amount > 0 ? this.money(after) : null,
+      still: after === null ? null : after < planned ? this.money(planned - after) : null,
+      over: after !== null && after > planned ? this.money(after - planned) : null,
+    };
+  });
+
+  constructor() {
+    // PRJ-06: a To account with a project picks it, and an empty amount becomes what is still to put
+    // in that month: the transfer is the month's saving.
+    effect(() => {
+      const options = this.toProjects();
+      untracked(() => this.pickProject(options));
+    });
+  }
+
   ngOnInit(): void {
     const controls = this.form().controls;
     this.from.set(controls.fromBankAccountId.value);
     this.to.set(controls.toBankAccountId.value);
+    this.dateText.set(this.dateString(controls.date.value));
+    controls.date.valueChanges
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((date) => this.dateText.set(this.dateString(date)));
+    this.project.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((id) => this.projectId.set(id));
     this.amountText.set(controls.amount.value);
     this.noteText.set(controls.note.value);
     controls.fromBankAccountId.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((id) => {
@@ -161,6 +222,27 @@ export class TransferFields implements OnInit {
     const from = controls.fromBankAccountId.value;
     controls.fromBankAccountId.setValue(controls.toBankAccountId.value);
     controls.toBankAccountId.setValue(from);
+  }
+
+  private pickProject(options: Project[]): void {
+    const project = options[0];
+    this.project.setValue(project?.id ?? '');
+    this.projectId.set(project?.id ?? '');
+    const amount = this.form().controls.amount;
+    const date = this.dateText();
+    const month = date ? project?.plan.find((item) => item.period.startDate <= date && date <= item.period.endDate) : undefined;
+    if (!month || amount.value.trim()) {
+      return;
+    }
+    const actual = project.months.find((item) => item.period.key === month.period.key)?.actual ?? 0;
+    const still = toMinor(month.amount) - toMinor(actual);
+    if (still > 0) {
+      amount.setValue(minorToInput(still));
+    }
+  }
+
+  private dateString(date: Date | null): string | null {
+    return date instanceof Date && !isNaN(date.getTime()) ? toDateString(date) : null;
   }
 
   private money(minor: number): string {

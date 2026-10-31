@@ -20,6 +20,7 @@ import {
   showAllTransferErrors,
 } from '../banks/transfer-fields';
 import { Category, PlanApi } from '../plan/plan-api';
+import { Project, ProjectsApi } from '../projects/projects-api';
 import { IncomeItemFields, createIncomeItemForm, incomeItemChange, incomeItemContext } from '../settings/income-item-fields';
 import { Income, SettingsApi } from '../settings/settings-api';
 import { BankAccount, EntryApi } from './entry-api';
@@ -37,7 +38,8 @@ type Mode = 'expense' | 'transfer' | 'income';
 // PRD 5.4 Add (ENT-01 to ENT-03, TRF-01, INC-01): an expense, a transfer between two of your accounts
 // (?type=transfer) or additional income (?type=income, owner note 17). Expense is the default, so
 // logging a spend stays one tap away. Page load is 2 calls (NFR-01): categories and bank accounts;
-// Income loads its month pickers (GET /api/income) the first time it is shown. /api/me is already loaded by setupGuard and brings the
+// Income loads its month pickers (GET /api/income) and Transfer the projects (GET /api/projects,
+// PRJ-06) the first time each is shown. /api/me is already loaded by setupGuard and brings the
 // last used account, today and the FY range; the transfer's balance preview uses the top bar's
 // summary (no extra call). The API assigns the month and FY from the date (R-CAL-09). The expense
 // fields are shared with the Entries edit dialog (TBL-02), the transfer fields with the Banks one, and
@@ -62,6 +64,7 @@ export class AddEntry {
   private readonly entryApi = inject(EntryApi);
   private readonly banksApi = inject(BanksApi);
   private readonly settingsApi = inject(SettingsApi);
+  private readonly projectsApi = inject(ProjectsApi);
   private readonly meService = inject(MeService);
   private readonly summaryService = inject(SummaryService);
   private readonly route = inject(ActivatedRoute);
@@ -94,6 +97,8 @@ export class AddEntry {
     return income ? incomeItemContext(income, this.summaryService.summary(), this.me(), null) : null;
   });
   protected readonly incomeLoadError = signal('');
+  // PRJ-06: the projects, for the To account's project; null until loaded (or when they cannot be).
+  protected readonly projects = signal<Project[] | null>(null);
 
   protected readonly me = this.meService.me;
   protected readonly currency = computed(() => this.me()?.profile?.currency ?? 'SAR');
@@ -149,6 +154,9 @@ export class AddEntry {
       this.mode.set(mode);
       if (mode === 'income') {
         void this.loadIncomeMonths();
+      }
+      if (mode === 'transfer' && !this.projects()) {
+        void this.loadProjects();
       }
     });
     void this.load();
@@ -219,6 +227,15 @@ export class AddEntry {
     }
   }
 
+  // PRJ-06: without the projects the transfer form still works, only without the project.
+  private async loadProjects(): Promise<void> {
+    try {
+      this.projects.set((await this.projectsApi.projects()).projects);
+    } catch {
+      this.projects.set(null);
+    }
+  }
+
   // TRF-01: amount and note clear; the accounts and the date stay, as for an expense (ENT-02).
   protected async saveTransfer(): Promise<void> {
     if (this.transferForm.invalid) {
@@ -243,6 +260,10 @@ export class AddEntry {
       this.saved.set(
         `Moved ${formatMoney(toMinor(transfer.amount), this.currency())} from ${name(transfer.fromBankAccountId)} to ${name(transfer.toBankAccountId)}`,
       );
+      // PRJ-06: a project's month now holds this transfer.
+      if (this.projects()?.some((project) => [transfer.fromBankAccountId, transfer.toBankAccountId].includes(project.bankAccountId))) {
+        void this.loadProjects();
+      }
     } catch (error: unknown) {
       if (!applyTransferServerErrors(this.transferForm, error)) {
         this.saveError.set('The transfer could not be saved. Please try again.');

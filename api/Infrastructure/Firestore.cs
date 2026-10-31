@@ -425,6 +425,58 @@ public sealed class FirestoreUserStore(FirestoreDb db) : IUserStore
 
     public Task<bool> DeleteLoanAsync(string uid, string id) => DeleteAsync(User(uid).Collection("loans").Document(id));
 
+    // Projects are few, so all of them are read at once, as loans.
+    public async Task<IReadOnlyList<Project>> GetProjectsAsync(string uid)
+    {
+        var snapshot = await User(uid).Collection("projects").GetSnapshotAsync();
+        return snapshot.Documents
+            .Select(document => (document.Id, Document: document.ConvertTo<ProjectDocument>()))
+            .OrderBy(item => item.Document.CreatedAt)
+            .Select(item => FirestoreDocuments.ToProject(item.Id, item.Document))
+            .ToList();
+    }
+
+    public async Task<Project?> GetProjectAsync(string uid, string id)
+    {
+        var snapshot = await User(uid).Collection("projects").Document(id).GetSnapshotAsync();
+        return snapshot.Exists ? FirestoreDocuments.ToProject(snapshot.Id, snapshot.ConvertTo<ProjectDocument>()) : null;
+    }
+
+    public Task AddProjectAsync(string uid, Project project) =>
+        User(uid).Collection("projects").Document(project.Id).CreateAsync(FirestoreDocuments.ToDocument(project));
+
+    // The lists are written as maps, so the update needs no custom converter.
+    public Task<bool> UpdateProjectAsync(string uid, Project project)
+    {
+        var document = FirestoreDocuments.ToDocument(project);
+        return UpdateAsync(User(uid).Collection("projects").Document(project.Id), new Dictionary<string, object>
+        {
+            ["name"] = document.Name,
+            ["nameLower"] = document.NameLower,
+            ["deadline"] = document.Deadline,
+            ["status"] = document.Status,
+            ["doneOn"] = document.DoneOn!,
+            ["targets"] = document.Targets,
+            ["activeTarget"] = document.ActiveTarget,
+            ["bankAccountId"] = document.BankAccountId,
+            ["monthly"] = document.Monthly
+                .Select(amount => new Dictionary<string, object> { ["periodKey"] = amount.PeriodKey, ["amountMinor"] = amount.AmountMinor })
+                .ToList(),
+            ["milestones"] = document.Milestones
+                .Select(milestone => new Dictionary<string, object>
+                {
+                    ["id"] = milestone.Id,
+                    ["label"] = milestone.Label,
+                    ["date"] = milestone.Date,
+                    ["amountMinor"] = milestone.AmountMinor,
+                })
+                .ToList(),
+            ["startPeriodKey"] = document.StartPeriodKey,
+        });
+    }
+
+    public Task<bool> DeleteProjectAsync(string uid, string id) => DeleteAsync(User(uid).Collection("projects").Document(id));
+
     public Task<bool> UpdateCategoryAsync(string uid, Category category) =>
         UpdateAsync(User(uid).Collection("categories").Document(category.Id), NameFields(category.Name, category.Archived));
 
@@ -628,6 +680,45 @@ public sealed class LoanDocument
     [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
 }
 
+// PRD 7.4 users/{uid}/projects/{id} (R-PRJ-01 to R-PRJ-12, owner note 30). Targets maps best, likely
+// and worst to amounts (only the set ones). DoneOn is null unless done. Monthly lists the months with
+// an amount.
+[FirestoreData]
+public sealed class ProjectDocument
+{
+    [FirestoreProperty("name")] public string Name { get; set; } = "";
+    [FirestoreProperty("nameLower")] public string NameLower { get; set; } = "";
+    [FirestoreProperty("deadline")] public string Deadline { get; set; } = "";
+    [FirestoreProperty("status")] public string Status { get; set; } = "";
+    [FirestoreProperty("doneOn")] public string? DoneOn { get; set; }
+    [FirestoreProperty("targets")] public Dictionary<string, long> Targets { get; set; } = [];
+    [FirestoreProperty("activeTarget")] public string ActiveTarget { get; set; } = "";
+    [FirestoreProperty("bankAccountId")] public string BankAccountId { get; set; } = "";
+    [FirestoreProperty("monthly")] public List<MonthlyAmountDocument> Monthly { get; set; } = [];
+    [FirestoreProperty("milestones")] public List<MilestoneDocument> Milestones { get; set; } = [];
+    [FirestoreProperty("startPeriodKey")] public string StartPeriodKey { get; set; } = "";
+    [FirestoreProperty("createdAt"), ServerTimestamp] public Timestamp CreatedAt { get; set; }
+    [FirestoreProperty("updatedAt"), ServerTimestamp] public Timestamp UpdatedAt { get; set; }
+}
+
+// R-PRJ-05
+[FirestoreData]
+public sealed class MonthlyAmountDocument
+{
+    [FirestoreProperty("periodKey")] public string PeriodKey { get; set; } = "";
+    [FirestoreProperty("amountMinor")] public long AmountMinor { get; set; }
+}
+
+// R-PRJ-08
+[FirestoreData]
+public sealed class MilestoneDocument
+{
+    [FirestoreProperty("id")] public string Id { get; set; } = "";
+    [FirestoreProperty("label")] public string Label { get; set; } = "";
+    [FirestoreProperty("date")] public string Date { get; set; } = "";
+    [FirestoreProperty("amountMinor")] public long AmountMinor { get; set; }
+}
+
 // Domain ↔ document. Dates become YYYY-MM-DD strings only here (PRD 7.4).
 public static class FirestoreDocuments
 {
@@ -790,6 +881,70 @@ public static class FirestoreDocuments
     public static Entry ToEntry(string id, EntryDocument document) => new(
         id, ToDate(document.Date), document.PeriodKey, document.FyId, document.CategoryId,
         document.SubCategoryId, document.BankAccountId, document.AmountMinor, document.Note);
+
+    public static ProjectDocument ToDocument(Project project) => new()
+    {
+        Name = project.Name,
+        NameLower = Names.Lower(project.Name),
+        Deadline = ToDateString(project.Deadline),
+        Status = ToProjectStatusName(project.Status),
+        DoneOn = project.DoneOn is { } done ? ToDateString(done) : null,
+        Targets = project.Targets.ToDictionary(target => ToTargetName(target.Key), target => target.Value),
+        ActiveTarget = ToTargetName(project.ActiveTarget),
+        BankAccountId = project.BankAccountId,
+        Monthly = project.Monthly.Select(amount => new MonthlyAmountDocument { PeriodKey = amount.PeriodKey, AmountMinor = amount.AmountMinor }).ToList(),
+        Milestones = project.Milestones
+            .Select(milestone => new MilestoneDocument
+            {
+                Id = milestone.Id,
+                Label = milestone.Label,
+                Date = ToDateString(milestone.Date),
+                AmountMinor = milestone.AmountMinor,
+            })
+            .ToList(),
+        StartPeriodKey = project.StartPeriodKey,
+    };
+
+    public static Project ToProject(string id, ProjectDocument document) => new(
+        id,
+        document.Name,
+        ToDate(document.Deadline),
+        ToProjectStatus(document.Status),
+        string.IsNullOrEmpty(document.DoneOn) ? null : ToDate(document.DoneOn),
+        document.Targets.ToDictionary(target => ToTargetLevel(target.Key), target => target.Value),
+        ToTargetLevel(document.ActiveTarget),
+        document.BankAccountId,
+        document.Monthly.Select(amount => new MonthlyAmount(amount.PeriodKey, amount.AmountMinor)).ToList(),
+        document.Milestones.Select(milestone => new Milestone(milestone.Id, milestone.Label, ToDate(milestone.Date), milestone.AmountMinor)).ToList(),
+        document.StartPeriodKey);
+
+    public static string ToProjectStatusName(ProjectStatus status) => status switch
+    {
+        ProjectStatus.Paused => "paused",
+        ProjectStatus.Done => "done",
+        _ => "active",
+    };
+
+    public static ProjectStatus ToProjectStatus(string? name) => name switch
+    {
+        "paused" => ProjectStatus.Paused,
+        "done" => ProjectStatus.Done,
+        _ => ProjectStatus.Active,
+    };
+
+    public static string ToTargetName(TargetLevel level) => level switch
+    {
+        TargetLevel.Best => "best",
+        TargetLevel.Worst => "worst",
+        _ => "likely",
+    };
+
+    public static TargetLevel ToTargetLevel(string? name) => name switch
+    {
+        "best" => TargetLevel.Best,
+        "worst" => TargetLevel.Worst,
+        _ => TargetLevel.Likely,
+    };
 
     public static IncomeItem ToIncome(string id, IncomeDocument document) => new(
         id, document.Kind == "salary" ? IncomeKind.Salary : IncomeKind.Additional, document.Label,

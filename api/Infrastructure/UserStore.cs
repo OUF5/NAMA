@@ -175,6 +175,19 @@ public interface IUserStore
 
     Task<bool> DeleteLoanAsync(string uid, string id);
 
+    // R-PRJ-01 to R-PRJ-12 (owner note 30). Projects are few, so all of them are read at once, as
+    // loans, in the order they were made. Update replaces every field but createdAt; update and
+    // delete return false when the project no longer exists.
+    Task<IReadOnlyList<Project>> GetProjectsAsync(string uid);
+
+    Task<Project?> GetProjectAsync(string uid, string id);
+
+    Task AddProjectAsync(string uid, Project project);
+
+    Task<bool> UpdateProjectAsync(string uid, Project project);
+
+    Task<bool> DeleteProjectAsync(string uid, string id);
+
     Task<bool> UpdateCategoryAsync(string uid, Category category);
 
     Task<bool> UpdateSubCategoryAsync(string uid, SubCategory subCategory);

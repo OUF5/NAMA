@@ -1,0 +1,166 @@
+// PRJ-04, docs/DESIGN.md "Dialogs" and "Projects": outline inputs, Save as the one filled button,
+// full screen on phones (set when the dialog opens). Tokens only.
+@use '../settings/dialog';
+
+fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 12px;
+  padding: 0;
+  border: 0;
+}
+
+legend {
+  margin-bottom: 8px;
+  padding: 0;
+  font-weight: 600;
+}
+
+.row.three mat-form-field {
+  min-width: 0;
+}
+
+.active-target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.caption {
+  margin: 0;
+}
+
+mat-option .caption {
+  margin-left: 4px;
+}
+
+.milestone {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.5fr) minmax(0, 1fr) 44px;
+  gap: 8px;
+  align-items: start;
+
+  button {
+    margin-top: 6px;
+  }
+}
+
+.status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+fieldset > button {
+  align-self: flex-start;
+}
+
+@media (max-width: 767.98px) {
+  .milestone {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 44px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--divider);
+
+    mat-form-field:first-child {
+      grid-column: 1 / -1;
+    }
+  }
+}
+
+// R-PRJ-12: the recommendation, a caption with an icon and its "Use" button.
+.recommend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0 0 8px;
+  color: var(--text-2);
+
+  mat-icon {
+    flex: none;
+    color: var(--text-muted);
+  }
+
+  span {
+    flex: 1;
+    min-width: 200px;
+  }
+}
+
+.monthly {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 12px;
+
+  mat-form-field {
+    flex: 1;
+    min-width: 200px;
+  }
+
+  button {
+    margin-top: 4px;
+  }
+}
+
+// Plan by month: as Plan's sub-category dialog (plan-dialog.scss).
+h2 .caption {
+  display: block;
+  font-weight: 400;
+}
+
+.same {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+
+  mat-form-field {
+    flex: 1;
+    min-width: 0;
+    max-width: 320px;
+  }
+
+  button {
+    margin-top: 4px;
+  }
+}
+
+.months {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+// Month and dates, amount, copy button, then "In all by then". Rows are split by a divider.
+.month {
+  display: grid;
+  grid-template-columns: 140px 160px 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 0 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--divider);
+
+  .when {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .after {
+    text-align: right;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .month {
+    grid-template-columns: minmax(0, 1fr) 120px 44px;
+    gap: 4px 8px;
+
+    .after {
+      grid-column: 1 / -1;
+      text-align: left;
+    }
+  }
+}

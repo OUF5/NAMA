@@ -85,6 +85,27 @@ public static class FiscalCalendar
         return NewFiscalYear(periods, fiscalStartMonth, payday, isTransition);
     }
 
+    // R-PRJ-05 (owner note 30): the stored months, oldest first, then the months the next FYs would
+    // have with the current settings (R-CAL-07, R-CAL-08), until a month contains `until`. They are
+    // named like the stored ones (R-CAL-11) and never stored. Empty without a stored FY.
+    public static IReadOnlyList<Period> MonthsThrough(
+        IEnumerable<FiscalYear> fiscalYears, DateOnly until, int fiscalStartMonth, int payday, MonthNaming naming)
+    {
+        var stored = fiscalYears.OrderBy(fiscalYear => fiscalYear.StartDate).ToList();
+        if (stored.Count == 0)
+        {
+            return [];
+        }
+        var months = stored.SelectMany(fiscalYear => fiscalYear.Periods).ToList();
+        var latest = stored[^1];
+        while (latest.EndDate < until)
+        {
+            latest = Named(NextFiscalYear(latest, fiscalStartMonth, payday), naming);
+            months.AddRange(latest.Periods);
+        }
+        return months;
+    }
+
     // R-CAL-06: "FY 2026" when all months start in one calendar year, otherwise "FY 2026/27". The month
     // names (R-CAL-11) do not change it.
     public static string FiscalYearLabel(IReadOnlyList<Period> periods)

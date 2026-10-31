@@ -82,6 +82,19 @@ export const routes: Routes = [
     canActivate: [authGuard, setupGuard],
     loadComponent: () => import('./features/loans/loans').then((m) => m.Loans),
   },
+  // PRD 5.14 Projects (PRJ-01 to PRJ-04, owner note 30): the list, and one project.
+  {
+    path: 'projects',
+    title: 'NAMA · Projects',
+    canActivate: [authGuard, setupGuard],
+    loadComponent: () => import('./features/projects/projects').then((m) => m.Projects),
+  },
+  {
+    path: 'projects/:id',
+    title: 'NAMA · Project',
+    canActivate: [authGuard, setupGuard],
+    loadComponent: () => import('./features/projects/project-view').then((m) => m.ProjectView),
+  },
   // Bank accounts moved from Settings to Banks (20 Oct 2026); old links still work.
   { path: 'settings/bank-accounts', redirectTo: 'banks' },
   // Categories moved from Settings to Plan's Categories tab (owner note 9); old links still work.

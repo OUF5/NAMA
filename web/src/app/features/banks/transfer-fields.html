@@ -37,6 +37,19 @@
       </mat-form-field>
     </div>
 
+    <!-- PRJ-06: the To account's project; what reaches the account counts for it. -->
+    @if (toProjects().length) {
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Project</mat-label>
+        <mat-select [formControl]="project">
+          @for (option of toProjects(); track option.id) {
+            <mat-option [value]="option.id">{{ option.name }}@if (option.status === 'paused') { (paused)}</mat-option>
+          }
+        </mat-select>
+        <mat-hint>This transfer is the project's saving for its month.</mat-hint>
+      </mat-form-field>
+    }
+
     <mat-form-field class="amount" subscriptSizing="dynamic">
       <mat-label>Amount ({{ currency() }})</mat-label>
       <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
@@ -106,6 +119,39 @@
           }
           <p class="caption">A transfer is never spending: your plan and Tracker stay the same.</p>
         </div>
+
+        <!-- PRJ-06: the project's month, before and after this transfer (R-PRJ-05, R-PRJ-06). -->
+        @if (projectMonth(); as m) {
+          <div class="project-month" aria-live="polite">
+            <p class="caption">{{ m.name }}@if (m.label) { · {{ m.label }}}</p>
+            @if (m.outside) {
+              <p class="caption">{{ m.outside }}</p>
+            } @else {
+              <div class="balance-line"><span>Planned</span><span class="money">{{ m.planned }}</span></div>
+              <div class="balance-line">
+                <span>Put in</span>
+                <span class="money amounts">
+                  <span [class.struck]="m.after">{{ m.putIn }}</span>
+                  @if (m.after) {
+                    <mat-icon aria-hidden="true">arrow_forward</mat-icon>
+                    <span class="after">{{ m.after }}</span>
+                  }
+                </span>
+              </div>
+              @if (!m.known) {
+                <p class="caption">Its account's balance at the start of the month is not known, so what is in so far is not either.</p>
+              } @else if (m.still) {
+                <p class="caption">Still to put in: <span class="money">{{ m.still }}</span></p>
+              } @else if (m.over) {
+                <p class="caption ok">The month is covered, <span class="money">{{ m.over }}</span> more than planned.</p>
+              } @else {
+                <p class="caption ok">The month is covered.</p>
+              }
+            }
+          </div>
+        } @else if (fromProject(); as source) {
+          <p class="caption project-month">This takes money out of {{ source.name }}: it counts against its month.</p>
+        }
       } @else {
         <div class="placeholder">
           <mat-icon aria-hidden="true">swap_horiz</mat-icon>

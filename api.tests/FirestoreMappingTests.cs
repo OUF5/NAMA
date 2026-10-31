@@ -212,6 +212,37 @@ public class FirestoreMappingTests
         Assert.Equal(entry, FirestoreDocuments.ToEntry("e", document));
     }
 
+    // PRD 7.4 projects (owner note 30): status and targets by name, one account, dates as strings.
+    [Fact]
+    public void Project_comes_back_unchanged()
+    {
+        var project = new Project(
+            "p", "Road to DE", new DateOnly(2027, 8, 30), ProjectStatus.Paused, null,
+            new Dictionary<TargetLevel, long> { [TargetLevel.Best] = 12_600_000, [TargetLevel.Worst] = 18_400_000 },
+            TargetLevel.Worst, "alinma",
+            [new MonthlyAmount("2026-10", 700_000), new MonthlyAmount("2026-12", 650_000)],
+            [new Milestone("m", "Deposit", new DateOnly(2027, 5, 1), 5_011_600)], "2026-10");
+
+        var document = FirestoreDocuments.ToDocument(project);
+
+        Assert.Equal(("road to de", "2027-08-30", "paused", null, "worst", "2026-10"),
+            (document.NameLower, document.Deadline, document.Status, document.DoneOn, document.ActiveTarget, document.StartPeriodKey));
+        Assert.Equal(new Dictionary<string, long> { ["best"] = 12_600_000, ["worst"] = 18_400_000 }, document.Targets);
+        Assert.Equal("2027-05-01", document.Milestones[0].Date);
+        Assert.Equal(("2026-12", 650_000L), (document.Monthly[1].PeriodKey, document.Monthly[1].AmountMinor));
+
+        var back = FirestoreDocuments.ToProject("p", document);
+        Assert.Equal("alinma", document.BankAccountId);
+        Assert.Equal(project with { Targets = back.Targets, Monthly = back.Monthly, Milestones = back.Milestones }, back);
+        Assert.Equal(project.Targets, back.Targets);
+        Assert.Equal(project.Monthly, back.Monthly);
+        Assert.Equal(project.Milestones, back.Milestones);
+
+        var done = project with { Status = ProjectStatus.Done, DoneOn = new DateOnly(2026, 10, 31) };
+        var doneBack = FirestoreDocuments.ToProject("p", FirestoreDocuments.ToDocument(done));
+        Assert.Equal((ProjectStatus.Done, new DateOnly(2026, 10, 31)), (doneBack.Status, doneBack.DoneOn));
+    }
+
     [Fact]
     public void Bank_account_comes_back_unchanged()
     {

@@ -1,0 +1,289 @@
+@switch (mode()) {
+  @case ('edit') {
+    <h2 mat-dialog-title>{{ project ? 'Edit ' + project.name : 'New project' }}</h2>
+    <form [formGroup]="form" (ngSubmit)="save()" novalidate>
+      <mat-dialog-content>
+        <div class="row">
+          <mat-form-field>
+            <mat-label>Name</mat-label>
+            <input matInput formControlName="name" [maxlength]="nameMax" autocomplete="off" />
+            @if (form.controls.name.hasError('duplicate')) {
+              <mat-error>A project with this name already exists.</mat-error>
+            } @else {
+              <mat-error>Enter 1 to {{ nameMax }} characters.</mat-error>
+            }
+          </mat-form-field>
+          <mat-form-field>
+            <mat-label>Deadline</mat-label>
+            <input matInput formControlName="deadline" [matDatepicker]="deadlinePicker" />
+            <mat-datepicker-toggle matIconSuffix [for]="deadlinePicker" />
+            <mat-datepicker #deadlinePicker />
+            <mat-error>Pick a date.</mat-error>
+          </mat-form-field>
+        </div>
+
+        <!-- R-PRJ-03: one whole account; an account counts in one project at a time. -->
+        <mat-form-field>
+          <mat-label>Bank account</mat-label>
+          <mat-select formControlName="bankAccountId">
+            @for (account of accounts; track account.id) {
+              <mat-option [value]="account.id" [disabled]="!!account.takenBy">
+                {{ account.name }} <span class="caption money">{{ account.balance }}@if (account.takenBy) { · in {{ account.takenBy }}}</span>
+              </mat-option>
+            }
+          </mat-select>
+          <mat-hint>The project's money is this account's balance, as Banks shows it.</mat-hint>
+          <mat-error>Choose a bank account.</mat-error>
+        </mat-form-field>
+
+        <!-- R-PRJ-02: up to three targets, and the one every figure uses. -->
+        <fieldset>
+          <legend>Targets ({{ data.currency }})</legend>
+          <div class="row three">
+            @for (level of levels; track level) {
+              <mat-form-field>
+                <mat-label>{{ targetLabels[level] }}</mat-label>
+                <input matInput [formControlName]="level" inputmode="decimal" autocomplete="off" />
+                <mat-error>More than 0, at most 10,000,000.</mat-error>
+              </mat-form-field>
+            }
+          </div>
+          <div class="active-target">
+            <span class="caption" id="active-target">Use as the target</span>
+            <mat-button-toggle-group formControlName="activeTarget" aria-labelledby="active-target" hideSingleSelectionIndicator>
+              @for (level of levels; track level) {
+                <mat-button-toggle [value]="level">{{ targetLabels[level] }}</mat-button-toggle>
+              }
+            </mat-button-toggle-group>
+          </div>
+          @if (form.hasError('noTarget') && form.touched) {
+            <p class="error">Set at least one target.</p>
+          } @else if (form.hasError('activeNotSet') && form.touched) {
+            <p class="error">Set the {{ targetLabels[form.controls.activeTarget.value] }} target, or use another one.</p>
+          } @else {
+            <p class="caption">Best is the cheapest outcome, Worst the dearest. One number hides risk.</p>
+          }
+        </fieldset>
+
+        <!-- R-PRJ-05, R-PRJ-12: the recommended amount fills the monthly amount until you change it. -->
+        <fieldset>
+          <legend>Monthly saving ({{ data.currency }})</legend>
+          @if (recommendation().text) {
+            <p class="recommend" aria-live="polite">
+              <mat-icon aria-hidden="true">lightbulb</mat-icon>
+              <span>{{ recommendation().text }}</span>
+              @if (recommendation().use; as use) {
+                <button mat-button type="button" (click)="useRecommended()">Use {{ use }}</button>
+              }
+            </p>
+          }
+          <div class="monthly">
+            <mat-form-field>
+              <mat-label>{{ varies() ? 'Monthly amount (varies by month)' : 'Monthly amount' }}</mat-label>
+              <input matInput formControlName="monthly" inputmode="decimal" autocomplete="off" (input)="monthlyTyped()" />
+              <mat-hint>{{ planHint() }}</mat-hint>
+              <mat-error>0 to 10,000,000, with up to 2 decimals.</mat-error>
+            </mat-form-field>
+            <button mat-stroked-button type="button" [disabled]="!periods().length" (click)="setMode('months')">
+              <mat-icon>calendar_month</mat-icon>
+              Plan by month
+            </button>
+          </div>
+        </fieldset>
+
+        <!-- R-PRJ-08 -->
+        <fieldset formArrayName="milestones">
+          <legend>Milestones</legend>
+          @for (milestone of milestones.controls; track milestone; let i = $index) {
+            <div class="milestone" [formGroupName]="i">
+              <mat-form-field>
+                <mat-label>Label</mat-label>
+                <input matInput formControlName="label" [maxlength]="nameMax" autocomplete="off" />
+                <mat-error>1 to {{ nameMax }} characters.</mat-error>
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Date</mat-label>
+                <input matInput formControlName="date" [matDatepicker]="milestonePicker" />
+                <mat-datepicker-toggle matIconSuffix [for]="milestonePicker" />
+                <mat-datepicker #milestonePicker />
+                <mat-error>Pick a date.</mat-error>
+              </mat-form-field>
+              <mat-form-field>
+                <mat-label>Amount</mat-label>
+                <input matInput formControlName="amount" inputmode="decimal" autocomplete="off" />
+                <mat-error>More than 0.</mat-error>
+              </mat-form-field>
+              <button mat-icon-button type="button" (click)="removeMilestone(i)" [attr.aria-label]="'Remove milestone ' + (i + 1)">
+                <mat-icon>close</mat-icon>
+              </button>
+            </div>
+          }
+          <button mat-stroked-button type="button" (click)="addMilestone()">
+            <mat-icon>add</mat-icon>
+            Add milestone
+          </button>
+          <p class="caption">Money you need on a day, such as a deposit. It is compared with the money in its account that day.</p>
+        </fieldset>
+
+        <!-- R-PRJ-01: status changes, edit only. -->
+        @if (project) {
+          <fieldset>
+            <legend>Status</legend>
+            <div class="status-actions">
+              @switch (project.status) {
+                @case ('active') {
+                  <button mat-stroked-button type="button" [disabled]="busy()" (click)="pause()">Pause</button>
+                  <button mat-stroked-button type="button" (click)="setMode('done')">Mark done</button>
+                }
+                @case ('paused') {
+                  <button mat-stroked-button type="button" [disabled]="busy()" (click)="resume()">Resume</button>
+                  <button mat-stroked-button type="button" (click)="setMode('done')">Mark done</button>
+                }
+                @case ('done') {
+                  <button mat-stroked-button type="button" [disabled]="busy()" (click)="reopen()">Reopen</button>
+                }
+              }
+            </div>
+            <p class="caption">
+              @switch (project.status) {
+                @case ('active') { Pause keeps the months as planned, but nothing more is counted until you resume. }
+                @case ('paused') { Paused: nothing more is counted until you resume. }
+                @case ('done') { Done: its figures stay as they were on {{ doneOnText }}. }
+              }
+            </p>
+          </fieldset>
+        }
+
+        @if (error()) {
+          <p class="error" role="alert">{{ error() }}</p>
+        }
+      </mat-dialog-content>
+      <!-- Save is the one filled button. -->
+      <mat-dialog-actions>
+        @if (project) {
+          <button mat-stroked-button type="button" class="delete" (click)="setMode('delete')">Delete</button>
+        }
+        <button mat-stroked-button type="button" mat-dialog-close>Cancel</button>
+        <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+      </mat-dialog-actions>
+    </form>
+  }
+
+  @case ('done') {
+    <h2 mat-dialog-title>Mark {{ project!.name }} done?</h2>
+    <mat-dialog-content>
+      <mat-form-field>
+        <mat-label>Done on</mat-label>
+        <input matInput [formControl]="doneOn" [matDatepicker]="donePicker" [min]="doneMin" [max]="doneMax" />
+        <mat-datepicker-toggle matIconSuffix [for]="donePicker" />
+        <mat-datepicker #donePicker />
+        <mat-error>Pick a day from the project's start to today.</mat-error>
+      </mat-form-field>
+      <p class="caption">Its figures stay as they were on that day, and its account can be counted by another project.</p>
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions>
+      <button mat-stroked-button type="button" (click)="setMode('edit')">Back</button>
+      <button mat-flat-button type="button" [disabled]="busy()" (click)="markDone()">Mark done</button>
+    </mat-dialog-actions>
+  }
+
+  @case ('months') {
+    <!-- R-PRJ-05, as Plan's sub-category dialog (PLN-01, PLN-02): every month to the deadline. -->
+    <h2 mat-dialog-title>
+      Plan by month
+      <span class="caption">{{ form.controls.name.value.trim() || 'New project' }}{{ total() ? ' · ' + total() + ' in all' : '' }}</span>
+    </h2>
+    <form [formGroup]="monthsForm" (ngSubmit)="save()" novalidate>
+      <mat-dialog-content>
+        <div class="same">
+          <mat-form-field>
+            <mat-label>{{ sameLabel() }}</mat-label>
+            <input
+              matInput
+              [formControl]="sameAmount"
+              inputmode="decimal"
+              autocomplete="off"
+              (keydown.enter)="$event.preventDefault(); applyToAll()"
+            />
+            @if (sameAmount.invalid) {
+              <mat-error>Enter 0 to 10,000,000 with at most 2 decimals.</mat-error>
+            }
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="applyToAll()">Apply to all</button>
+        </div>
+
+        <ul class="months" formArrayName="amounts">
+          @for (period of periods(); track period.key; let i = $index) {
+            <li class="month">
+              <label class="when" [for]="'project-month-' + i">
+                {{ period.label }}
+                <span class="caption">{{ formatDay(period.startDate) }} to {{ formatDay(period.endDate) }}</span>
+              </label>
+              <mat-form-field subscriptSizing="dynamic">
+                <input
+                  matInput
+                  [id]="'project-month-' + i"
+                  [formControlName]="i"
+                  [attr.aria-label]="period.label"
+                  inputmode="decimal"
+                  autocomplete="off"
+                  (input)="monthEdited()"
+                />
+                @if (amounts.at(i).invalid) {
+                  <mat-error>0 to 10,000,000, 2 decimals.</mat-error>
+                }
+              </mat-form-field>
+              @if (i > 0) {
+                <button
+                  mat-icon-button
+                  type="button"
+                  class="copy"
+                  (click)="copyPrevious(i)"
+                  [attr.aria-label]="'Copy from ' + periods()[i - 1].label"
+                  [title]="'Copy from ' + periods()[i - 1].label"
+                >
+                  <mat-icon>arrow_downward</mat-icon>
+                </button>
+              } @else {
+                <span class="copy" aria-hidden="true"></span>
+              }
+              <span class="after caption">
+                @if (runningTotals()[i]; as sum) {
+                  In all by then <span class="money">{{ sum }}</span>
+                }
+              </span>
+            </li>
+          }
+        </ul>
+
+        <p class="caption">Leave a month empty or enter 0 when nothing goes in.</p>
+        @if (error()) {
+          <p class="error" role="alert">{{ error() }}</p>
+        }
+      </mat-dialog-content>
+      <mat-dialog-actions>
+        <button mat-stroked-button type="button" (click)="setMode('edit')">Back</button>
+        <button mat-flat-button type="submit" [disabled]="busy()">Save</button>
+      </mat-dialog-actions>
+    </form>
+  }
+
+  @case ('delete') {
+    <!-- UX-04: the confirmation replaces the form, never a second dialog. -->
+    <h2 mat-dialog-title>Delete this project?</h2>
+    <mat-dialog-content>
+      <p class="money">{{ summary }}</p>
+      <p class="caption">Your balances and entries do not change. This cannot be undone.</p>
+      @if (error()) {
+        <p class="error" role="alert">{{ error() }}</p>
+      }
+    </mat-dialog-content>
+    <mat-dialog-actions>
+      <button mat-stroked-button type="button" (click)="setMode('edit')">Cancel</button>
+      <button mat-flat-button type="button" [disabled]="busy()" (click)="remove()">Delete</button>
+    </mat-dialog-actions>
+  }
+}

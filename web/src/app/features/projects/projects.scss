@@ -1,0 +1,337 @@
+// PRD 5.14 Projects (PRJ-02, PRJ-03), docs/DESIGN.md "Projects". Section cards like Banks, tokens
+// only. The list and a project share this file. The pages have no filled button; the dialog's Save is
+// the one.
+@use '../../shared/plan-status';
+
+@include plan-status.styles;
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+
+  h1 {
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+// PRJ-03: a quiet text button back to the list; its icon lines up with the title.
+.back {
+  margin: 0 0 4px -12px;
+  color: var(--text-2);
+
+  &:hover {
+    color: var(--text);
+  }
+}
+
+.status {
+  min-height: 24px;
+  margin: 0 0 8px;
+  color: var(--text-2);
+}
+
+.card {
+  box-sizing: border-box;
+  margin-bottom: 16px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+
+  h2 {
+    margin: 0 0 12px;
+  }
+}
+
+.error,
+.danger {
+  color: var(--danger);
+}
+
+.error {
+  margin: 0;
+}
+
+.ok {
+  color: var(--ok);
+}
+
+.muted {
+  color: var(--text-muted);
+}
+
+.strong {
+  font-weight: 600;
+}
+
+.chip.neutral {
+  color: var(--text-2);
+  background: var(--surface-2);
+  border: 1px solid var(--divider);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+
+  p {
+    margin: 0;
+    color: var(--text-2);
+  }
+
+  mat-icon {
+    color: var(--text-muted);
+  }
+}
+
+// PRJ-02: one card per project, side by side on wide screens; the whole card opens the project.
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.project {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  color: inherit;
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--text-muted);
+  }
+}
+
+.project-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.name {
+  overflow: hidden;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.line {
+  display: block;
+}
+
+.fold {
+  margin: 0 0 8px -12px;
+}
+
+.chevron {
+  flex: none;
+  transition: transform 0.15s;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+// The rows of a project: 44px rows behind --divider lines.
+.rows {
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 44px;
+    border-bottom: 1px solid var(--divider);
+  }
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+// R-PRJ-08: one block per milestone: its head, its bar and a caption.
+.milestones {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+
+  li {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+.milestone-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+// PRJ-03: the three lines that tell the story.
+.story {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 16px;
+  margin: 16px 0 12px;
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .value {
+    font-size: 20px;
+    font-weight: 600;
+  }
+}
+
+.verdict {
+  margin: 0 0 4px;
+  font-weight: 500;
+}
+
+.breakdown {
+  margin: 8px 0;
+
+  div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 32px;
+    align-items: center;
+    border-bottom: 1px solid var(--divider);
+  }
+
+  dt {
+    color: var(--text-2);
+  }
+
+  dd {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .result {
+    border-bottom: 0;
+    font-weight: 600;
+
+    dt {
+      color: var(--text);
+    }
+  }
+}
+
+.op {
+  display: inline-block;
+  width: 16px;
+  color: var(--text-muted);
+}
+
+// PRJ-03: This month and Targets side by side on wide screens.
+.pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+
+  .card {
+    margin: 0;
+  }
+}
+
+.end {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+// R-PRJ-06: By month as a small table.
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    height: 40px;
+    padding: 0 8px;
+    text-align: right;
+    border-bottom: 1px solid var(--divider);
+    white-space: nowrap;
+  }
+
+  th:first-child,
+  td:first-child {
+    padding-left: 0;
+    text-align: left;
+  }
+
+  th {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+
+  .current td {
+    background: var(--primary-soft);
+  }
+
+  .to-come td {
+    color: var(--text-2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chevron {
+    transition: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .card {
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .cards,
+  .pair {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+}

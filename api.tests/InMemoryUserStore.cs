@@ -26,6 +26,7 @@ public sealed class InMemoryUserStore : IUserStore
         // In the order added, which stands in for createdAt.
         public List<Transfer> Transfers { get; } = [];
         public List<Loan> Loans { get; } = [];
+        public List<Project> Projects { get; } = [];
     }
 
     private readonly ConcurrentDictionary<string, UserData> _users = new();
@@ -218,6 +219,20 @@ public sealed class InMemoryUserStore : IUserStore
 
     public Task<bool> DeleteLoanAsync(string uid, string id) =>
         Change(uid, data => data.Loans.RemoveAll(loan => loan.Id == id) > 0);
+
+    // In the order they were made, as createdAt orders them in Firestore.
+    public Task<IReadOnlyList<Project>> GetProjectsAsync(string uid) => Read<Project>(uid, data => data.Projects);
+
+    public async Task<Project?> GetProjectAsync(string uid, string id) =>
+        (await Read<Project>(uid, data => data.Projects.Where(project => project.Id == id))).SingleOrDefault();
+
+    public Task AddProjectAsync(string uid, Project project) => Write(uid, data => data.Projects.Add(project));
+
+    public Task<bool> UpdateProjectAsync(string uid, Project project) =>
+        Change(uid, data => Replace(data.Projects, project, item => item.Id == project.Id));
+
+    public Task<bool> DeleteProjectAsync(string uid, string id) =>
+        Change(uid, data => data.Projects.RemoveAll(project => project.Id == id) > 0);
 
     public Task<bool> UpdateCategoryAsync(string uid, Category category) =>
         Change(uid, data => Replace(data.Categories, category, item => item.Id == category.Id));

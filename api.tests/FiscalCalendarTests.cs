@@ -585,4 +585,35 @@ public class FiscalCalendarTests
             fy2027.Periods[0]);
         Assert.DoesNotContain(fy2027.Periods, p => p.Label == "Jan 2027");
     }
+
+    // R-PRJ-05 (owner note 30): after the stored FYs, the months the next FYs would have with the
+    // current settings, named like the stored ones, until a month contains the day.
+    [Fact]
+    public void Months_through_a_day_go_on_after_the_stored_fiscal_years()
+    {
+        var fy2026 = FiscalCalendar.Named(FiscalCalendar.FirstFiscalYear(Today, 1, 27), MonthNaming.EndMonth);
+
+        var months = FiscalCalendar.MonthsThrough([fy2026], Date("2027-03-10"), 1, 27, MonthNaming.EndMonth);
+
+        Assert.Equal(fy2026.Periods, months.Take(12));
+        Assert.Equal(
+            [new Period("2027-01", "Feb 2027", Date("2027-01-27"), Date("2027-02-26")), new Period("2027-12", "Jan 2028", Date("2027-12-27"), Date("2028-01-26"))],
+            new[] { months[12], months[^1] });
+        Assert.Equal(24, months.Count);
+        Assert.Equal(fy2026.Periods, FiscalCalendar.MonthsThrough([fy2026], Date("2026-12-31"), 1, 27, MonthNaming.EndMonth));
+        Assert.Empty(FiscalCalendar.MonthsThrough([], Date("2027-03-10"), 1, 27, MonthNaming.EndMonth));
+    }
+
+    // R-CAL-07, R-CAL-08: a payday change saved now applies to the months after the stored FYs, as the
+    // next FY would have them (Example B).
+    [Fact]
+    public void Months_through_a_day_use_the_payday_the_next_fiscal_year_would_use()
+    {
+        var fy2026 = FiscalCalendar.FirstFiscalYear(Today, 1, 27);
+
+        var months = FiscalCalendar.MonthsThrough([fy2026], Date("2027-02-15"), 1, 1, MonthNaming.PaydayMonth);
+
+        Assert.Equal(new Period("2027-01", "Jan 2027", Date("2027-01-27"), Date("2027-01-31")), months[12]);
+        Assert.Equal(new Period("2027-02", "Feb 2027", Date("2027-02-01"), Date("2027-02-28")), months[13]);
+    }
 }

@@ -1,0 +1,62 @@
+<div class="page-head">
+  <h1>Projects</h1>
+  @if (data()) {
+    <button mat-stroked-button type="button" (click)="add()">
+      <mat-icon>add</mat-icon>
+      New project
+    </button>
+  }
+</div>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+} @else if (data(); as d) {
+  <p class="status" aria-live="polite">{{ status() }}</p>
+
+  @if (!d.projects.length) {
+    <!-- UX-03 -->
+    <section class="card empty">
+      <mat-icon aria-hidden="true">savings</mat-icon>
+      <p>No projects yet. A project is a goal with a deadline, such as a car down payment, saved in one of your bank accounts.</p>
+      <button mat-stroked-button type="button" (click)="add()">New project</button>
+    </section>
+  } @else {
+    <!-- PRJ-02: Active first, then Paused, each by deadline. -->
+    <div class="cards">
+      @for (card of cards().open; track card.project.id) {
+        <a class="card project" [routerLink]="['/projects', card.project.id]" [attr.aria-label]="card.project.name + ', ' + card.chip.label">
+          <span class="project-head">
+            <span class="name">{{ card.project.name }}</span>
+            <span class="chip" [class.ok]="card.chip.tone === 'ok'" [class.danger]="card.chip.tone === 'danger'" [class.neutral]="card.chip.tone === 'neutral'">{{ card.chip.label }}</span>
+          </span>
+          <app-project-bar [bar]="card.bar" />
+          <span class="money line">{{ card.progress }}</span>
+          <span class="line" [class.danger]="card.verdict.tone === 'danger'" [class.ok]="card.verdict.tone === 'ok'">{{ card.verdict.text }}</span>
+          <span class="caption">{{ card.deadline }}</span>
+        </a>
+      }
+    </div>
+
+    @if (cards().done.length) {
+      <button mat-button type="button" class="fold" [attr.aria-expanded]="showDone()" (click)="showDone.set(!showDone())">
+        <mat-icon class="chevron" [class.open]="showDone()" aria-hidden="true">chevron_right</mat-icon>
+        Done ({{ cards().done.length }})
+      </button>
+      @if (showDone()) {
+        <div class="cards">
+          @for (card of cards().done; track card.project.id) {
+            <a class="card project" [routerLink]="['/projects', card.project.id]">
+              <span class="project-head">
+                <span class="name">{{ card.project.name }}</span>
+                <span class="chip neutral">{{ card.chip.label }}</span>
+              </span>
+              <app-project-bar [bar]="card.bar" />
+              <span class="money line">{{ card.progress }}</span>
+              <span class="caption">{{ card.verdict.text }}</span>
+            </a>
+          }
+        </div>
+      }
+    }
+  }
+}

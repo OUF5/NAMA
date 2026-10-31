@@ -1,0 +1,160 @@
+<a mat-button class="back" routerLink="/projects">
+  <mat-icon aria-hidden="true">arrow_back</mat-icon>
+  All projects
+</a>
+
+@if (loadError()) {
+  <p class="error" role="alert">{{ loadError() }}</p>
+} @else if (data() && !project()) {
+  <section class="card empty">
+    <p>This project no longer exists.</p>
+    <a mat-stroked-button routerLink="/projects">All projects</a>
+  </section>
+} @else if (view(); as v) {
+  <div class="page-head">
+    <div class="title">
+      <h1>{{ v.project.name }}</h1>
+      <span class="chip" [class.ok]="v.chip.tone === 'ok'" [class.danger]="v.chip.tone === 'danger'" [class.neutral]="v.chip.tone === 'neutral'">{{ v.chip.label }}</span>
+    </div>
+    <button mat-stroked-button type="button" (click)="edit()">
+      <mat-icon>edit</mat-icon>
+      Edit
+    </button>
+  </div>
+  <p class="status" aria-live="polite">{{ status() || v.deadline }}</p>
+
+  <!-- PRJ-03: where you are, where you will be by the deadline, and what it means. -->
+  <section class="card" aria-label="Where it stands">
+    <app-project-bar [bar]="v.bar" />
+    <div class="story">
+      <div>
+        <span class="caption">Now</span>
+        <span class="money value">{{ v.now }}</span>
+        <span class="caption">{{ v.nowParts }}</span>
+      </div>
+      <div>
+        <span class="caption">By {{ formatDate(v.project.deadline) }}</span>
+        <span class="money value">{{ v.projected }}</span>
+        <span class="caption">{{ v.projectedCaption }}</span>
+      </div>
+      <div>
+        <span class="caption">Still to save</span>
+        <span class="money value">{{ v.stillToSave }}</span>
+        <span class="caption">{{ v.progressLine }}</span>
+      </div>
+    </div>
+    <p class="verdict" [class.danger]="v.verdict.tone === 'danger'" [class.ok]="v.verdict.tone === 'ok'">{{ v.verdict.text }}</p>
+    @if (v.project.state === 'unknown') {
+      <a mat-stroked-button routerLink="/banks">Open Banks</a>
+    }
+    @if (v.how; as lines) {
+      <button mat-button type="button" class="fold" [attr.aria-expanded]="how()" (click)="how.set(!how())">
+        <mat-icon class="chevron" [class.open]="how()" aria-hidden="true">chevron_right</mat-icon>
+        How?
+      </button>
+      @if (how()) {
+        <dl class="breakdown">
+          @for (line of lines; track line.label) {
+            <div>
+              <dt><span class="op" aria-hidden="true">{{ line.op }}</span>{{ line.label }}</dt>
+              <dd class="money">{{ line.value }}</dd>
+            </div>
+          }
+          <div class="result">
+            <dt><span class="op" aria-hidden="true">=</span>Projected by {{ formatDate(v.project.deadline) }}</dt>
+            <dd class="money">{{ v.projected }}</dd>
+          </div>
+        </dl>
+        <p class="caption">
+          Progress is the money in its account. Each month's amount counts from its first day, as income
+          does. Expected income is not added: it counts once it reaches the account.
+        </p>
+      }
+    }
+  </section>
+
+  <div class="pair">
+    <!-- R-PRJ-02 -->
+    <section class="card" aria-labelledby="targets-title">
+      <h2 id="targets-title">Targets</h2>
+      <ul class="rows">
+        @for (target of v.targets; track target.label) {
+          <li>
+            <span class="who">
+              <span [class.strong]="target.active">{{ target.label }}@if (target.active) { · active}</span>
+              <span class="money caption">{{ target.amount }}</span>
+            </span>
+            <span [class.ok]="target.covered === true" [class.danger]="target.covered === false">{{ target.gap }}</span>
+          </li>
+        }
+      </ul>
+    </section>
+
+    <!-- R-PRJ-06: the month in progress. -->
+    @if (v.thisMonth; as month) {
+      <section class="card" aria-labelledby="month-title">
+        <h2 id="month-title">This month · {{ month.month }}</h2>
+        <ul class="rows">
+          <li><span>Planned</span><span class="money">{{ month.planned }}</span></li>
+          <li><span>Put in so far</span><span class="money">{{ month.putIn }}</span></li>
+          <li><span>Still to put in</span><span class="money strong">{{ month.stillToPutIn }}</span></li>
+          <li>
+            <span>From the months before</span>
+            <span [class.danger]="month.before.tone === 'danger'" [class.ok]="month.before.tone === 'ok'">{{ month.before.text }}</span>
+          </li>
+        </ul>
+        <p class="caption">What goes into its account counts: your share of income, income items and transfers. Money taken out for anything else counts against it.</p>
+      </section>
+    }
+  </div>
+
+  <!-- R-PRJ-08 -->
+  @if (v.milestones.length) {
+    <section class="card" aria-labelledby="milestones-title">
+      <h2 id="milestones-title">Milestones</h2>
+      <ul class="milestones">
+        @for (milestone of v.milestones; track milestone.id) {
+          <li>
+            <span class="milestone-head">
+              <span class="who">
+                <span class="strong">{{ milestone.label }}</span>
+                <span class="caption">By {{ milestone.date }} · <span class="money">{{ milestone.amount }}</span></span>
+              </span>
+              <span class="chip" [class.ok]="milestone.status.tone === 'ok'" [class.danger]="milestone.status.tone === 'danger'" [class.neutral]="milestone.status.tone === 'neutral'">{{ milestone.status.text }}</span>
+            </span>
+            <app-project-bar [bar]="milestone.bar" />
+            @if (milestone.caption) {
+              <span class="caption money">{{ milestone.caption }}</span>
+            }
+          </li>
+        }
+      </ul>
+      <p class="caption">A milestone is money you need on a day, so it is compared with the money in its account that day.</p>
+    </section>
+  }
+
+  <!-- R-PRJ-06: planned vs actual, carried from month to month. -->
+  @if (v.months.length) {
+    <section class="card" aria-labelledby="months-title">
+      <h2 id="months-title">By month</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Month</th><th scope="col">Planned</th><th scope="col">Actual</th><th scope="col">Behind or ahead</th></tr>
+          </thead>
+          <tbody>
+            @for (month of v.months; track month.key) {
+              <tr [class.current]="month.current" [class.to-come]="month.toCome">
+                <td>{{ month.label }}</td>
+                <td class="money">{{ month.planned }}</td>
+                <td class="money">{{ month.actual }}</td>
+                <td [class.danger]="month.behind.tone === 'danger'" [class.ok]="month.behind.tone === 'ok'">{{ month.behind.text }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="caption">What is behind carries into the next month, as plan leftovers do. Months to come show what is planned; "–" when the balances are not known yet.</p>
+    </section>
+  }
+}
