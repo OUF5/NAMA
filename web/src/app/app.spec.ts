@@ -389,12 +389,13 @@ describe('the old Months address', () => {
   });
 });
 
-// Categories moved from Settings to Plan's Categories tab (owner note 9): old links still work.
+// Categories moved from Settings to Plan (owner note 9), then into its Planning list (owner note 31):
+// old links still work.
 describe('the old Settings categories address', () => {
   @Component({ template: '' })
   class PlanPage {}
 
-  it('goes to the Categories tab of Plan', async () => {
+  it('goes to the Planning tab of Plan', async () => {
     TestBed.configureTestingModule({
       providers: [
         provideRouter([routes.find((route) => route.path === 'settings/categories')!, { path: 'plan', component: PlanPage }]),
@@ -403,6 +404,6 @@ describe('the old Settings categories address', () => {
     const harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/settings/categories');
 
-    expect(TestBed.inject(Router).url).toBe('/plan?tab=categories');
+    expect(TestBed.inject(Router).url).toBe('/plan?tab=planning');
   });
 });

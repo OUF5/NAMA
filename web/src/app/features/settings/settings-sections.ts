@@ -3,7 +3,7 @@ import { UrlMatchResult, UrlSegment } from '@angular/router';
 // The Settings sections (PRD 5.7), each on its own page: /settings/<id>. Desktop lists them under
 // Settings in the side bar; phones open /settings as a list (owner's choice, M8). Sign out (AUTH-04)
 // is outside Settings, in the shell. Bank accounts are on Banks (BNK-02, 20 Oct 2026), and categories
-// on Plan's Categories tab (owner note 9).
+// on Plan's Planning tab (owner notes 9 and 31).
 export const SETTINGS_SECTIONS = [
   { id: 'profile', label: 'Profile', icon: 'person' },
   { id: 'fiscal-year', label: 'Fiscal year', icon: 'event' },

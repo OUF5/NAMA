@@ -1,11 +1,13 @@
 import { BreakpointObserver } from '@angular/cdk/layout';
 import { ComponentType } from '@angular/cdk/portal';
+import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatSelectModule } from '@angular/material/select';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -15,45 +17,56 @@ import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
 import { formatAmount, formatMoney, toMinor } from '../../shared/money';
 import { PeriodInfo, formatDate, formatDay } from '../../shared/month-label';
 import { MonthOption, MonthPicker } from '../../shared/month-picker';
+import { CategoriesChange, CategoryEditor } from './category-editor';
 import { Category, PlanApi, PlansResponse, SubCategory } from './plan-api';
-import { PlanCategories, CategoriesChange } from './plan-categories';
 import { PlanDialog, PlanDialogData } from './plan-dialog';
 
 const PHONE = '(max-width: 767.98px)';
 
-// Owner note 9: three tabs, in the URL as ?tab= so a link can open one. Owner note 25: Allocating
-// first, and /plan with no tab opens it; links about editing amounts name ?tab=planning.
+// Owner note 9: tabs in the URL as ?tab= so a link can open one. Owner note 25: Allocating first, and
+// /plan with no tab opens it; links about editing amounts name ?tab=planning. Owner note 31: the
+// Categories tab is part of Planning, and its old links open Planning.
 export const PLAN_TABS = [
   { id: 'allocating', label: 'Allocating' },
   { id: 'planning', label: 'Planning' },
-  { id: 'categories', label: 'Categories' },
 ] as const;
 
 export type PlanTab = (typeof PLAN_TABS)[number]['id'];
 
-// PRD 5.3 Plan (PLN-01 to PLN-06), in three tabs (owner note 9): Allocating (the PLN-03 totals, the
-// default, owner note 25), Planning (each sub-category's amount in one month, a month at a time) and Categories (STG-05, moved from
-// Settings). Owner's choice (M8), so the page stays short as it grows:
+// An archived category, or an archived sub-category of an active one ("in Food").
+interface ArchivedRow {
+  name: string;
+  category: Category;
+  sub?: SubCategory;
+  caption: string;
+}
+
+// PRD 5.3 Plan (PLN-01 to PLN-06), in two tabs (owner notes 9 and 31): Allocating (the PLN-03 totals,
+// the default, owner note 25) and Planning (each sub-category's amount in one month, a month at a
+// time, and adding, renaming, archiving and restoring categories and sub-categories in the same list,
+// STG-05). Owner's choice (M8), so the page stays short as it grows:
 // - PLN-03 totals are one table turned sideways that reads top to bottom: Income - Planned = Unassigned
 //   this month (the month on its own), added up from the FY's first month = Accumulated Planned
 //   Savings (R-PLN-03, owner note 10), for every month and the FY, whose last row is Planned saved
 //   (R-PLN-04). A month can be selected.
 // - Categories are compact rows (closed at first) with their amount in the selected month and their
-//   FY total; a category opens its sub-categories. Allocating and Planning share the selected month.
+//   FY total; a category opens its sub-categories and ends with "Add sub-category". Each row's "More"
+//   menu renames, archives and restores. Allocating and Planning share the selected month.
 // - The 12 month amounts are edited in a dialog (PlanDialog).
 // All sums come from the API (R-PLN-02, R-PLN-03); the page only formats them.
 @Component({
   selector: 'app-plan',
   imports: [
+    NgTemplateOutlet,
     RouterLink,
     MatButtonModule,
     MatFormFieldModule,
     MatIconModule,
+    MatMenuModule,
     MatSelectModule,
     MonthPicker,
-    PlanCategories,
   ],
-  providers: [OUTLINE_FORM_FIELDS],
+  providers: [OUTLINE_FORM_FIELDS, CategoryEditor],
   templateUrl: './plan.html',
   styleUrl: './plan.scss',
 })
@@ -64,6 +77,7 @@ export class Plan {
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
   private readonly breakpoints = inject(BreakpointObserver);
+  private readonly editor = inject(CategoryEditor);
 
   protected readonly formatDate = formatDate;
   protected readonly tabs = PLAN_TABS;
@@ -168,6 +182,22 @@ export class Plan {
       .filter((category) => !category.archived || category.subs.length > 0);
   });
 
+  // PLN-05: archived items the list above leaves out, each with Restore. A sub-category of an archived
+  // category comes back with its category.
+  protected readonly archived = computed<ArchivedRow[]>(() => {
+    const shown = new Set(this.rows().flatMap((category) => [category.id, ...category.subs.map((sub) => sub.id)]));
+    return this.categories().flatMap((category): ArchivedRow[] =>
+      category.archived
+        ? shown.has(category.id)
+          ? []
+          : [{ name: category.name, category, caption: '' }]
+        : category.subCategories
+            .filter((sub) => sub.archived && !shown.has(sub.id))
+            .map((sub) => ({ name: sub.name, category, sub, caption: `in ${category.name}` })),
+    );
+  });
+  protected readonly busy = this.editor.busy;
+
   // PLN-06
   protected readonly hasSubCategories = computed(() =>
     this.rows().some((category) => category.subs.some((sub) => !sub.hidden)),
@@ -178,7 +208,7 @@ export class Plan {
 
   constructor() {
     this.route.queryParamMap.pipe(takeUntilDestroyed()).subscribe((params) => {
-      const tab = params.get('tab');
+      const tab = params.get('tab') === 'categories' ? 'planning' : params.get('tab');
       this.tab.set(PLAN_TABS.some((item) => item.id === tab) ? (tab as PlanTab) : 'allocating');
       // Switching tabs keeps the FY and needs no call.
       if (this.data() && params.get('fyId') === this.urlFyId) {
@@ -246,16 +276,49 @@ export class Plan {
     }
   }
 
-  // The Categories tab changed the list (STG-05, PLN-05).
-  protected categoriesChanged(change: CategoriesChange): void {
+  // PLN-05. A new category opens, ready for its first sub-category.
+  protected async addCategory(): Promise<void> {
+    const change = await this.editor.addCategory(this.categories());
+    if (change?.added) {
+      this.apply(change);
+      this.expand(change.added.id);
+    }
+  }
+
+  // PLN-01: a new sub-category goes straight to its month amounts.
+  protected async addSubCategory(category: Category): Promise<void> {
+    const change = await this.editor.addSubCategory(this.categories(), category);
+    if (change?.added) {
+      this.apply(change);
+      await this.edit(change.added as SubCategory, category.name);
+    }
+  }
+
+  // STG-05, from a row's "More" menu or the archived fold.
+  protected async rename(category: Category, sub?: SubCategory): Promise<void> {
+    const change = sub
+      ? await this.editor.renameSub(this.categories(), category, sub)
+      : await this.editor.renameCategory(this.categories(), category);
+    if (change) {
+      this.apply(change);
+    }
+  }
+
+  protected async toggleArchived(category: Category, sub?: SubCategory): Promise<void> {
+    this.apply(
+      sub
+        ? await this.editor.toggleSub(this.categories(), sub)
+        : await this.editor.toggleCategory(this.categories(), category),
+    );
+  }
+
+  private apply(change: CategoriesChange): void {
     this.categories.set(change.categories);
     this.status.set(change.message);
   }
 
-  // PLN-01: a new sub-category goes straight to its month amounts.
-  protected async subAdded(sub: SubCategory, categoryName: string): Promise<void> {
-    this.opened.update((ids) => new Set(ids).add(sub.categoryId));
-    await this.edit(sub, categoryName);
+  private expand(categoryId: string): void {
+    this.opened.update((ids) => new Set(ids).add(categoryId));
   }
 
   // The FY in the URL, else the one that contains today, else the latest one.

@@ -146,27 +146,30 @@ describe('Plan (PRD 5.3)', () => {
     return Array.from(root.querySelectorAll<HTMLAnchorElement>('nav.tabs a'));
   }
 
-  // Owner note 9: three tabs in the URL. Owner note 25: Allocating first, and /plan opens it. PLN-06
-  // on Planning.
+  // Owner note 9: tabs in the URL. Owner note 25: Allocating first, and /plan opens it. Owner note 31:
+  // Categories is part of Planning, and its old link opens Planning. PLN-06 on Planning.
   it('opens on Allocating and switches tabs without a call', async () => {
     const root = await open([food], plansResponse(), '/plan');
 
-    expect(tabs(root).map((tab) => text(tab))).toEqual(['Allocating', 'Planning', 'Categories']);
-    expect(tabs(root).map((tab) => tab.getAttribute('aria-current'))).toEqual(['page', null, null]);
-    expect(tabs(root).map((tab) => tab.getAttribute('href'))).toEqual(['/plan', '/plan?tab=planning', '/plan?tab=categories']);
+    expect(tabs(root).map((tab) => text(tab))).toEqual(['Allocating', 'Planning']);
+    expect(tabs(root).map((tab) => tab.getAttribute('aria-current'))).toEqual(['page', null]);
+    expect(tabs(root).map((tab) => tab.getAttribute('href'))).toEqual(['/plan', '/plan?tab=planning']);
     expect(root.querySelector('table.totals')).not.toBeNull();
     expect(root.querySelector('#list-title')).toBeNull();
 
     await harness.navigateByUrl('/plan?tab=planning');
     await settle();
-    expect(tabs(root).map((tab) => tab.getAttribute('aria-current'))).toEqual([null, 'page', null]);
+    expect(tabs(root).map((tab) => tab.getAttribute('aria-current'))).toEqual([null, 'page']);
     expect(text(root)).toContain('Add your first sub-category');
     expect(text(root.querySelector('#list-title'))).toBe('Planned in Sep 2026 27 Sep to 26 Oct');
     expect(root.querySelector('table.totals')).toBeNull();
 
+    await harness.navigateByUrl('/plan?tab=allocating');
+    await settle();
     await harness.navigateByUrl('/plan?tab=categories');
     await settle();
-    expect(root.querySelector('app-plan-categories')).not.toBeNull();
+    expect(tabs(root).map((tab) => tab.getAttribute('aria-current'))).toEqual([null, 'page']);
+    expect(root.querySelector('#list-title')).not.toBeNull();
     // afterEach checks that no call was made.
   });
 
@@ -258,7 +261,7 @@ describe('Plan (PRD 5.3)', () => {
     expect(text(root.querySelector('#list-title'))).toContain('Planned in Jan 2026');
     expect(button(root, 'Previous month').disabled).toBe(true);
     expect(text(category())).toContain('SAR 900');
-    expect(text(root.querySelector('.row.sub'))).toBe('Groceries FY total SAR 16,600 SAR 900 edit');
+    expect(text(root.querySelector('.row.sub'))).toBe('Groceries FY total SAR 16,600 SAR 900 edit more_vert');
   });
 
   // PLN-01, PLN-02, PLN-04 in the editor dialog, with "Planned savings after" while typing (M8).
@@ -328,33 +331,49 @@ describe('Plan (PRD 5.3)', () => {
     expect(text(dialog())).toContain('at most 2 decimals');
   });
 
-  // STG-05 on the Categories tab (owner note 9): one row per category; it opens its sub-categories.
-  it('opens a category on Categories to rename or archive its sub-categories', async () => {
-    const root = await open([withGroceries], plansResponse(), '/plan?tab=categories');
-    const row = root.querySelector<HTMLButtonElement>('app-plan-categories button.expand')!;
-    expect(text(row)).toContain('Food 1 sub-category');
-    expect(row.getAttribute('aria-expanded')).toBe('false');
-    expect(root.querySelector('[aria-label="Archive Groceries"]')).toBeNull();
+  function menuItem(label: string): HTMLButtonElement {
+    return Array.from(document.querySelectorAll<HTMLButtonElement>('.mat-mdc-menu-panel button')).find(
+      (el) => text(el).endsWith(label),
+    )!;
+  }
 
-    row.click();
+  // STG-05 on Planning (owner note 31; a Categories tab before): each row's "More" menu renames and
+  // archives; what is archived and not planned folds away at the end, with Restore.
+  it('archives a sub-category from its menu and restores it from the archived fold', async () => {
+    const root = await open([withGroceries], plansResponse());
+    root.querySelector<HTMLButtonElement>('button.expand')!.click();
     await settle();
 
-    expect(row.getAttribute('aria-expanded')).toBe('true');
-    expect(root.querySelector('[aria-label="Rename Groceries"]')).not.toBeNull();
-    root.querySelector<HTMLButtonElement>('[aria-label="Archive Groceries"]')!.click();
+    expect(root.querySelector('[aria-label="More for Food"]')).not.toBeNull();
+    root.querySelector<HTMLButtonElement>('[aria-label="More for Groceries"]')!.click();
+    await settle();
+    expect(menuItem('Rename')).toBeDefined();
+    menuItem('Archive').click();
     const put = await vi.waitFor(() => http.expectOne('/api/sub-categories/groceries'));
     expect(put.request.body).toEqual({ name: 'Groceries', archived: true });
     put.flush({ id: 'groceries', categoryId: 'food', name: 'Groceries', sortOrder: 0, archived: true });
     await settle();
 
     expect(text(root.querySelector('.status'))).toBe('Groceries archived.');
-    expect(text(root)).toContain('Archived (1)');
-    expect(root.querySelector('[aria-label="Archive Groceries"]')).toBeNull();
+    expect(root.querySelector('.row.sub')).toBeNull();
+    button(root, 'Archived (1)').click();
+    await settle();
+    expect(text(root.querySelector('.archived'))).toBe('Groceries in Food unarchive');
+
+    root.querySelector<HTMLButtonElement>('[aria-label="Restore Groceries"]')!.click();
+    const restore = await vi.waitFor(() => http.expectOne('/api/sub-categories/groceries'));
+    expect(restore.request.body).toEqual({ name: 'Groceries', archived: false });
+    restore.flush({ id: 'groceries', categoryId: 'food', name: 'Groceries', sortOrder: 0, archived: false });
+    await settle();
+
+    expect(text(root.querySelector('.status'))).toBe('Groceries restored.');
+    expect(text(root)).not.toContain('Archived (');
+    expect(text(root.querySelector('.row.sub .name'))).toBe('Groceries FY total –');
   });
 
-  // PLN-01: a new sub-category opens its month amounts right away.
-  it('adds a sub-category and opens its months', async () => {
-    const root = await open([food], plansResponse(), '/plan?tab=categories');
+  // PLN-01, PLN-05: added where it is planned (owner note 31), then its month amounts right away.
+  it('adds a sub-category on Planning and opens its months', async () => {
+    const root = await open([food], plansResponse());
     root.querySelector<HTMLButtonElement>('button.expand')!.click();
     await settle();
 
@@ -370,12 +389,33 @@ describe('Plan (PRD 5.3)', () => {
     await settle();
     expect(inputLabeled(dialog(), 'Jan 2026')).toBeDefined();
     expect(text(root.querySelector('.status'))).toBe('Added Groceries.');
-    expect(text(root.querySelector('app-plan-categories .subs'))).toContain('Groceries');
+    expect(text(root.querySelector('.row.sub .name'))).toBe('Groceries FY total –');
+    expect(text(root)).not.toContain('Add your first sub-category');
+  });
+
+  // PLN-05: a new category opens, ready for its first sub-category.
+  it('adds a category on Planning and opens it', async () => {
+    const root = await open([food], plansResponse());
+
+    button(root, 'Add category').click();
+    await settle();
+    type(inputLabeled(dialog(), 'Category name'), 'Transport');
+    button(dialog(), 'Save').click();
+    const post = await vi.waitFor(() => http.expectOne('/api/categories'));
+    expect(post.request.body).toEqual({ name: 'Transport' });
+    post.flush({ id: 'transport', name: 'Transport', sortOrder: 1, archived: false, subCategories: [] });
+    await vi.waitFor(async () => {
+      await settle();
+      expect(text(root.querySelector('.status'))).toBe('Added Transport.');
+    });
+    const rows = root.querySelectorAll<HTMLButtonElement>('button.expand');
+    expect(Array.from(rows).map((row) => row.getAttribute('aria-expanded'))).toEqual(['false', 'true']);
+    expect(button(root, 'Add sub-category')).toBeDefined();
   });
 
   // PLN-05, PRD 4.7
   it('refuses a category name that exists, ignoring case, without calling the API', async () => {
-    const root = await open([food], plansResponse(), '/plan?tab=categories');
+    const root = await open([food], plansResponse());
 
     button(root, 'Add category').click();
     await settle();
@@ -426,6 +466,7 @@ describe('Plan (PRD 5.3)', () => {
     expect(names).toEqual(['Groceries (archived) FY total SAR 99']);
     expect(root.querySelector('[aria-label="Edit amounts of Groceries"]')).not.toBeNull();
     expect(text(root)).not.toContain('Old');
+    expect(text(root)).toContain('Archived (2)');
     expect(text(root)).toContain('Add your first sub-category');
   });
 });

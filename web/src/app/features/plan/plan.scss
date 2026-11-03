@@ -23,7 +23,7 @@
   max-width: 420px;
 }
 
-// Owner note 9: Planning, Allocating and Categories, as links under the FY (docs/DESIGN.md "Tabs").
+// Owner notes 9 and 31: Allocating and Planning, as links under the FY (docs/DESIGN.md "Tabs").
 .tabs {
   display: flex;
   gap: 4px;
@@ -164,6 +164,22 @@
   padding-left: 32px;
 }
 
+// The width of a 44px icon button, so a category's amount lines up with its sub-categories'.
+.icon-gap {
+  flex: none;
+  width: 44px;
+}
+
+// "Add sub-category" ends an open category, "Add category" the list (PLN-05, owner note 31).
+.add,
+.fold {
+  margin-top: 4px;
+}
+
+.archived {
+  padding-left: 32px;
+}
+
 // The sub-category saved last.
 .flash {
   background: var(--surface-2);
@@ -183,7 +199,8 @@
     padding: 16px;
   }
 
-  .subs {
+  .subs,
+  .archived {
     padding-left: 12px;
   }
 

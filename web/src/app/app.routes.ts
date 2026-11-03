@@ -97,8 +97,9 @@ export const routes: Routes = [
   },
   // Bank accounts moved from Settings to Banks (20 Oct 2026); old links still work.
   { path: 'settings/bank-accounts', redirectTo: 'banks' },
-  // Categories moved from Settings to Plan's Categories tab (owner note 9); old links still work.
-  { path: 'settings/categories', redirectTo: () => '/plan?tab=categories' },
+  // Categories moved from Settings to Plan (owner note 9), then into its Planning list (owner note 31);
+  // old links still work.
+  { path: 'settings/categories', redirectTo: () => '/plan?tab=planning' },
   {
     matcher: settingsMatcher,
     title: 'NAMA · Settings',

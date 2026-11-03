@@ -33,8 +33,8 @@ const PHONE = '(max-width: 767.98px)';
 // No page has a filled button; every change opens one dialog whose Save is its one filled button
 // (UX-04). Archive and restore are reversible, so they need no confirmation. Load = GET
 // /api/settings and GET /api/health (NFR-01), once for every section; each change is one call.
-// Long lists stay short: only the newest salary shows. Categories are on Plan's Categories tab
-// (owner note 9). People (STG-07, AUTH-07) is for admins only: /api/settings sends it
+// Long lists stay short: only the newest salary shows. Categories are on Plan's Planning tab
+// (owner notes 9 and 31). People (STG-07, AUTH-07) is for admins only: /api/settings sends it
 // only to them. Connected apps (STG-08, MCP-05) lists the apps allowed to read your data.
 @Component({
   selector: 'app-settings',

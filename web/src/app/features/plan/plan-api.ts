@@ -102,7 +102,7 @@ export class PlanApi {
     return firstValueFrom(this.http.post<SubCategory>('/api/sub-categories', { categoryId, name }));
   }
 
-  // Rename, archive and restore (STG-05, on Plan's Categories tab since owner note 9). There is no
+  // Rename, archive and restore (STG-05, on Plan's Planning list since owner note 31). There is no
   // delete (PRD 4.6).
   updateCategory(id: string, name: string, archived: boolean): Promise<Category> {
     return firstValueFrom(this.http.put<Category>(`/api/categories/${id}`, { name, archived }));

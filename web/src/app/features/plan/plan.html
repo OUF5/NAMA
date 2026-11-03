@@ -46,13 +46,13 @@
         <section class="card empty">
           <h2>Add your first sub-category</h2>
           <p class="note">
-            On <a routerLink="/plan" [queryParams]="{ tab: 'categories' }" queryParamsHandling="merge">Categories</a>,
-            open a category and add a sub-category, for example Groceries under Food. Then enter the planned amount
-            for each month.
+            Open a category below and choose "Add sub-category", for example Groceries under Food. Then enter
+            the planned amount for each month.
           </p>
         </section>
       }
-      <!-- PLN-01: categories (closed at first) with their sub-categories. -->
+      <!-- PLN-01: categories (closed at first) with their sub-categories. PLN-05 and STG-05 in the same
+           list (owner note 31): add at the end of each list, rename and archive in each row's menu. -->
       <section class="card" aria-labelledby="list-title">
         <div class="card-head">
           <h2 id="list-title">
@@ -64,7 +64,7 @@
           <app-month-picker [months]="monthOptions()" [selected]="selected()?.key ?? null" (selectedChange)="selectMonth($event)" />
         </div>
         <p class="caption list-note">
-          Open a category to edit its sub-categories' amounts.
+          Open a category to plan its sub-categories or add one.
           <a routerLink="/tracker" [queryParams]="{ fyId: d.fiscalYear.id, view: 'year' }">See the year grid</a>
         </p>
         <ul class="list">
@@ -82,6 +82,9 @@
                   </span>
                   <span class="money">{{ money(category.month) }}</span>
                 </button>
+                <!-- Keeps the amounts in line with the sub-categories', which have an edit button. -->
+                <span class="icon-gap" aria-hidden="true"></span>
+                <ng-container *ngTemplateOutlet="more; context: { category: category, item: category }" />
               </div>
               @if (isOpen(category.id)) {
                 <ul class="subs">
@@ -104,17 +107,61 @@
                       >
                         <mat-icon>edit</mat-icon>
                       </button>
+                      <ng-container *ngTemplateOutlet="more; context: { category: category, sub: sub, item: sub }" />
                     </li>
                   } @empty {
-                    <li class="note">No sub-categories yet. Add one on <a routerLink="/plan" [queryParams]="{ tab: 'categories' }" queryParamsHandling="merge">Categories</a>.</li>
+                    <li class="note">No sub-categories yet.</li>
+                  }
+                  @if (!category.archived) {
+                    <li>
+                      <button mat-button type="button" class="add" (click)="addSubCategory(category)">
+                        <mat-icon>add</mat-icon>
+                        Add sub-category
+                      </button>
+                    </li>
                   }
                 </ul>
               }
             </li>
           } @empty {
-            <li class="note">No categories yet. Add one on <a routerLink="/plan" [queryParams]="{ tab: 'categories' }" queryParamsHandling="merge">Categories</a>.</li>
+            <li class="note">No categories yet.</li>
           }
         </ul>
+        <button mat-button type="button" class="add" (click)="addCategory()">
+          <mat-icon>add</mat-icon>
+          Add category
+        </button>
+        <!-- PLN-05: archived items the list leaves out, folded away, each with Restore. -->
+        @if (archived().length) {
+          <button mat-button type="button" class="fold" [attr.aria-expanded]="isOpen('archived')" (click)="toggle('archived')">
+            <mat-icon class="chevron" [class.open]="isOpen('archived')" aria-hidden="true">chevron_right</mat-icon>
+            Archived ({{ archived().length }})
+          </button>
+          @if (isOpen('archived')) {
+            <ul class="list archived">
+              @for (row of archived(); track row.sub?.id ?? row.category.id) {
+                <li class="row">
+                  <span class="name">
+                    {{ row.name }}
+                    @if (row.caption) {
+                      <span class="caption line">{{ row.caption }}</span>
+                    }
+                  </span>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    [disabled]="busy()"
+                    [attr.aria-label]="'Restore ' + row.name"
+                    [title]="'Restore ' + row.name"
+                    (click)="toggleArchived(row.category, row.sub)"
+                  >
+                    <mat-icon>unarchive</mat-icon>
+                  </button>
+                </li>
+              }
+            </ul>
+          }
+        }
       </section>
       }
       @case ('allocating') {
@@ -233,15 +280,34 @@
         </p>
       </section>
       }
-      @case ('categories') {
-        <app-plan-categories
-          [categories]="categories()"
-          (changed)="categoriesChanged($event)"
-          (subAdded)="subAdded($event.sub, $event.categoryName)"
-        />
-      }
     }
   </div>
+
+  <!-- A row's "More" button opens the one menu with that row's category or sub-category (STG-05). -->
+  <ng-template #more let-category="category" let-sub="sub" let-item="item">
+    <button
+      mat-icon-button
+      type="button"
+      [matMenuTriggerFor]="rowMenu"
+      [matMenuTriggerData]="{ category: category, sub: sub, item: item }"
+      [attr.aria-label]="'More for ' + item.name"
+      [title]="'More for ' + item.name"
+    >
+      <mat-icon>more_vert</mat-icon>
+    </button>
+  </ng-template>
+  <mat-menu #rowMenu="matMenu" xPosition="before">
+    <ng-template matMenuContent let-category="category" let-sub="sub" let-item="item">
+      <button mat-menu-item type="button" (click)="rename(category, sub)">
+        <mat-icon>edit</mat-icon>
+        <span>Rename</span>
+      </button>
+      <button mat-menu-item type="button" [disabled]="busy()" (click)="toggleArchived(category, sub)">
+        <mat-icon>{{ item.archived ? 'unarchive' : 'archive' }}</mat-icon>
+        <span>{{ item.archived ? 'Restore' : 'Archive' }}</span>
+      </button>
+    </ng-template>
+  </mat-menu>
 } @else {
   <p class="caption">Loading…</p>
 }
