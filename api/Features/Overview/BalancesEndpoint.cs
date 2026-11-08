@@ -22,20 +22,23 @@ public static class BalancesEndpoint
     public static IEndpointRouteBuilder MapBalances(this IEndpointRouteBuilder api)
     {
         api.MapGet("/fiscal-years/{fyId}/balances", async (string fyId, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
-        {
-            var uid = user.FindFirstValue("sub")!;
-            var fiscalYear = (await store.GetFiscalYearsAsync(uid)).FirstOrDefault(item => item.Id == fyId);
-            if (fiscalYear is null || await BanksEndpoint.LoadAsync(uid, store, time, fiscalYear.StartDate) is not { } data)
-            {
-                return Results.NotFound();
-            }
-            return Results.Ok(new BalancesResponse(
-                data.Complete,
-                (await MonthEndsAsync(uid, store, data, fiscalYear))
-                    .Select(end => new MonthBalanceDto(end.Period.Key, end.Balance is { } amount ? Money.FromMinor(amount) : null, end.Projected))
-                    .ToList()));
-        });
+            await LoadAsync(user.FindFirstValue("sub")!, fyId, store, time) is { } balances ? Results.Ok(balances) : Results.NotFound());
         return api;
+    }
+
+    // Null for an unknown FY. Also the Claude connector's get_balances (owner note 34).
+    public static async Task<BalancesResponse?> LoadAsync(string uid, string fyId, IUserStore store, TimeProvider time)
+    {
+        var fiscalYear = (await store.GetFiscalYearsAsync(uid)).FirstOrDefault(item => item.Id == fyId);
+        if (fiscalYear is null || await BanksEndpoint.LoadAsync(uid, store, time, fiscalYear.StartDate) is not { } data)
+        {
+            return null;
+        }
+        return new BalancesResponse(
+            data.Complete,
+            (await MonthEndsAsync(uid, store, data, fiscalYear))
+                .Select(end => new MonthBalanceDto(end.Period.Key, end.Balance is { } amount ? Money.FromMinor(amount) : null, end.Projected))
+                .ToList());
     }
 
     // Each month's end balance of one FY: real for a closed month, projected otherwise (null when

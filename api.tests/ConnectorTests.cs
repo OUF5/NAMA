@@ -329,7 +329,8 @@ public class ConnectorTests : IClassFixture<ApiFactory>
         var tools = (await McpResult(await McpSend(factory, tokens.AccessToken, "tools/list")))["tools"]!.AsArray();
 
         Assert.Equal(
-            ["get_banks", "get_calendar", "get_categories", "get_income", "get_loans", "get_month", "get_overview", "get_plans", "get_summary", "list_entries"],
+            ["get_balances", "get_banks", "get_briefing", "get_calendar", "get_categories", "get_income", "get_loans", "get_month",
+                "get_overview", "get_plans", "get_projects", "get_summary", "list_entries"],
             tools.Select(tool => tool!["name"]!.GetValue<string>()).Order());
         Assert.All(tools, tool =>
         {
@@ -348,6 +349,8 @@ public class ConnectorTests : IClassFixture<ApiFactory>
     [InlineData("get_overview", "/api/fiscal-years/2026-01/overview")]
     [InlineData("get_month", "/api/fiscal-years/2026-01/months/2026-09")]
     [InlineData("get_plans", "/api/fiscal-years/2026-01/plans")]
+    [InlineData("get_balances", "/api/fiscal-years/2026-01/balances")]
+    [InlineData("get_projects", "/api/projects")]
     public async Task A_tool_answers_what_its_page_reads(string tool, string url)
     {
         var sub = await SetUpWithData();
@@ -357,6 +360,20 @@ public class ConnectorTests : IClassFixture<ApiFactory>
         var answer = ToolJson(await CallTool(factory, tokens.AccessToken, tool));
 
         Assert.Equal(WithoutNulls(page)!.ToJsonString(), WithoutNulls(answer)!.ToJsonString());
+    }
+
+    // Owner note 34: get_month takes Tracker's months back (?back=) for the overspend to make up.
+    [Fact]
+    public async Task get_month_counts_the_overspend_over_the_months_back()
+    {
+        var sub = await SetUpWithData();
+        var tokens = await Connect(factory, sub);
+
+        var page = await Json(await Send(factory, HttpMethod.Get, "/api/fiscal-years/2026-01/months/2026-09?back=3", sub));
+        var answer = ToolJson(await CallTool(factory, tokens.AccessToken, "get_month", new JsonObject { ["back"] = 3 }));
+
+        Assert.Equal(WithoutNulls(page)!.ToJsonString(), WithoutNulls(answer)!.ToJsonString());
+        Assert.Equal(3, answer["overspent"]!["monthsBack"]!.GetValue<int>());
     }
 
     [Fact]
@@ -372,18 +389,40 @@ public class ConnectorTests : IClassFixture<ApiFactory>
             answer["fiscalYears"]!.ToJsonString());
     }
 
+    // Owner note 34 (TBL-07): every type, newest first, with names, as the Entries page lists them, and
+    // each type's total; the filters as the page's.
     [Fact]
-    public async Task list_entries_answers_the_filtered_entries_with_their_count_and_total()
+    public async Task list_entries_answers_every_type_with_names_and_totals()
     {
         var sub = await SetUpWithData();
+        await factory.Store.AddTransferAsync(sub, new Transfer("t1", new DateOnly(2026, 10, 14), "2026-09", "2026-01", "bank", "rajhi", 25_000, "Card"));
+        await factory.Store.AddIncomeAsync(sub, new IncomeItem("gift", IncomeKind.Additional, "Gift", 50_000, "2026-09", "2026-09", IncomeCounts.Actual, "rajhi"));
         var tokens = await Connect(factory, sub);
 
-        var page = await Json(await Send(factory, HttpMethod.Get, "/api/entries?q=lunch", sub));
-        var answer = ToolJson(await CallTool(factory, tokens.AccessToken, "list_entries", new JsonObject { ["q"] = "lunch" }));
+        var answer = ToolJson(await CallTool(factory, tokens.AccessToken, "list_entries"));
 
-        Assert.Equal(WithoutNulls(page["entries"])!.ToJsonString(), answer["entries"]!.ToJsonString());
-        Assert.Equal((1, 40m, false, "2026-01"),
-            (answer["count"]!.GetValue<int>(), answer["total"]!.GetValue<decimal>(), answer["truncated"]!.GetValue<bool>(), answer["fyId"]!.GetValue<string>()));
+        Assert.Equal((4, false, 200m, 250m, 500m, "2026-01"), (
+            answer["count"]!.GetValue<int>(), answer["truncated"]!.GetValue<bool>(), answer["spent"]!.GetValue<decimal>(),
+            answer["moved"]!.GetValue<decimal>(), answer["income"]!.GetValue<decimal>(), answer["fyId"]!.GetValue<string>()));
+        var rows = answer["entries"]!.AsArray();
+        Assert.Equal(["transfer", "expense", "expense", "income"], rows.Select(row => row!["type"]!.GetValue<string>()));
+        Assert.Equal(("SNB", "Al Rajhi", 250m, "Oct 2026"), (
+            rows[0]!["fromAccount"]!.GetValue<string>(), rows[0]!["toAccount"]!.GetValue<string>(),
+            rows[0]!["amount"]!.GetValue<decimal>(), rows[0]!["month"]!.GetValue<string>()));
+        var lunch = rows.Single(row => row!["note"]?.GetValue<string>() == "Lunch with Sara")!;
+        Assert.Equal(("Food", "Groceries", "SNB", "groceries", 40m), (
+            lunch["category"]!.GetValue<string>(), lunch["subCategory"]!.GetValue<string>(), lunch["account"]!.GetValue<string>(),
+            lunch["subCategoryId"]!.GetValue<string>(), lunch["amount"]!.GetValue<decimal>()));
+        Assert.Equal(("Gift", "actual", "Al Rajhi", "2026-09-27"), (
+            rows[3]!["label"]!.GetValue<string>(), rows[3]!["counts"]!.GetValue<string>(), rows[3]!["account"]!.GetValue<string>(),
+            rows[3]!["date"]!.GetValue<string>()));
+
+        var lunchOnly = ToolJson(await CallTool(factory, tokens.AccessToken, "list_entries", new JsonObject { ["q"] = "lunch" }));
+        Assert.Equal((1, 40m), (lunchOnly["count"]!.GetValue<int>(), lunchOnly["spent"]!.GetValue<decimal>()));
+        var transfers = ToolJson(await CallTool(factory, tokens.AccessToken, "list_entries", new JsonObject { ["type"] = "transfer" }));
+        Assert.Equal(["transfer"], transfers["entries"]!.AsArray().Select(row => row!["type"]!.GetValue<string>()));
+        var wrong = await CallTool(factory, tokens.AccessToken, "list_entries", new JsonObject { ["type"] = "loan" });
+        Assert.True(wrong["isError"]!.GetValue<bool>());
     }
 
     [Fact]
@@ -400,7 +439,128 @@ public class ConnectorTests : IClassFixture<ApiFactory>
         var answer = ToolJson(await CallTool(factory, tokens.AccessToken, "list_entries"));
 
         Assert.Equal((301, 301m, true, 300),
-            (answer["count"]!.GetValue<int>(), answer["total"]!.GetValue<decimal>(), answer["truncated"]!.GetValue<bool>(), answer["entries"]!.AsArray().Count));
+            (answer["count"]!.GetValue<int>(), answer["spent"]!.GetValue<decimal>(), answer["truncated"]!.GetValue<bool>(), answer["entries"]!.AsArray().Count));
+    }
+
+    // Owner note 34: get_briefing, "start here". Today is 17 Oct 2026, in Oct 2026 (2026-09, 27 Sep to 26
+    // Oct). Groceries: 200 of its 1,000 this month. Fuel: 900 of its 1,000 (near limit), and 30 with no
+    // plan last month, so Transport has 30 to make up. A Bonus of 300 comes next month. Names, never
+    // only ids, and the month's numbers are the top bar's.
+    [Fact]
+    public async Task get_briefing_says_how_the_month_and_the_year_are_going_with_names()
+    {
+        var sub = await SetUpWithData();
+        await factory.Store.AddSubCategoryAsync(sub, new SubCategory("fuel", "transport", "Fuel", 0));
+        await factory.Store.SetPlanAsync(sub, "2026-01", new PlanAmounts("fuel", "transport", new Dictionary<string, long> { ["2026-09"] = 100_000 }));
+        await factory.Store.AddEntryAsync(sub, new Entry("f1", new DateOnly(2026, 10, 2), "2026-09", "2026-01", "transport", "fuel", "rajhi", 90_000, "Road trip"));
+        await factory.Store.AddEntryAsync(sub, new Entry("f0", new DateOnly(2026, 9, 2), "2026-08", "2026-01", "transport", "fuel", "rajhi", 3_000, ""));
+        await factory.Store.AddIncomeAsync(sub, new IncomeItem("bonus", IncomeKind.Additional, "Bonus", 30_000, "2026-10", "2026-10", IncomeCounts.Both, "rajhi"));
+        var tokens = await Connect(factory, sub);
+
+        var briefing = ToolJson(await CallTool(factory, tokens.AccessToken, "get_briefing"));
+        var summary = (await Json(await Send(factory, HttpMethod.Get, "/api/summary", sub)))["month"]!;
+
+        Assert.Equal(("2026-10-17", "SAR", "FY 2026", "2026-01"), (
+            briefing["today"]!.GetValue<string>(), briefing["currency"]!.GetValue<string>(),
+            briefing["fiscalYear"]!.GetValue<string>(), briefing["fyId"]!.GetValue<string>()));
+        var month = briefing["month"]!;
+        Assert.Equal(("2026-09", 21, 10), (month["period"]!["key"]!.GetValue<string>(), month["day"]!.GetValue<int>(), month["daysLeft"]!.GetValue<int>()));
+        Assert.Equal((summary["planned"]!.GetValue<decimal>(), summary["spent"]!.GetValue<decimal>()), (month["planned"]!.GetValue<decimal>(), month["spent"]!.GetValue<decimal>()));
+        Assert.Equal((2_000m, 1_100m, 900m, "withinPlan", 30m, 870m, 10_000m), (
+            month["planned"]!.GetValue<decimal>(), month["spent"]!.GetValue<decimal>(), month["remainingThisMonth"]!.GetValue<decimal>(),
+            month["status"]!.GetValue<string>(), month["overspentLastMonth"]!.GetValue<decimal>(),
+            month["remainingAfterOverspent"]!.GetValue<decimal>(), month["income"]!.GetValue<decimal>()));
+
+        var watch = briefing["watch"]!.AsArray().Single()!;
+        Assert.Equal(("Transport", "Fuel", 900m, 1_000m, "nearLimit"), (
+            watch["category"]!.GetValue<string>(), watch["subCategory"]!.GetValue<string>(), watch["spent"]!.GetValue<decimal>(),
+            watch["planned"]!.GetValue<decimal>(), watch["status"]!.GetValue<string>()));
+        Assert.Equal(["Transport", "Food"], briefing["topCategories"]!.AsArray().Select(line => line!["category"]!.GetValue<string>()));
+        Assert.Equal(30m, briefing["topCategories"]![0]!["lastMonthSpent"]!.GetValue<decimal>());
+        var overspent = briefing["overspentToMakeUp"]!.AsArray().Single()!;
+        Assert.Equal(("Transport", 30m, 100m, 70m), (
+            overspent["category"]!.GetValue<string>(), overspent["overspent"]!.GetValue<decimal>(),
+            overspent["leftThisMonth"]!.GetValue<decimal>(), overspent["afterCovering"]!.GetValue<decimal>()));
+        Assert.Equal(("Road trip", "Fuel", "Al Rajhi", 900m), (
+            briefing["biggestThisMonth"]![0]!["note"]!.GetValue<string>(), briefing["biggestThisMonth"]![0]!["subCategory"]!.GetValue<string>(),
+            briefing["biggestThisMonth"]![0]!["account"]!.GetValue<string>(), briefing["biggestThisMonth"]![0]!["amount"]!.GetValue<decimal>()));
+        Assert.Equal(3, briefing["latestThisMonth"]!.AsArray().Count);
+
+        var bonus = briefing["additionalIncomeSoon"]!.AsArray().Single()!;
+        Assert.Equal(("Bonus", "Nov 2026", 300m, "both", "Al Rajhi"), (
+            bonus["label"]!.GetValue<string>(), bonus["month"]!.GetValue<string>(), bonus["amount"]!.GetValue<decimal>(),
+            bonus["counts"]!.GetValue<string>(), bonus["account"]!.GetValue<string>()));
+        Assert.Equal((500m, 1), (briefing["loans"]!["lentOpen"]!.GetValue<decimal>(), briefing["loans"]!["lentOpenCount"]!.GetValue<int>()));
+        Assert.False(briefing["money"]!["complete"]!.GetValue<bool>());
+        Assert.Equal(["Al Rajhi", "SNB"], briefing["money"]!["accounts"]!.AsArray().Select(account => account!["name"]!.GetValue<string>()));
+        var outlook = (await Json(await Send(factory, HttpMethod.Get, "/api/fiscal-years/2026-01/overview", sub)))["planVsActual"]!;
+        Assert.Equal((outlook["spent"]!.GetValue<decimal>(), outlook["projectedSaved"]!.GetValue<decimal>()), (
+            briefing["outlook"]!["spentSoFar"]!.GetValue<decimal>(), briefing["outlook"]!["projectedSavingAtFyEnd"]!.GetValue<decimal>()));
+        Assert.Empty(briefing["projects"]!.AsArray());
+    }
+
+    // Owner note 34: compact whatever the year holds: under 40,000 characters (about 10,000 tokens,
+    // where Claude Code warns) with 600 expenses over 30 sub-categories.
+    [Fact]
+    public async Task get_briefing_stays_compact_in_a_busy_year()
+    {
+        var sub = await SetUpUser(factory);
+        for (var s = 0; s < 30; s++)
+        {
+            await factory.Store.AddSubCategoryAsync(sub, new SubCategory($"sub{s}", s % 2 == 0 ? "food" : "transport", $"Sub-category number {s}", s));
+            await factory.Store.SetPlanAsync(sub, "2026-01", new PlanAmounts($"sub{s}", s % 2 == 0 ? "food" : "transport",
+                new Dictionary<string, long> { ["2026-08"] = 10_000, ["2026-09"] = 10_000 }));
+        }
+        for (var i = 0; i < 600; i++)
+        {
+            var (date, key) = i % 2 == 0 ? (new DateOnly(2026, 10, 1 + i % 16), "2026-09") : (new DateOnly(2026, 9, 1 + i % 20), "2026-08");
+            await factory.Store.AddEntryAsync(sub, new Entry($"e{i}", date, key, "2026-01", i % 60 < 30 ? "food" : "transport", $"sub{i % 30}", "bank", 900 + i, $"Entry number {i} with a note"));
+        }
+        var tokens = await Connect(factory, sub);
+
+        var result = await CallTool(factory, tokens.AccessToken, "get_briefing");
+
+        Assert.InRange(result["content"]![0]!["text"]!.GetValue<string>().Length, 1, 40_000);
+        Assert.Equal(5, ToolJson(result)["watch"]!.AsArray().Count);
+    }
+
+    // MCP-07 (owner note 34): ready-made prompts that point Claude at the tools.
+    [Fact]
+    public async Task Prompts_are_listed_and_name_the_tools_to_call()
+    {
+        var tokens = await Connect(factory, await SetUpUser(factory));
+
+        var prompts = (await McpResult(await McpSend(factory, tokens.AccessToken, "prompts/list")))["prompts"]!.AsArray();
+        Assert.Equal(["monthly_review", "savings_outlook", "spending_check"], prompts.Select(prompt => prompt!["name"]!.GetValue<string>()).Order());
+
+        var review = await McpResult(await McpSend(factory, tokens.AccessToken, "prompts/get",
+            new JsonObject { ["name"] = "monthly_review", ["arguments"] = new JsonObject { ["month"] = "Nov 2026" } }));
+        var text = review["messages"]![0]!["content"]!["text"]!.GetValue<string>();
+        Assert.Contains("the month Nov 2026", text);
+        Assert.Contains("get_briefing", text);
+        var check = await McpResult(await McpSend(factory, tokens.AccessToken, "prompts/get",
+            new JsonObject { ["name"] = "spending_check", ["arguments"] = new JsonObject { ["category"] = "Groceries" } }));
+        Assert.Contains("\"Groceries\"", check["messages"]![0]!["content"]!["text"]!.GetValue<string>());
+        Assert.Equal(HttpStatusCode.Unauthorized, (await McpSend(factory, null, "prompts/list")).StatusCode);
+    }
+
+    // Owner note 34: what Claude reads when it connects starts it at get_briefing and says the app's words.
+    [Fact]
+    public async Task The_instructions_start_at_get_briefing()
+    {
+        var tokens = await Connect(factory, await SetUpUser(factory));
+
+        var init = await McpResult(await McpSend(factory, tokens.AccessToken, "initialize", new JsonObject
+        {
+            ["protocolVersion"] = "2025-11-25",
+            ["capabilities"] = new JsonObject(),
+            ["clientInfo"] = new JsonObject { ["name"] = "test", ["version"] = "1" },
+        }));
+
+        var instructions = init["instructions"]!.GetValue<string>();
+        Assert.Contains("Start with get_briefing", instructions);
+        Assert.Contains("Remaining this month", instructions);
+        Assert.NotNull(init["capabilities"]!["prompts"]);
     }
 
     [Fact]

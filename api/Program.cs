@@ -35,7 +35,8 @@ builder.Services.AddValidation();
 // R-CAL-10: tests replace it to fake "today".
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddFirestore();
-// MCP-03, MCP-04: the Claude connector's token scheme and its read-only tools (stateless Streamable HTTP).
+// MCP-03, MCP-04, MCP-07: the Claude connector's token scheme, its read-only tools and its prompts
+// (stateless Streamable HTTP).
 builder.Services.AddMcpAuth();
 builder.Services.AddMcpServer(options =>
 {
@@ -43,7 +44,8 @@ builder.Services.AddMcpServer(options =>
     options.ServerInstructions = NamaTools.Instructions;
 })
     .WithHttpTransport()
-    .WithTools<NamaTools>();
+    .WithTools<NamaTools>()
+    .WithPrompts<NamaPrompts>();
 
 var app = builder.Build();
 
