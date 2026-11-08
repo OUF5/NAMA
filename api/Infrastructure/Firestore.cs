@@ -728,6 +728,10 @@ public static class FirestoreDocuments
 
     public static DateOnly ToDate(string value) => DateOnly.ParseExact(value, DateFormat, CultureInfo.InvariantCulture);
 
+    // ENT-05: a stored document has its server time; one that was never stored has none.
+    private static DateTimeOffset ToCreatedAt(Timestamp createdAt) =>
+        createdAt.Equals(default(Timestamp)) ? default : createdAt.ToDateTimeOffset();
+
     public static ProfileDocument ToDocument(UserProfile profile) => new()
     {
         DisplayName = profile.DisplayName,
@@ -845,7 +849,7 @@ public static class FirestoreDocuments
 
     public static Transfer ToTransfer(string id, TransferDocument document) => new(
         id, ToDate(document.Date), document.PeriodKey, document.FyId, document.FromBankAccountId,
-        document.ToBankAccountId, document.AmountMinor, document.Note);
+        document.ToBankAccountId, document.AmountMinor, document.Note, ToCreatedAt(document.CreatedAt));
 
     public static LoanDocument ToDocument(Loan loan) => new()
     {
@@ -880,7 +884,7 @@ public static class FirestoreDocuments
 
     public static Entry ToEntry(string id, EntryDocument document) => new(
         id, ToDate(document.Date), document.PeriodKey, document.FyId, document.CategoryId,
-        document.SubCategoryId, document.BankAccountId, document.AmountMinor, document.Note);
+        document.SubCategoryId, document.BankAccountId, document.AmountMinor, document.Note, ToCreatedAt(document.CreatedAt));
 
     public static ProjectDocument ToDocument(Project project) => new()
     {
@@ -948,7 +952,8 @@ public static class FirestoreDocuments
 
     public static IncomeItem ToIncome(string id, IncomeDocument document) => new(
         id, document.Kind == "salary" ? IncomeKind.Salary : IncomeKind.Additional, document.Label,
-        document.AmountMinor, document.FromPeriodKey, document.ToPeriodKey, ToCounts(document.Counts), document.BankAccountId);
+        document.AmountMinor, document.FromPeriodKey, document.ToPeriodKey, ToCounts(document.Counts), document.BankAccountId,
+        ToCreatedAt(document.CreatedAt));
 
     public static CategoryDocument ToDocument(Category category) => new()
     {

@@ -57,6 +57,42 @@ export interface Projection {
   countedFrom: PeriodInfo | null;
 }
 
+export interface LastExpense {
+  date: string;
+  categoryId: string;
+  subCategoryId: string;
+  bankAccountId: string;
+  amount: number;
+  note: string;
+}
+
+export interface LastTransfer {
+  id: string;
+  date: string;
+  fromBankAccountId: string;
+  toBankAccountId: string;
+  amount: number;
+  note: string;
+}
+
+export interface LastIncome {
+  label: string;
+  amount: number;
+  fromPeriodKey: string;
+  toPeriodKey: string | null;
+  bankAccountId: string | null;
+}
+
+// ENT-05 (owner note 35): the one added last, by when it was added. Maps are keyed by id; an id with
+// nothing added is left out. income is null until an additional item exists.
+export interface LastAddedData {
+  expenseBySubCategory: Record<string, LastExpense>;
+  expenseByAccount: Record<string, LastExpense>;
+  transferFrom: Record<string, LastTransfer>;
+  transferTo: Record<string, LastTransfer>;
+  income: LastIncome | null;
+}
+
 // balance is the active accounts' total, null until complete (every active account has an opening
 // balance and income has a split). month and projection are null when no FY contains today.
 export interface Summary {
@@ -65,6 +101,7 @@ export interface Summary {
   accounts: SummaryAccount[];
   month: SummaryMonth | null;
   projection: Projection | null;
+  lastAdded: LastAddedData | null;
 }
 
 // UX-08: the top bar's numbers. Loaded once the shell shows the navigation, and again after every

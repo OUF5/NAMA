@@ -128,6 +128,8 @@
           <p class="caption">{{ plan.note }}</p>
         }
       }
+      <!-- ENT-05 (owner note 35): the additional income added last. -->
+      <app-last-added [rows]="lastRows()" />
     </div>
   } @else if (split()) {
     <!-- Add: a placeholder beside the fields until there is something to show, as the expense panel. -->
@@ -135,6 +137,7 @@
       <mat-icon aria-hidden="true">payments</mat-icon>
       <p class="placeholder-title">What this income changes</p>
       <p class="caption">Choose its months and account to see your balance and Plan's income before and after.</p>
+      <app-last-added [rows]="lastRows()" />
     </div>
   }
 </div>

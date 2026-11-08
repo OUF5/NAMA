@@ -8,7 +8,7 @@ public enum IncomeCounts { Both, Planned, Actual }
 
 // PRD 7.4 income document. An empty ToPeriodKey is open ended; equal to FromPeriodKey is Once (R-INC-03).
 // BankAccountId (R-INC-05): the account an Actual or Both item goes into on payday; null goes through
-// the income split.
+// the income split. CreatedAt is the moment it was added (ENT-05), set by the store; default until stored.
 public sealed record IncomeItem(
     string Id,
     IncomeKind Kind,
@@ -17,7 +17,8 @@ public sealed record IncomeItem(
     string FromPeriodKey,
     string? ToPeriodKey,
     IncomeCounts Counts = IncomeCounts.Both,
-    string? BankAccountId = null)
+    string? BankAccountId = null,
+    DateTimeOffset CreatedAt = default)
 {
     public bool InPlan => Counts != IncomeCounts.Actual;
 

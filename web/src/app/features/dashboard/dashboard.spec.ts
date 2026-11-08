@@ -219,6 +219,7 @@ function summary(): Summary {
       projectedSaving: 186000,
       countedFrom: null,
     },
+    lastAdded: null,
   };
 }
 

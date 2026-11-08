@@ -7,7 +7,7 @@ import { MatFormFieldHarness } from '@angular/material/form-field/testing';
 import { MatSelectHarness } from '@angular/material/select/testing';
 import { Router, provideRouter } from '@angular/router';
 import { Me, MeService } from '../../core/me';
-import { Summary, SummaryService } from '../../core/summary';
+import { LastAddedData, Summary, SummaryService } from '../../core/summary';
 import { Category } from '../plan/plan-api';
 import { Project } from '../projects/projects-api';
 import { AddEntry } from './add-entry';
@@ -325,6 +325,25 @@ describe('Add transfer and income (PRD 5.4, TRF-01, INC-01)', () => {
     ],
     month: null,
     projection: null,
+    lastAdded: null,
+  };
+
+  // ENT-05 (owner note 35): keyed by id; Fuel, SNB-from and income have nothing added in some tests.
+  const lastAdded: LastAddedData = {
+    expenseBySubCategory: {
+      groceries: { date: '2026-10-05', categoryId: 'food', subCategoryId: 'groceries', bankAccountId: 'snb', amount: 120, note: 'Weekly shop' },
+    },
+    expenseByAccount: {
+      rajhi: { date: '2026-10-16', categoryId: 'transport', subCategoryId: 'fuel', bankAccountId: 'rajhi', amount: 50, note: '' },
+    },
+    transferFrom: {
+      rajhi: { id: 't1', date: '2026-10-02', fromBankAccountId: 'rajhi', toBankAccountId: 'snb', amount: 500, note: '' },
+    },
+    transferTo: {
+      snb: { id: 't1', date: '2026-10-02', fromBankAccountId: 'rajhi', toBankAccountId: 'snb', amount: 500, note: '' },
+      rajhi: { id: 't2', date: '2026-10-09', fromBankAccountId: 'snb', toBankAccountId: 'rajhi', amount: 75, note: 'Rent share' },
+    },
+    income: { label: 'Bonus', amount: 800, fromPeriodKey: '2026-09', toPeriodKey: '2026-09', bankAccountId: 'snb' },
   };
 
   // PRJ-06: Car saves in SNB; 500 of this month's 2,000 is in.
@@ -421,6 +440,33 @@ describe('Add transfer and income (PRD 5.4, TRF-01, INC-01)', () => {
     expect(account()).toBe('Bank balance SNB SAR 23,900 arrow_forward SAR 18,900');
   });
 
+  // ENT-05 (owner note 35): a row for the chosen sub-category, and another for the chosen account.
+  it('shows the last expense of the chosen sub-category and, on its own row, of the bank', async () => {
+    const fixture = await open('/');
+    const root = fixture.nativeElement as HTMLElement;
+    const rows = () => Array.from(root.querySelectorAll('.side app-last-added .line')).map(words);
+
+    expect(rows()).toEqual([]);
+
+    TestBed.inject(SummaryService).summary.set({ ...summary, lastAdded });
+    await settle(fixture);
+    expect(rows()).toEqual(['Last from Al Rajhi 16 Oct 2026 · Transport › Fuel SAR 50']);
+
+    await (await select(fixture, 'Category')).clickOptions({ text: 'Food' });
+    await (await select(fixture, 'Sub-category')).clickOptions({ text: 'Groceries' });
+    (await vi.waitFor(() => http.expectOne((request) => request.url === '/api/indicator'))).flush(indicator);
+    await settle(fixture);
+    expect(rows()).toEqual([
+      'Last in Food › Groceries 5 Oct 2026 · SNB · Weekly shop SAR 120',
+      'Last from Al Rajhi 16 Oct 2026 · Transport › Fuel SAR 50',
+    ]);
+
+    // Nothing added from SNB yet: that row goes, the sub-category's stays.
+    await (await select(fixture, 'Bank account')).clickOptions({ text: 'SNB' });
+    await settle(fixture);
+    expect(rows()).toEqual(['Last in Food › Groceries 5 Oct 2026 · SNB · Weekly shop SAR 120']);
+  });
+
   it('says when an expense is before the opening balance, or the account has none', async () => {
     const fixture = await open('/');
     const root = fixture.nativeElement as HTMLElement;
@@ -484,6 +530,23 @@ describe('Add transfer and income (PRD 5.4, TRF-01, INC-01)', () => {
   });
 
   // PRJ-06: a To account with a project names it, and the amount is what is still to put in that month.
+  // ENT-05: one row per chosen account, and one row when both are the same transfer.
+  it('shows the last transfer of each chosen account', async () => {
+    const fixture = await open();
+    const root = fixture.nativeElement as HTMLElement;
+    const rows = () => Array.from(root.querySelectorAll('.side app-last-added .line')).map(words);
+    TestBed.inject(SummaryService).summary.set({ ...summary, lastAdded });
+    await settle(fixture);
+
+    // From Al Rajhi, to SNB: the last out of one is the last into the other.
+    expect(rows()).toEqual(['Last from Al Rajhi 2 Oct 2026 · to SNB SAR 500']);
+
+    // Swapped: nothing left SNB yet, and Al Rajhi's last came in from SNB.
+    (root.querySelector('button.swap') as HTMLButtonElement).click();
+    await settle(fixture);
+    expect(rows()).toEqual(['Last into Al Rajhi 9 Oct 2026 · from SNB · Rent share SAR 75']);
+  });
+
   it('names the project of the To account and fills what is still to put in', async () => {
     const fixture = await open('/?type=transfer', accounts, [car]);
     const root = fixture.nativeElement as HTMLElement;
@@ -635,6 +698,24 @@ describe('Add transfer and income (PRD 5.4, TRF-01, INC-01)', () => {
     // Label and amount clear; the type, the month and the choice stay.
     expect(await (await select(fixture, 'Counts in')).getValueText()).toBe('Actual');
     http.verify();
+  });
+
+  // ENT-05: the additional income added last, whatever the form holds.
+  it('shows the last income added', async () => {
+    const fixture = await open('/?type=income');
+    await flushIncome(fixture);
+    const root = fixture.nativeElement as HTMLElement;
+    const rows = () => Array.from(root.querySelectorAll('app-last-added .line')).map(words);
+
+    expect(rows()).toEqual([]);
+
+    TestBed.inject(SummaryService).summary.set({ ...summary, lastAdded });
+    await settle(fixture);
+    expect(rows()).toEqual(['Last added Bonus · Sep 2026 · into SNB SAR 800']);
+
+    TestBed.inject(SummaryService).summary.set({ ...summary, lastAdded: { ...lastAdded, income: null } });
+    await settle(fixture);
+    expect(rows()).toEqual([]);
   });
 
   it('switches to income and loads its months once', async () => {

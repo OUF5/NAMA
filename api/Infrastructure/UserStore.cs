@@ -22,7 +22,8 @@ public sealed record UserProfile(
 public sealed record BankAccount(string Id, string Name, bool Archived = false, OpeningBalance? Opening = null);
 
 // PRD 7.4 entry. PeriodKey and FyId are set by the API from Date (R-CAL-09); CategoryId is
-// copied from the sub-category for filtering.
+// copied from the sub-category for filtering. CreatedAt is the moment it was added (ENT-05), set by
+// the store on the first write and never changed; default until stored.
 public sealed record Entry(
     string Id,
     DateOnly Date,
@@ -32,10 +33,11 @@ public sealed record Entry(
     string SubCategoryId,
     string BankAccountId,
     long AmountMinor,
-    string Note);
+    string Note,
+    DateTimeOffset CreatedAt = default);
 
 // R-TRF-01: money moved between two of the user's own accounts. Never spending, never income.
-// PeriodKey and FyId are set by the API from Date (R-CAL-09).
+// PeriodKey and FyId are set by the API from Date (R-CAL-09). CreatedAt as Entry's (ENT-05).
 public sealed record Transfer(
     string Id,
     DateOnly Date,
@@ -44,7 +46,8 @@ public sealed record Transfer(
     string FromBankAccountId,
     string ToBankAccountId,
     long AmountMinor,
-    string Note);
+    string Note,
+    DateTimeOffset CreatedAt = default);
 
 public sealed record Category(string Id, string Name, int SortOrder, bool Archived = false);
 

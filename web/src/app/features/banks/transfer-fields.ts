@@ -9,7 +9,9 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { LastAddedData, LastTransfer } from '../../core/summary';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
+import { LastAdded, LastRow } from '../../shared/last-added';
 import { amountValidator, formatMoney, minorToInput, parseAmount, toMinor } from '../../shared/money';
 import { formatDate, fromDateString, toDateString } from '../../shared/month-label';
 import { BankAccount } from '../add-entry/entry-api';
@@ -77,6 +79,7 @@ export function applyTransferServerErrors(form: TransferForm, error: unknown): b
     MatIconModule,
     MatInputModule,
     MatSelectModule,
+    LastAdded,
   ],
   host: { '[class.split]': 'split()' },
   providers: [
@@ -104,6 +107,8 @@ export class TransferFields implements OnInit {
   readonly split = input(false);
   // PRJ-06 (Add only): GET /api/projects, or null while not loaded (then no project shows).
   readonly projects = input<Project[] | null>(null);
+  // ENT-05 (owner note 35), Add only: the top bar's summary.
+  readonly last = input<LastAddedData | null>(null);
 
   protected readonly noteMax = NOTE_MAX_LENGTH;
 
@@ -142,6 +147,27 @@ export class TransferFields implements OnInit {
       };
     };
     return { from: line(from, -amount), to: line(to, amount), amount: amount > 0 ? this.money(amount) : null };
+  });
+
+  // ENT-05: the last transfer out of the From account and into the To account; one row when they are
+  // the same transfer, which names both accounts.
+  protected readonly lastRows = computed<LastRow[]>(() => {
+    const last = this.last();
+    if (!last) {
+      return [];
+    }
+    const name = (id: string) => this.accounts().find((account) => account.id === id)?.name ?? '';
+    const row = (caption: string, transfer: LastTransfer, where: string): LastRow => ({
+      caption,
+      detail: [formatDate(transfer.date), where, transfer.note].filter(Boolean).join(' · '),
+      amount: this.money(toMinor(transfer.amount)),
+    });
+    const out = last.transferFrom[this.from()];
+    const into = last.transferTo[this.to()];
+    return [
+      ...(out ? [row(`Last from ${name(out.fromBankAccountId)}`, out, `to ${name(out.toBankAccountId)}`)] : []),
+      ...(into && into.id !== out?.id ? [row(`Last into ${name(into.toBankAccountId)}`, into, `from ${name(into.fromBankAccountId)}`)] : []),
+    ];
   });
 
   // PRJ-06: the project that counts the To account (R-PRJ-03: one at most that is not Done). Shown

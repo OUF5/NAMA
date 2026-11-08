@@ -110,7 +110,8 @@ public sealed class NamaTools(IUserStore store, TimeProvider time, EmailAllowlis
     [Description("The top bar and Dashboard's projection: the month in progress (day, days, days left, income, carriedIn, planned, "
         + "spent, remaining (carried: carriedIn + planned - spent), unassigned, and overspentLastMonth; Remaining this month is "
         + "planned - spent), the total bank balance and each account's, and the projection to the FY's end (balance today, still "
-        + "to spend this month, the months to come, the projected balance, saved to date, planned saved and projected saving). "
+        + "to spend this month, the months to come, the projected balance, saved to date, planned saved and projected saving), "
+        + "and lastAdded: the last expense added per sub-category and per account, the last transfer per account, the last additional income. "
         + "get_briefing says the same with names.")]
     public async Task<SummaryEndpoint.SummaryResponse> GetSummary(ClaimsPrincipal user) =>
         await SummaryEndpoint.LoadAsync(Uid(user), store, time) ?? throw NotSetUp();

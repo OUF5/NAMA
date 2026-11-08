@@ -17,6 +17,7 @@ public sealed record BalanceData(
     IReadOnlyList<IncomeSplit> Splits,
     IReadOnlyList<Transfer> Transfers,
     IncomeTotals Income,
+    IReadOnlyList<IncomeItem> IncomeItems,
     IReadOnlyList<Entry> Entries,
     IReadOnlyDictionary<string, AccountBalance> Balances)
 {
@@ -153,7 +154,8 @@ public static class BanksEndpoint
         var splits = await store.GetIncomeSplitsAsync(uid);
         var transfers = await store.GetTransfersAsync(uid);
         var periods = fiscalYears.SelectMany(fiscalYear => fiscalYear.Periods).ToList();
-        var income = IncomeCalculator.Totals(await store.GetIncomesAsync(uid), periods);
+        var incomeItems = await store.GetIncomesAsync(uid);
+        var income = IncomeCalculator.Totals(incomeItems, periods);
 
         // Only what a balance can count: entries from the earliest opening date on.
         var dates = accounts.Where(account => account.Opening is not null).Select(account => account.Opening!.Date).ToList();
@@ -163,7 +165,7 @@ public static class BanksEndpoint
         }
         var entries = dates.Count == 0 ? [] : await store.GetEntriesFromAsync(uid, dates.Min());
 
-        var data = new BalanceData(profile, today, fiscalYears, accounts, splits, transfers, income, entries, new Dictionary<string, AccountBalance>());
+        var data = new BalanceData(profile, today, fiscalYears, accounts, splits, transfers, income, incomeItems, entries, new Dictionary<string, AccountBalance>());
         return data with
         {
             Balances = accounts

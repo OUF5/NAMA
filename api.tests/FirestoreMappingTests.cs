@@ -1,5 +1,6 @@
 using Api.Domain;
 using Api.Infrastructure;
+using Google.Cloud.Firestore;
 
 namespace Api.Tests;
 
@@ -210,6 +211,24 @@ public class FirestoreMappingTests
             (document.Date, document.PeriodKey, document.FyId, document.CategoryId, document.SubCategoryId,
              document.BankAccountId, document.AmountMinor, document.Note));
         Assert.Equal(entry, FirestoreDocuments.ToEntry("e", document));
+    }
+
+    // ENT-05: what was stored comes back with the moment it was added.
+    [Fact]
+    public void Created_at_comes_back_with_a_stored_document()
+    {
+        var added = new DateTimeOffset(2026, 10, 17, 9, 30, 0, TimeSpan.Zero);
+        var at = Timestamp.FromDateTimeOffset(added);
+
+        var entry = FirestoreDocuments.ToDocument(new Entry("e", new DateOnly(2026, 10, 17), "2026-09", "2026-01", "food", "groceries", "bank", 12_550, ""));
+        entry.CreatedAt = at;
+        var transfer = FirestoreDocuments.ToDocument(new Transfer("t", new DateOnly(2026, 10, 18), "2026-09", "2026-01", "a", "b", 50_025, ""));
+        transfer.CreatedAt = at;
+        var income = FirestoreDocuments.ToDocument(new IncomeItem("i", IncomeKind.Additional, "Bonus", 50_025, "2026-09", "2026-09"));
+        income.CreatedAt = at;
+
+        Assert.Equal((added, added, added),
+            (FirestoreDocuments.ToEntry("e", entry).CreatedAt, FirestoreDocuments.ToTransfer("t", transfer).CreatedAt, FirestoreDocuments.ToIncome("i", income).CreatedAt));
     }
 
     // PRD 7.4 projects (owner note 30): status and targets by name, one account, dates as strings.

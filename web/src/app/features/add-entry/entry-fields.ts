@@ -10,7 +10,9 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { merge } from 'rxjs';
+import { LastAddedData, LastExpense } from '../../core/summary';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
+import { LastAdded, LastRow } from '../../shared/last-added';
 import { amountValidator, formatMoney, parseAmount, toMinor } from '../../shared/money';
 import { formatDate, fromDateString, toDateString } from '../../shared/month-label';
 import { PlannedIndicator } from '../../shared/planned-indicator';
@@ -109,6 +111,7 @@ export function applyServerErrors(form: EntryForm, error: unknown): boolean {
     MatSelectModule,
     RouterLink,
     PlannedIndicator,
+    LastAdded,
   ],
   host: { '[class.split]': 'split()' },
   providers: [
@@ -141,6 +144,8 @@ export class EntryFields implements OnInit {
   // balance) with their opening dates (the top bar's summary), and today (YYYY-MM-DD).
   readonly balances = input<Record<string, { balance: number | null; openingDate: string | null }> | null>(null);
   readonly today = input<string | null>(null);
+  // ENT-05 (owner note 35), Add only: the top bar's summary.
+  readonly last = input<LastAddedData | null>(null);
 
   protected readonly noteMax = NOTE_MAX_LENGTH;
   protected readonly toMinor = toMinor;
@@ -201,11 +206,39 @@ export class EntryFields implements OnInit {
     };
   });
 
+  private readonly subCategoryId = signal('');
+
+  // ENT-05: the last expense in the chosen sub-category and, on its own row, from the chosen account.
+  protected readonly lastRows = computed<LastRow[]>(() => {
+    const last = this.last();
+    if (!last) {
+      return [];
+    }
+    const account = (entry: LastExpense) => this.accounts().find((item) => item.id === entry.bankAccountId)?.name ?? '';
+    const place = (entry: LastExpense) => {
+      const category = this.categories().find((item) => item.id === entry.categoryId);
+      return `${category?.name ?? ''} › ${category?.subCategories.find((item) => item.id === entry.subCategoryId)?.name ?? ''}`;
+    };
+    const row = (caption: string, entry: LastExpense, where: string): LastRow => ({
+      caption,
+      detail: [formatDate(entry.date), where, entry.note].filter(Boolean).join(' · '),
+      amount: this.money(toMinor(entry.amount)),
+    });
+    const inSubCategory = last.expenseBySubCategory[this.subCategoryId()];
+    const fromAccount = last.expenseByAccount[this.accountId()];
+    return [
+      ...(inSubCategory ? [row(`Last in ${place(inSubCategory)}`, inSubCategory, account(inSubCategory))] : []),
+      ...(fromAccount ? [row(`Last from ${account(fromAccount)}`, fromAccount, place(fromAccount))] : []),
+    ];
+  });
+
   private indicatorRequest = 0;
 
   ngOnInit(): void {
     const controls = this.form().controls;
     this.categoryId.set(controls.categoryId.value);
+    this.subCategoryId.set(controls.subCategoryId.value);
+    controls.subCategoryId.valueChanges.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((id) => this.subCategoryId.set(id));
     this.amountText.set(controls.amount.value);
     this.noteText.set(controls.note.value);
     // A new category starts with no sub-category.

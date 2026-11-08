@@ -5,9 +5,10 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { Summary } from '../../core/summary';
+import { LastIncome, Summary } from '../../core/summary';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
-import { INCOME_COUNTS, IncomeCounts, countsHint, untilNotBeforeFrom } from '../../shared/income-months';
+import { INCOME_COUNTS, IncomeCounts, countsHint, incomeMonths, untilNotBeforeFrom } from '../../shared/income-months';
+import { LastAdded, LastRow } from '../../shared/last-added';
 import { amountValidator, formatMoney, minorToInput, parseAmount, toMinor } from '../../shared/money';
 import { PeriodInfo, formatDate, monthKeyLabel } from '../../shared/month-label';
 import { NAME_MAX_LENGTH, nameValidator } from '../../shared/names';
@@ -121,7 +122,7 @@ interface ItemShape {
 // On Add (split, owner note 21) the preview sits beside the fields on desktop, as the expense panel.
 @Component({
   selector: 'app-income-item-fields',
-  imports: [ReactiveFormsModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule],
+  imports: [ReactiveFormsModule, MatFormFieldModule, MatIconModule, MatInputModule, MatSelectModule, LastAdded],
   host: { '[class.split]': 'split()' },
   providers: [OUTLINE_FORM_FIELDS],
   templateUrl: './income-item-fields.html',
@@ -134,9 +135,28 @@ export class IncomeItemFields implements OnInit {
   readonly context = input.required<IncomeItemContext>();
   readonly currency = input.required<string>();
   readonly split = input(false);
+  // ENT-05 (owner note 35), Add only: the top bar's summary.
+  readonly last = input<LastIncome | null>(null);
 
   protected readonly nameMax = NAME_MAX_LENGTH;
   protected readonly countsOptions = INCOME_COUNTS;
+
+  // ENT-05: the additional income added last.
+  protected readonly lastRows = computed<LastRow[]>(() => {
+    const last = this.last();
+    if (!last) {
+      return [];
+    }
+    const context = this.context();
+    const account = context.accounts.find((item) => item.id === last.bankAccountId)?.name;
+    return [
+      {
+        caption: 'Last added',
+        detail: [last.label, incomeMonths(last, context.monthKeyOffset), account ? `into ${account}` : ''].filter(Boolean).join(' · '),
+        amount: this.money(toMinor(last.amount)),
+      },
+    ];
+  });
 
   private readonly value = signal<ReturnType<IncomeItemForm['getRawValue']> | null>(null);
   protected readonly type = computed(() => this.value()?.type ?? 'monthly');

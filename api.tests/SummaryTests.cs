@@ -229,4 +229,102 @@ public class SummaryTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var filtered = await Json(await Send(factory, HttpMethod.Get, $"/api/fiscal-years/{Fy}/months/2026-09?categoryId=food", sub));
         Assert.Empty(filtered["additionalIncome"]!.AsArray());
     }
+
+    // ENT-05 (owner note 35): when each was added, a minute apart.
+    private static DateTimeOffset Added(int minute) => new(2026, 10, 17, 9, minute, 0, TimeSpan.Zero);
+
+    private Task AddExpense(string sub, string id, string subCategoryId, string account, DateOnly date, long amountMinor, int minute, string note = "") =>
+        factory.Store.AddEntryAsync(sub, new Entry(id, date, "2026-09", Fy, "food", subCategoryId, account, amountMinor, note, Added(minute)));
+
+    private Task AddTransfer(string sub, string id, string from, string to, DateOnly date, long amountMinor, int minute) =>
+        factory.Store.AddTransferAsync(sub, new Transfer(id, date, "2026-09", Fy, from, to, amountMinor, "", Added(minute)));
+
+    // Groceries 100 from SNB on 10 Oct, then Groceries 200 from Al Rajhi back-dated to 5 Oct, then Fuel
+    // 300 from SNB on 1 Oct: each is the last added of its own key, whatever its date.
+    [Fact]
+    public async Task Last_expense_is_the_one_added_last_not_the_newest_date()
+    {
+        var sub = await SetUp();
+        await AddExpense(sub, "e1", "groceries", "bank", new DateOnly(2026, 10, 10), 10_000, 1);
+        await AddExpense(sub, "e2", "groceries", "rajhi", new DateOnly(2026, 10, 5), 20_000, 2, "Weekly shop");
+        await AddExpense(sub, "e3", "fuel", "bank", new DateOnly(2026, 10, 1), 30_000, 3);
+
+        var last = (await Get(sub))["lastAdded"]!;
+
+        var groceries = last["expenseBySubCategory"]!["groceries"]!;
+        Assert.Equal(("2026-10-05", "food", "groceries", "rajhi", 200m, "Weekly shop"),
+            (groceries["date"]!.GetValue<string>(), groceries["categoryId"]!.GetValue<string>(), groceries["subCategoryId"]!.GetValue<string>(),
+                groceries["bankAccountId"]!.GetValue<string>(), Dec(groceries["amount"]), groceries["note"]!.GetValue<string>()));
+        Assert.Equal(300m, Dec(last["expenseBySubCategory"]!["fuel"]!["amount"]));
+        Assert.Equal(300m, Dec(last["expenseByAccount"]!["bank"]!["amount"]));
+        Assert.Equal(200m, Dec(last["expenseByAccount"]!["rajhi"]!["amount"]));
+        Assert.Null(last["expenseByAccount"]!["other"]);
+    }
+
+    // An edit is not a new input (createdAt is kept), and the amount shown is the edited one. A deleted
+    // entry leaves the one added before it.
+    [Fact]
+    public async Task Last_expense_stays_after_an_edit_and_steps_back_after_a_delete()
+    {
+        var sub = await SetUp();
+        await AddExpense(sub, "e1", "fuel", "bank", new DateOnly(2026, 10, 10), 10_000, 1);
+        await AddExpense(sub, "e2", "fuel", "bank", new DateOnly(2026, 10, 11), 20_000, 2);
+        var stored = (await factory.Store.GetEntryAsync(sub, "e1"))!;
+        await factory.Store.UpdateEntryAsync(sub, stored with { AmountMinor = 15_000, CreatedAt = default });
+        var latest = (await factory.Store.GetEntryAsync(sub, "e2"))!;
+        await factory.Store.UpdateEntryAsync(sub, latest with { AmountMinor = 25_000, CreatedAt = default });
+
+        Assert.Equal(250m, Dec((await Get(sub))["lastAdded"]!["expenseBySubCategory"]!["fuel"]!["amount"]));
+
+        await factory.Store.DeleteEntryAsync(sub, "e2");
+
+        Assert.Equal(150m, Dec((await Get(sub))["lastAdded"]!["expenseBySubCategory"]!["fuel"]!["amount"]));
+    }
+
+    // SNB → Al Rajhi 500 on 15 Oct, then Al Rajhi → SNB 100 back-dated to 1 Oct.
+    [Fact]
+    public async Task Last_transfer_is_kept_for_each_account_and_direction()
+    {
+        var sub = await SetUp();
+        await AddTransfer(sub, "t1", "bank", "rajhi", new DateOnly(2026, 10, 15), 50_000, 1);
+        await AddTransfer(sub, "t2", "rajhi", "bank", new DateOnly(2026, 10, 1), 10_000, 2);
+
+        var last = (await Get(sub))["lastAdded"]!;
+
+        string Id(string map, string account) => last[map]![account]!["id"]!.GetValue<string>();
+        Assert.Equal(("t1", "t2", "t2", "t1"), (Id("transferFrom", "bank"), Id("transferFrom", "rajhi"), Id("transferTo", "bank"), Id("transferTo", "rajhi")));
+        var transfer = last["transferFrom"]!["bank"]!;
+        Assert.Equal(("2026-10-15", "bank", "rajhi", 500m),
+            (transfer["date"]!.GetValue<string>(), transfer["fromBankAccountId"]!.GetValue<string>(), transfer["toBankAccountId"]!.GetValue<string>(), Dec(transfer["amount"])));
+    }
+
+    // The salary is not additional income, however late it changed.
+    [Fact]
+    public async Task Last_income_is_the_additional_item_added_last()
+    {
+        var sub = await SetUp();
+        await factory.Store.AddIncomeAsync(sub, new IncomeItem("gift", IncomeKind.Additional, "Gift", 50_000, "2026-09", "2026-09", IncomeCounts.Actual, "rajhi", Added(1)));
+        await factory.Store.AddIncomeAsync(sub, new IncomeItem("bonus", IncomeKind.Additional, "Bonus", 30_000, "2026-10", null, IncomeCounts.Planned, null, Added(2)));
+        await factory.Store.AddIncomeAsync(sub, new IncomeItem("raise", IncomeKind.Salary, "Salary", 1_800_000, "2026-11", null, CreatedAt: Added(3)));
+
+        var income = (await Get(sub))["lastAdded"]!["income"]!;
+
+        Assert.Equal(("Bonus", 300m, "2026-10"), (income["label"]!.GetValue<string>(), Dec(income["amount"]), income["fromPeriodKey"]!.GetValue<string>()));
+        Assert.Null(income["toPeriodKey"]);
+        Assert.Null(income["bankAccountId"]);
+    }
+
+    [Fact]
+    public async Task Last_added_is_empty_before_anything_is_added()
+    {
+        var sub = await SetUpUser(factory, [new("s", IncomeKind.Salary, "Salary", 1_700_000, Fy, null)]);
+
+        var last = (await Get(sub))["lastAdded"]!;
+
+        Assert.Empty(last["expenseBySubCategory"]!.AsObject());
+        Assert.Empty(last["expenseByAccount"]!.AsObject());
+        Assert.Empty(last["transferFrom"]!.AsObject());
+        Assert.Empty(last["transferTo"]!.AsObject());
+        Assert.Null(last["income"]);
+    }
 }

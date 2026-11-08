@@ -121,6 +121,7 @@ describe('App', () => {
         overspentLastMonth: 0,
       },
       projection: null,
+      lastAdded: null,
     });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -149,6 +150,7 @@ describe('App', () => {
       accounts: [{ id: 'main', name: 'Main', balance: -250, openingDate: '2026-01-27' }],
       month: null,
       projection: null,
+      lastAdded: null,
     });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
@@ -185,7 +187,7 @@ describe('App', () => {
 
   // BNK-05: until every account has its opening balance, the top bar asks for it.
   it('should ask to set up the balance until it is complete', async () => {
-    summary.set({ balance: null, complete: false, accounts: [{ id: 'main', name: 'Main', balance: null, openingDate: '2026-01-27' }], month: null, projection: null });
+    summary.set({ balance: null, complete: false, accounts: [{ id: 'main', name: 'Main', balance: null, openingDate: '2026-01-27' }], month: null, projection: null, lastAdded: null });
     const fixture = TestBed.createComponent(App);
     await fixture.whenStable();
     const compiled = fixture.nativeElement as HTMLElement;

@@ -107,7 +107,7 @@ public sealed class InMemoryUserStore : IUserStore
         {
             return false;
         }
-        data.Entries[index] = entry;
+        data.Entries[index] = entry with { CreatedAt = data.Entries[index].CreatedAt };
         return true;
     });
 

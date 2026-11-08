@@ -131,6 +131,10 @@ export class AddEntry {
       : null;
   });
 
+  // ENT-05 (owner note 35): what was added last, from the top bar's summary (no extra call), so it
+  // follows every save.
+  protected readonly lastAdded = computed(() => this.summaryService.summary()?.lastAdded ?? null);
+
   constructor() {
     // The "Saved" line stays until the next entry starts.
     merge(

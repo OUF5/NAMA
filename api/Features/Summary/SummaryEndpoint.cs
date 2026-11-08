@@ -55,11 +55,54 @@ public static class SummaryEndpoint
         // first month (NAMA was set up later), so Dashboard can say so (owner note 11). Null otherwise.
         MeEndpoint.PeriodDto? CountedFrom);
 
+    public record LastExpenseDto(DateOnly Date, string CategoryId, string SubCategoryId, string BankAccountId, decimal Amount, string Note)
+    {
+        public static LastExpenseDto From(Entry entry) => new(
+            entry.Date, entry.CategoryId, entry.SubCategoryId, entry.BankAccountId, Money.FromMinor(entry.AmountMinor), entry.Note);
+    }
+
+    public record LastTransferDto(string Id, DateOnly Date, string FromBankAccountId, string ToBankAccountId, decimal Amount, string Note)
+    {
+        public static LastTransferDto From(Transfer transfer) => new(
+            transfer.Id, transfer.Date, transfer.FromBankAccountId, transfer.ToBankAccountId, Money.FromMinor(transfer.AmountMinor), transfer.Note);
+    }
+
+    public record LastIncomeDto(string Label, decimal Amount, string FromPeriodKey, string? ToPeriodKey, string? BankAccountId)
+    {
+        public static LastIncomeDto From(IncomeItem item) => new(
+            item.Label, Money.FromMinor(item.AmountMinor), item.FromPeriodKey, item.ToPeriodKey, item.BankAccountId);
+    }
+
+    // ENT-05 (owner note 35): for Add's panels, the one added last, by when it was added, not by its
+    // date, so a back-dated expense counts. Each map is keyed by an id; an id with nothing added is
+    // left out. Income is the last additional item (the salary is not one). It is here, not in its own
+    // call, because the balances read all of it already (NFR-01); expenses go back as far as they do.
+    public record LastAddedDto(
+        IReadOnlyDictionary<string, LastExpenseDto> ExpenseBySubCategory,
+        IReadOnlyDictionary<string, LastExpenseDto> ExpenseByAccount,
+        IReadOnlyDictionary<string, LastTransferDto> TransferFrom,
+        IReadOnlyDictionary<string, LastTransferDto> TransferTo,
+        LastIncomeDto? Income)
+    {
+        public static LastAddedDto From(BalanceData data) => new(
+            Latest(data.Entries, entry => entry.SubCategoryId, entry => entry.CreatedAt, LastExpenseDto.From),
+            Latest(data.Entries, entry => entry.BankAccountId, entry => entry.CreatedAt, LastExpenseDto.From),
+            Latest(data.Transfers, transfer => transfer.FromBankAccountId, transfer => transfer.CreatedAt, LastTransferDto.From),
+            Latest(data.Transfers, transfer => transfer.ToBankAccountId, transfer => transfer.CreatedAt, LastTransferDto.From),
+            data.IncomeItems.Where(item => item.Kind == IncomeKind.Additional).MaxBy(item => item.CreatedAt) is { } income
+                ? LastIncomeDto.From(income)
+                : null);
+
+        private static Dictionary<string, TDto> Latest<T, TDto>(
+            IEnumerable<T> items, Func<T, string> key, Func<T, DateTimeOffset> createdAt, Func<T, TDto> toDto) =>
+            items.GroupBy(key).ToDictionary(group => group.Key, group => toDto(group.MaxBy(createdAt)!));
+    }
+
     // Balance is the active accounts' total, null until every active account has an opening balance
     // and income has a split (Complete). Accounts are the active ones, by name. Month and Projection
     // are null when no FY contains today.
     public record SummaryResponse(
-        decimal? Balance, bool Complete, IReadOnlyList<AccountDto> Accounts, MonthDto? Month, ProjectionDto? Projection);
+        decimal? Balance, bool Complete, IReadOnlyList<AccountDto> Accounts, MonthDto? Month, ProjectionDto? Projection, LastAddedDto LastAdded);
 
     // The month in progress for the whole budget: its carried remaining (R-PLN-05), its Unassigned
     // (R-PLN-03) and the projection (R-PLN-07, R-PLN-08), all from the month NAMA was set up (R-PLN-06).
@@ -162,6 +205,7 @@ public static class SummaryEndpoint
                     account.Opening?.Date))
                 .ToList(),
             month,
-            projection);
+            projection,
+            LastAddedDto.From(data));
     }
 }
