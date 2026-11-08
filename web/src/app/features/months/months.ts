@@ -147,10 +147,12 @@ export class Months {
   );
 
   // "See all" opens Entries with the same month and filter.
+  // TBL-07: expenses only, the entries Tracker counts.
   protected readonly entriesQuery = computed<Record<string, string>>(() =>
     Object.fromEntries(
       Object.entries({
         fyId: this.data()?.fyId ?? '',
+        type: 'expense',
         periodKey: this.monthKey() ?? '',
         categoryId: this.categoryId(),
         subCategoryId: this.subCategoryId(),

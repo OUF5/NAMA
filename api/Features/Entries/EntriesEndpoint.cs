@@ -3,6 +3,7 @@ using System.Security.Claims;
 using Api.Domain;
 using Api.Features.BankAccounts;
 using Api.Features.FiscalYears;
+using Api.Features.Transfers;
 using Api.Infrastructure;
 
 namespace Api.Features.Entries;
@@ -27,14 +28,25 @@ public static class EntriesEndpoint
             entry.BankAccountId, Money.FromMinor(entry.AmountMinor), entry.Note);
     }
 
+    // TBL-07 (owner note 33): one month of an additional income item (R-INC-03), dated its payday (the
+    // month's first day). Counts is "planned", "actual" or "both" (R-INC-04); BankAccountId is null for
+    // a Planned item or one through the split (R-INC-05). Editing it edits the whole item.
+    public record IncomeRowDto(string IncomeId, DateOnly Date, string PeriodKey, string Label, string Counts, string? BankAccountId, decimal Amount);
+
     // Everything the Entries page needs besides GET /api/categories (NFR-01, M6): the FYs for the
-    // selector and the month filter, the accounts, the filtered entries and their total (TBL-04).
+    // selector and the month filter, the accounts, and the filtered rows of each type with their
+    // totals (TBL-04, TBL-07): Entries (expenses) and Total, Transfers and TransferTotal, Income and
+    // IncomeTotal, each newest first. A type the filter leaves out is empty.
     public record EntriesResponse(
         IReadOnlyList<FiscalYearsEndpoint.FiscalYearDto> FiscalYears,
         string FyId,
         IReadOnlyList<BankAccountsEndpoint.BankAccountDto> BankAccounts,
         IReadOnlyList<EntryDto> Entries,
-        decimal Total);
+        decimal Total,
+        IReadOnlyList<TransfersEndpoint.TransferDto> Transfers,
+        decimal TransferTotal,
+        IReadOnlyList<IncomeRowDto> Income,
+        decimal IncomeTotal);
 
     public static IEndpointRouteBuilder MapEntries(this IEndpointRouteBuilder api)
     {
@@ -50,14 +62,19 @@ public static class EntriesEndpoint
             return Results.Created($"/api/entries/{entry.Id}", EntryDto.From(entry));
         });
 
-        // TBL-01, TBL-04: newest first, filtered, with the total of the filtered rows.
+        // TBL-01, TBL-04, TBL-07: newest first, filtered, with the total of each type's filtered rows.
         api.MapGet("/entries", async ([AsParameters] EntryFilter filter, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
-            await LoadAsync(user.FindFirstValue("sub")!, filter, store, time) is { } entries ? Results.Ok(entries) : Results.NotFound());
+            !filter.HasKnownType ? UnknownType()
+            : await LoadAsync(user.FindFirstValue("sub")!, filter, store, time) is { } entries ? Results.Ok(entries) : Results.NotFound());
 
-        // TBL-06, NFR-05: the same filters and order as the list.
+        // TBL-06, NFR-05: the same filters and order as the list, every type in one list (TBL-07).
         api.MapGet("/entries/export.csv", async ([AsParameters] EntryFilter filter, ClaimsPrincipal user, IUserStore store, TimeProvider time) =>
         {
             var uid = user.FindFirstValue("sub")!;
+            if (!filter.HasKnownType)
+            {
+                return UnknownType();
+            }
             if (await SelectAsync(uid, filter, store, time) is not { } selection)
             {
                 return Results.NotFound();
@@ -67,15 +84,22 @@ public static class EntriesEndpoint
             var subCategories = (await store.GetSubCategoriesAsync(uid)).ToDictionary(sub => sub.Id, sub => sub.Name);
             var accounts = (await store.GetBankAccountsAsync(uid)).ToDictionary(account => account.Id, account => account.Name);
             var months = selection.FiscalYear.Periods.ToDictionary(period => period.Key, period => period.Label);
+            string Month(string periodKey) => months.GetValueOrDefault(periodKey, periodKey);
+            string Account(string? id) => id is null ? "" : accounts.GetValueOrDefault(id, "");
 
-            var rows = selection.Entries.Select(entry => new EntriesCsv.Row(
-                entry.Date,
-                months.GetValueOrDefault(entry.PeriodKey, entry.PeriodKey),
-                categories.GetValueOrDefault(entry.CategoryId, ""),
-                subCategories.GetValueOrDefault(entry.SubCategoryId, ""),
-                entry.AmountMinor,
-                accounts.GetValueOrDefault(entry.BankAccountId, ""),
-                entry.Note));
+            var rows = selection.Entries
+                .Select(entry => new EntriesCsv.Row(
+                    entry.Date, Month(entry.PeriodKey), EntriesCsv.Expense,
+                    $"{categories.GetValueOrDefault(entry.CategoryId, "")} · {subCategories.GetValueOrDefault(entry.SubCategoryId, "")}",
+                    entry.AmountMinor, Account(entry.BankAccountId), entry.Note))
+                .Concat(selection.Transfers.Select(transfer => new EntriesCsv.Row(
+                    transfer.Date, Month(transfer.PeriodKey), EntriesCsv.Transfer, "",
+                    transfer.AmountMinor, $"{Account(transfer.FromBankAccountId)} → {Account(transfer.ToBankAccountId)}", transfer.Note)))
+                .Concat(selection.Income.Select(income => new EntriesCsv.Row(
+                    income.Date, Month(income.Period.Key), EntriesCsv.Income, $"{income.Item.Label} · {EntriesCsv.CountsLabel(income.Item.Counts)}",
+                    income.Item.AmountMinor, Account(income.Item.BankAccountId), "")))
+                // Newest first; on one day, expenses, then transfers, then income (a stable sort).
+                .OrderByDescending(row => row.Date);
             return Results.File(EntriesCsv.Write(rows, profile.Currency), "text/csv; charset=utf-8", $"nama-entries-{selection.FiscalYear.Id}.csv");
         });
 
@@ -102,6 +126,10 @@ public static class EntriesEndpoint
 
         return api;
     }
+
+    // TBL-07: type is "expense", "transfer", "income" or left out (every type).
+    private static IResult UnknownType() =>
+        Results.ValidationProblem(new Dictionary<string, string[]> { ["type"] = ["Type is expense, transfer or income."] });
 
     // PRD 7.5: 422 when the date is outside every existing FY.
     public static IResult OutsideFiscalYears() => Results.ValidationProblem(
@@ -157,13 +185,29 @@ public static class EntriesEndpoint
             selection.FiscalYear.Id,
             BankAccountsEndpoint.Sorted(accounts),
             selection.Entries.Select(EntryDto.From).ToList(),
-            Money.FromMinor(selection.Entries.Sum(entry => entry.AmountMinor)));
+            Money.FromMinor(selection.Entries.Sum(entry => entry.AmountMinor)),
+            selection.Transfers.Select(TransfersEndpoint.TransferDto.From).ToList(),
+            Money.FromMinor(selection.Transfers.Sum(transfer => transfer.AmountMinor)),
+            selection.Income.Select(income => new IncomeRowDto(
+                income.Item.Id, income.Date, income.Period.Key, income.Item.Label, FirestoreDocuments.ToCountsName(income.Item.Counts),
+                income.Item.BankAccountId, Money.FromMinor(income.Item.AmountMinor))).ToList(),
+            Money.FromMinor(selection.Income.Sum(income => income.Item.AmountMinor)));
     }
 
-    private sealed record Selection(IReadOnlyList<FiscalYear> FiscalYears, FiscalYear FiscalYear, IReadOnlyList<Entry> Entries);
+    // TBL-07: one month of an additional income item, on its payday.
+    private sealed record IncomeMonth(IncomeItem Item, Period Period)
+    {
+        public DateOnly Date => Period.StartDate;
+    }
 
-    // The chosen FY (by default the one that contains today, else the latest) and its entries that
-    // match the filters. Null when the FY is unknown.
+    private sealed record Selection(
+        IReadOnlyList<FiscalYear> FiscalYears, FiscalYear FiscalYear, IReadOnlyList<Entry> Entries,
+        IReadOnlyList<Transfer> Transfers, IReadOnlyList<IncomeMonth> Income);
+
+    // The chosen FY (by default the one that contains today, else the latest) and its rows of each type
+    // that match the filters (TBL-07), each newest first. The entries, the transfers and the income
+    // items are read at the same time, and only for the types the filter keeps (NFR-01). Null when the
+    // FY is unknown.
     private static async Task<Selection?> SelectAsync(string uid, EntryFilter filter, IUserStore store, TimeProvider time)
     {
         var fiscalYears = (await store.GetFiscalYearsAsync(uid)).OrderBy(fiscalYear => fiscalYear.StartDate).ToList();
@@ -182,8 +226,30 @@ public static class EntriesEndpoint
         {
             return null;
         }
-        var entries = (await store.GetFiscalYearEntriesAsync(uid, chosen.Id)).Where(filter.Matches).ToList();
-        return new Selection(fiscalYears, chosen, entries);
+        var entriesRead = filter.Includes(EntryFilter.Expense)
+            ? store.GetFiscalYearEntriesAsync(uid, chosen.Id)
+            : Task.FromResult<IReadOnlyList<Entry>>([]);
+        var transfersRead = filter.Includes(EntryFilter.Transfer)
+            ? store.GetTransfersAsync(uid)
+            : Task.FromResult<IReadOnlyList<Transfer>>([]);
+        var incomeRead = filter.Includes(EntryFilter.Income)
+            ? store.GetIncomesAsync(uid)
+            : Task.FromResult<IReadOnlyList<IncomeItem>>([]);
+        await Task.WhenAll(entriesRead, transfersRead, incomeRead);
+
+        var income = (await incomeRead)
+            .Where(item => item.Kind == IncomeKind.Additional)
+            .SelectMany(item => chosen.Periods.Where(period => IncomeCalculator.IsActive(item, period.Key)).Select(period => new IncomeMonth(item, period)))
+            .Where(month => filter.Matches(month.Item, month.Period.Key))
+            .OrderByDescending(month => month.Date)
+            .ThenBy(month => month.Item.Label, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return new Selection(
+            fiscalYears,
+            chosen,
+            (await entriesRead).Where(filter.Matches).ToList(),
+            (await transfersRead).Where(transfer => transfer.FyId == chosen.Id && filter.Matches(transfer)).ToList(),
+            income);
     }
 
     private static IResult Invalid(string field, string message) =>
@@ -191,21 +257,48 @@ public static class EntriesEndpoint
 }
 
 // TBL-04 filters, from the query string. Each one is optional. Ids must match exactly; q is
-// searched in notes, ignoring case.
+// searched in notes, ignoring case. TBL-07 (owner note 33): Type keeps one type ("expense",
+// "transfer" or "income"; every type when left out). A category or sub-category keeps expenses only;
+// a bank account keeps the expenses paid from it, the transfers into or out of it and the income
+// into it; q also searches income labels.
 public sealed record EntryFilter(
     string? FyId,
     string? PeriodKey,
     string? CategoryId,
     string? SubCategoryId,
     string? BankAccountId,
-    string? Q)
+    string? Q,
+    string? Type = null)
 {
+    public const string Expense = "expense";
+    public const string Transfer = "transfer";
+    public const string Income = "income";
+
+    public bool HasKnownType => string.IsNullOrEmpty(Type) || Type is Expense or Transfer or Income;
+
+    // Whether rows of this type can match at all.
+    public bool Includes(string type) =>
+        (string.IsNullOrEmpty(Type) || Type == type)
+        && (type == Expense || (string.IsNullOrEmpty(CategoryId) && string.IsNullOrEmpty(SubCategoryId)));
+
     public bool Matches(Entry entry) =>
         Is(PeriodKey, entry.PeriodKey)
         && Is(CategoryId, entry.CategoryId)
         && Is(SubCategoryId, entry.SubCategoryId)
         && Is(BankAccountId, entry.BankAccountId)
-        && (string.IsNullOrWhiteSpace(Q) || entry.Note.Contains(Q.Trim(), StringComparison.OrdinalIgnoreCase));
+        && Found(entry.Note);
+
+    public bool Matches(Transfer transfer) =>
+        Is(PeriodKey, transfer.PeriodKey)
+        && (Is(BankAccountId, transfer.FromBankAccountId) || Is(BankAccountId, transfer.ToBankAccountId))
+        && Found(transfer.Note);
+
+    public bool Matches(IncomeItem item, string periodKey) =>
+        Is(PeriodKey, periodKey)
+        && (string.IsNullOrEmpty(BankAccountId) || BankAccountId == item.BankAccountId)
+        && Found(item.Label);
+
+    private bool Found(string text) => string.IsNullOrWhiteSpace(Q) || text.Contains(Q.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private static bool Is(string? filter, string value) => string.IsNullOrEmpty(filter) || filter == value;
 }

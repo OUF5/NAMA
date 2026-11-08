@@ -2,6 +2,9 @@
   <h2 mat-dialog-title>{{ data.item ? 'Edit income' : 'Add income' }}</h2>
   <form [formGroup]="form" (ngSubmit)="save()" novalidate>
     <mat-dialog-content>
+      @if (data.note) {
+        <p class="caption note">{{ data.note }}</p>
+      }
       <app-income-item-fields [form]="form" [context]="data.context" [currency]="data.currency" />
       @if (error()) {
         <p class="error" role="alert">{{ error() }}</p>

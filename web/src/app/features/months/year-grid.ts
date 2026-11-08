@@ -38,6 +38,8 @@ export class YearGrid {
     const data = this.data();
     const names = nameMaps(data.categories);
     const fyId = data.fyId;
+    // TBL-07: a cell opens Entries on its expenses only, the spending it shows.
+    const type = 'expense';
     const months = data.months;
     const cells = (
       name: string,
@@ -47,9 +49,9 @@ export class YearGrid {
       query: Params,
     ) => [
       ...cellMonths.map((cell, i) =>
-        this.cell(name, months[i].period.label, cell, { fyId, periodKey: cell.periodKey, ...query }),
+        this.cell(name, months[i].period.label, cell, { fyId, type, periodKey: cell.periodKey, ...query }),
       ),
-      this.cell(name, this.fiscalYearLabel(), { carriedIn: null, planned, spent }, { fyId, ...query }),
+      this.cell(name, this.fiscalYearLabel(), { carriedIn: null, planned, spent }, { fyId, type, ...query }),
     ];
     return {
       months,

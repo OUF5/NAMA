@@ -8,10 +8,10 @@ using static Api.Tests.ApiCalls;
 namespace Api.Tests;
 
 // PRD 5.5 GET /api/entries/export.csv (TBL-06, NFR-05): the filtered entries, newest first, in the
-// TBL-01 columns. Today is 17 Oct 2026; FY 2026 has payday 27.
+// TBL-01 columns (Type and Details since owner note 33, TBL-07). Today is 17 Oct 2026; FY 2026 has payday 27.
 public class EntriesExportTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
-    private const string Header = "\"Date\",\"Month\",\"Category\",\"Sub-category\",\"Amount (SAR)\",\"Bank account\",\"Note\"\r\n";
+    private const string Header = "\"Date\",\"Month\",\"Type\",\"Details\",\"Amount (SAR)\",\"Bank account\",\"Note\"\r\n";
 
     private async Task<string> SetUp()
     {
@@ -56,8 +56,8 @@ public class EntriesExportTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         Assert.Equal(
             Header +
-            "\"2026-10-17\",\"Oct 2026\",\"Food\",\"Groceries\",\"125.50\",\"Al Rajhi\",\"Weekly, \"\"big\"\"\nshop\"\r\n" +
-            "\"2026-10-01\",\"Oct 2026\",\"Transport\",\"Fuel\",\"1000.00\",\"SNB\",\"\"\r\n",
+            "\"2026-10-17\",\"Oct 2026\",\"Expense\",\"Food · Groceries\",\"125.50\",\"Al Rajhi\",\"Weekly, \"\"big\"\"\nshop\"\r\n" +
+            "\"2026-10-01\",\"Oct 2026\",\"Expense\",\"Transport · Fuel\",\"1000.00\",\"SNB\",\"\"\r\n",
             csv);
         Assert.Equal("text/csv; charset=utf-8", response.Content.Headers.ContentType!.ToString());
         Assert.Equal("nama-entries-2026-01.csv", response.Content.Headers.ContentDisposition!.FileName);
@@ -75,7 +75,7 @@ public class EntriesExportTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var csv = await Export(sub, "?periodKey=2026-09&q=SHOP");
 
-        Assert.Equal(Header + "\"2026-10-17\",\"Oct 2026\",\"Food\",\"Groceries\",\"125.50\",\"Al Rajhi\",\"Weekly shop\"\r\n", csv);
+        Assert.Equal(Header + "\"2026-10-17\",\"Oct 2026\",\"Expense\",\"Food · Groceries\",\"125.50\",\"Al Rajhi\",\"Weekly shop\"\r\n", csv);
     }
 
     // OWASP "CSV Injection": a note a spreadsheet would run as a formula gets a leading quote.

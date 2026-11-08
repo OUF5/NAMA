@@ -41,6 +41,9 @@ export interface Entry extends NewEntry {
 }
 
 // TBL-04 filters, with the API parameter names; they are also the Entries page URL (MON-04).
+// TBL-07 (owner note 33): type keeps one type, every type when left out.
+export type EntryType = 'expense' | 'transfer' | 'income';
+
 export interface EntryFilters {
   fyId?: string;
   periodKey?: string;
@@ -48,16 +51,46 @@ export interface EntryFilters {
   subCategoryId?: string;
   bankAccountId?: string;
   q?: string;
+  type?: string;
+}
+
+// TBL-07: a transfer (R-TRF-01), as Banks lists it.
+export interface TransferRow {
+  id: string;
+  date: string;
+  periodKey: string;
+  fyId: string;
+  fromBankAccountId: string;
+  toBankAccountId: string;
+  amount: number;
+  note: string;
+}
+
+// TBL-07: one month of an additional income item (R-INC-03), dated its payday. bankAccountId is null
+// for a Planned item (R-INC-05). Editing it edits the whole item.
+export interface IncomeRow {
+  incomeId: string;
+  date: string;
+  periodKey: string;
+  label: string;
+  counts: 'planned' | 'actual' | 'both';
+  bankAccountId: string | null;
+  amount: number;
 }
 
 // GET /api/entries: the FYs (oldest first), the FY shown (by default the one that contains today),
-// the accounts, the filtered entries newest first, and their total, summed by the API (TBL-04).
+// the accounts, and the filtered rows of each type newest first with their totals, summed by the API
+// (TBL-04, TBL-07): entries (expenses) and total, transfers and transferTotal, income and incomeTotal.
 export interface EntriesResponse {
   fiscalYears: FiscalYear[];
   fyId: string;
   bankAccounts: BankAccount[];
   entries: Entry[];
   total: number;
+  transfers: TransferRow[];
+  transferTotal: number;
+  income: IncomeRow[];
+  incomeTotal: number;
 }
 
 function filterParams(filters: EntryFilters): HttpParams {

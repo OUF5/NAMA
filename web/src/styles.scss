@@ -47,6 +47,15 @@
   --series-5: #d55181;
   --series-other: #8a93a2;
 
+  // Entries' type chips (TBL-07, owner note 33): text on its tint, each at least 5.8:1 (WCAG AA for
+  // 12px). Orange, blue and green apart from each other; never a plan status (Entries shows none).
+  --type-expense: #f08a5d;
+  --type-expense-bg: #362520;
+  --type-transfer: #6fa8f5;
+  --type-transfer-bg: #212a38;
+  --type-income: #4cc79a;
+  --type-income-bg: #1b2f29;
+
   // The only shadow: menus and dialogs.
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.4);
 

@@ -17,6 +17,8 @@ export interface IncomeItemDialogData {
   // R-INC-05: a new item goes into the last used account.
   defaultAccountId: string | null;
   currency: string;
+  // TBL-07: said above the fields when the dialog is opened from one month of an item (Entries).
+  note?: string;
 }
 
 // R-INC-03: an additional income item, Once (one month) or Monthly (from a month, optionally until a

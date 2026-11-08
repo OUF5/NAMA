@@ -122,6 +122,41 @@ mat-form-field {
     width: 48px;
     padding: 0;
   }
+
+  // "–": a transfer has no details, a Planned income no account.
+  .muted {
+    color: var(--text-muted);
+  }
+}
+
+// TBL-07 (owner note 33): each type its own color, and its name, so color is never the only signal.
+.type-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  &.expense {
+    color: var(--type-expense);
+    background: var(--type-expense-bg);
+  }
+
+  &.transfer {
+    color: var(--type-transfer);
+    background: var(--type-transfer-bg);
+  }
+
+  &.income {
+    color: var(--type-income);
+    background: var(--type-income-bg);
+  }
+}
+
+.entry-line .type-chip {
+  margin-right: 8px;
+  vertical-align: 1px;
 }
 
 // TBL-05: one card per entry on phones.

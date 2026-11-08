@@ -101,7 +101,8 @@ public sealed class NamaTools(IUserStore store, TimeProvider time, EmailAllowlis
         [Description("Only this bank account.")] string? bankAccountId = null,
         [Description("Words to find in the notes, ignoring case.")] string? q = null)
     {
-        var filter = new EntryFilter(fyId, periodKey, categoryId, subCategoryId, bankAccountId, q);
+        // MCP-04: expenses only (TBL-07's transfers and income are not read).
+        var filter = new EntryFilter(fyId, periodKey, categoryId, subCategoryId, bankAccountId, q, EntryFilter.Expense);
         var response = await EntriesEndpoint.LoadAsync(Uid(user), filter, store, time)
             ?? throw new McpException($"There is no FY {fyId}. get_calendar lists them.");
         return new EntriesResult(

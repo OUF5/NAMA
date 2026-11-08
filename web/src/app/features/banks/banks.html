@@ -115,7 +115,7 @@
           <span class="caption">{{ card.shareText }}</span>
           <button mat-stroked-button type="button" class="set" (click)="editAccount(card.account)">Set balance</button>
         }
-        <a class="expenses" routerLink="/entries" [queryParams]="{ bankAccountId: card.account.id }">See its expenses</a>
+        <a class="expenses" routerLink="/entries" [queryParams]="{ bankAccountId: card.account.id, type: 'expense' }">See its expenses</a>
       </section>
     }
   </div>

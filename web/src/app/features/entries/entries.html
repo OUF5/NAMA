@@ -22,6 +22,17 @@
         </mat-form-field>
       }
 
+      <!-- TBL-07 (owner note 33): every type by default. -->
+      <mat-form-field subscriptSizing="dynamic">
+        <mat-label>Type</mat-label>
+        <mat-select [value]="filters().type ?? ''" (selectionChange)="setFilter('type', $event.value)">
+          <mat-option value="">All types</mat-option>
+          @for (type of types; track type.value) {
+            <mat-option [value]="type.value">{{ type.filter }}</mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
       <mat-form-field subscriptSizing="dynamic">
         <mat-label>Month</mat-label>
         <mat-select [value]="filters().periodKey ?? ''" (selectionChange)="setFilter('periodKey', $event.value)">
@@ -34,7 +45,7 @@
 
       <mat-form-field subscriptSizing="dynamic">
         <mat-label>Category</mat-label>
-        <mat-select [value]="categoryId()" (selectionChange)="setFilter('categoryId', $event.value)">
+        <mat-select [value]="categoryId()" [disabled]="categoryOff()" (selectionChange)="setFilter('categoryId', $event.value)">
           <mat-option value="">All categories</mat-option>
           @for (category of categories() ?? []; track category.id) {
             <mat-option [value]="category.id">{{ category.name }}@if (category.archived) { (archived)}</mat-option>
@@ -46,7 +57,7 @@
         <mat-label>Sub-category</mat-label>
         <mat-select
           [value]="filters().subCategoryId ?? ''"
-          [disabled]="!categoryId()"
+          [disabled]="!categoryId() || categoryOff()"
           (selectionChange)="setFilter('subCategoryId', $event.value)"
         >
           <mat-option value="">All sub-categories</mat-option>
@@ -81,7 +92,7 @@
         <button mat-button type="button" (click)="clearFilters()">Clear filters</button>
       }
       <!-- TBL-06. Outlined: the page has no filled button; Save in the dialog is the one. -->
-      <button mat-stroked-button type="button" [disabled]="exporting() || d.entries.length === 0" (click)="exportCsv()">
+      <button mat-stroked-button type="button" [disabled]="exporting() || rows().length === 0" (click)="exportCsv()">
         <mat-icon aria-hidden="true">download</mat-icon>
         Export CSV
       </button>
@@ -92,7 +103,7 @@
   }
   <p class="status" aria-live="polite">{{ status() }}</p>
 
-  @if (d.entries.length === 0) {
+  @if (rows().length === 0) {
     <!-- UX-03 -->
     <section class="card empty">
       @if (hasFilters()) {
@@ -100,25 +111,25 @@
         <p class="note">Change the filters above, or clear them.</p>
       } @else {
         <h2>No entries in {{ fiscalYear()?.label }} yet</h2>
-        <p class="note">Every spend you add shows up here. <a routerLink="/add">Add an entry</a>.</p>
+        <p class="note">Every expense, transfer and additional income you add shows up here. <a routerLink="/add">Add an entry</a>.</p>
       }
     </section>
   } @else if (phone()) {
-    <!-- TBL-05: one card per entry on phones. -->
+    <!-- TBL-05: one card per row on phones; TBL-07: its type chip first. -->
     <ul class="entry-cards">
-      @for (row of rows(); track row.entry.id) {
+      @for (row of rows(); track row.key) {
         <li class="card entry-card">
           <div class="entry-main">
             <div class="entry-line">
-              <span class="name">{{ row.sub }}</span>
+              <span class="name"><span class="type-chip" [class]="row.type">{{ row.typeLabel }}</span>{{ row.title }}</span>
               <span class="money">{{ row.amount }}</span>
             </div>
-            <p class="caption">{{ row.category }} · {{ row.date }} · {{ row.month }} · {{ row.account }}</p>
-            @if (row.entry.note) {
-              <p class="entry-note">{{ row.entry.note }}</p>
+            <p class="caption">{{ row.cardDetail ? row.cardDetail + ' · ' : '' }}{{ row.date }} · {{ row.month }}{{ row.type === 'transfer' || row.account === '–' ? '' : ' · ' + row.account }}</p>
+            @if (row.note) {
+              <p class="entry-note">{{ row.note }}</p>
             }
           </div>
-          <button mat-icon-button type="button" (click)="edit(row.entry)" [attr.aria-label]="row.editLabel">
+          <button mat-icon-button type="button" (click)="row.edit()" [attr.aria-label]="row.editLabel">
             <mat-icon>edit</mat-icon>
           </button>
         </li>
@@ -131,8 +142,8 @@
           <tr>
             <th scope="col">Date</th>
             <th scope="col">Month</th>
-            <th scope="col">Category</th>
-            <th scope="col">Sub-category</th>
+            <th scope="col">Type</th>
+            <th scope="col">Details</th>
             <th scope="col" class="num">Amount</th>
             <th scope="col">Bank account</th>
             <th scope="col">Note</th>
@@ -140,17 +151,17 @@
           </tr>
         </thead>
         <tbody>
-          @for (row of rows(); track row.entry.id) {
+          @for (row of rows(); track row.key) {
             <tr>
               <td class="nowrap">{{ row.date }}</td>
               <td class="nowrap">{{ row.month }}</td>
-              <td>{{ row.category }}</td>
-              <td>{{ row.sub }}</td>
+              <td><span class="type-chip" [class]="row.type">{{ row.typeLabel }}</span></td>
+              <td [class.muted]="row.details === '–'">{{ row.details }}</td>
               <td class="num money nowrap">{{ row.amount }}</td>
-              <td>{{ row.account }}</td>
-              <td class="note-cell">{{ row.entry.note }}</td>
+              <td [class.muted]="row.account === '–'">{{ row.account }}</td>
+              <td class="note-cell">{{ row.note }}</td>
               <td class="edit-cell">
-                <button mat-icon-button type="button" (click)="edit(row.entry)" [attr.aria-label]="row.editLabel">
+                <button mat-icon-button type="button" (click)="row.edit()" [attr.aria-label]="row.editLabel">
                   <mat-icon>edit</mat-icon>
                 </button>
               </td>

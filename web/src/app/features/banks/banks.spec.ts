@@ -140,7 +140,7 @@ describe('Banks (PRD 5.11)', () => {
       '− Expenses paid SAR 14,000',
       '= Balance today SAR 4,100',
     ]);
-    expect(cards[0].querySelector('a.expenses')?.getAttribute('href')).toBe('/entries?bankAccountId=main');
+    expect(cards[0].querySelector('a.expenses')?.getAttribute('href')).toBe('/entries?bankAccountId=main&type=expense');
 
     // BNK-03
     expect(Array.from(root.querySelectorAll('.split li')).map(text)).toEqual(['Main 80% SAR 13,600', 'Savings 20% SAR 3,400']);

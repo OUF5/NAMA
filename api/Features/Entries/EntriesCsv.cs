@@ -9,22 +9,37 @@ namespace Api.Features.Entries;
 // doubled and lines end with CRLF. A UTF-8 BOM lets Excel read names that are not ASCII.
 public static class EntriesCsv
 {
-    // One entry with its names looked up. The amount is in minor units (R-MON-01).
-    public sealed record Row(DateOnly Date, string Month, string Category, string SubCategory, long AmountMinor, string BankAccount, string Note);
+    // TBL-07 (owner note 33): the Type column, as on the page.
+    public const string Expense = "Expense";
+    public const string Transfer = "Transfer";
+    public const string Income = "Income";
+
+    // One row of any type with its names looked up, as the page shows it: Details is "Food · Groceries"
+    // for an expense, empty for a transfer (its Bank account is "Main → Savings") and "Bonus · Actual"
+    // for income. The amount is in minor units (R-MON-01).
+    public sealed record Row(DateOnly Date, string Month, string Type, string Details, long AmountMinor, string BankAccount, string Note);
+
+    // R-INC-04 in words, as Settings says it.
+    public static string CountsLabel(IncomeCounts counts) => counts switch
+    {
+        IncomeCounts.Planned => "Planned",
+        IncomeCounts.Actual => "Actual",
+        _ => "Planned and actual",
+    };
 
     // Columns in the TBL-01 order.
     public static byte[] Write(IEnumerable<Row> rows, string currency)
     {
         var text = new StringBuilder();
-        Line(text, ["Date", "Month", "Category", "Sub-category", $"Amount ({currency})", "Bank account", "Note"]);
+        Line(text, ["Date", "Month", "Type", "Details", $"Amount ({currency})", "Bank account", "Note"]);
         foreach (var row in rows)
         {
             Line(text,
             [
                 FirestoreDocuments.ToDateString(row.Date),
                 Safe(row.Month),
-                Safe(row.Category),
-                Safe(row.SubCategory),
+                row.Type,
+                Safe(row.Details),
                 // 125.50: two decimals, a dot, no thousands separator and no currency.
                 Money.FromMinor(row.AmountMinor).ToString("0.00", CultureInfo.InvariantCulture),
                 Safe(row.BankAccount),

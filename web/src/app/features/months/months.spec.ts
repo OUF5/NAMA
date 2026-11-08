@@ -455,7 +455,7 @@ describe('Tracker (PRD 5.6)', () => {
     expect(lines(section('latest'), '.entry')).toHaveLength(2);
     const link = section('latest').querySelector('a.see-all')!;
     expect(text(link)).toBe('See all 7 entries in Sep 2026');
-    expect(link.getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09');
+    expect(link.getAttribute('href')).toBe('/entries?fyId=2026-01&type=expense&periodKey=2026-09');
   });
 
   // Owner note 17 (R-INC-04): the month lists its additional income by name, and Income is the actual
@@ -1009,11 +1009,11 @@ describe('Tracker (PRD 5.6)', () => {
     );
     expect(words(cell('Food, Oct 2026'))).toBe('Spent 0 Plan 1,500 Available 1,500');
     expect(words(cell('Food, FY 2026'))).toBe('Spent 1,249.99 Plan 4,500');
-    expect(food.getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09&categoryId=food');
-    expect(cell('Food, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&categoryId=food');
-    expect(cell('Total, Sep 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09');
+    expect(food.getAttribute('href')).toBe('/entries?fyId=2026-01&type=expense&periodKey=2026-09&categoryId=food');
+    expect(cell('Food, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&type=expense&categoryId=food');
+    expect(cell('Total, Sep 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&type=expense&periodKey=2026-09');
     expect(words(cell('Total, Sep 2026'))).toBe('Spent 1,299.99 Plan 1,900 Available 1,900');
-    expect(cell('Total, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01');
+    expect(cell('Total, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&type=expense');
 
     // Spending without a plan is red, with "Over by" in the label.
     const transportAug = cell('Transport, Aug 2026');
@@ -1027,8 +1027,8 @@ describe('Tracker (PRD 5.6)', () => {
     toggle.click();
     await settle();
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(cell('Fuel, Sep 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09&subCategoryId=fuel');
-    expect(cell('Fuel, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&subCategoryId=fuel');
+    expect(cell('Fuel, Sep 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&type=expense&periodKey=2026-09&subCategoryId=fuel');
+    expect(cell('Fuel, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&type=expense&subCategoryId=fuel');
     // Nothing planned and nothing spent: a dash, no color.
     const fuelAug = cell('Fuel, Aug 2026');
     expect(text(fuelAug)).toBe('–');

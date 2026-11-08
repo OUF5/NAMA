@@ -356,12 +356,13 @@ Fields in this order: **Category → Sub-category** (filtered by the category) *
 
 Page **Entries** (`/entries`).
 
-- **TBL-01** Shows all entries of the selected FY, newest first: date, month, category, sub-category, amount, bank account, note.
-- **TBL-02** Edit any entry in a dialog that reuses the Add form.
+- **TBL-01** Shows all entries of the selected FY, newest first: date, month, type, details, amount, bank account, note (TBL-07; category and sub-category were two columns before, now an expense's details "Food · Groceries").
+- **TBL-02** Edit any entry in a dialog that reuses the Add form. A transfer opens Banks' transfer dialog (BNK-04) and additional income Settings' income dialog (STG-03), which edits the whole item ("Changes apply to every month of this income." for a Monthly item); their code and GET /api/income load only on Edit (TBL-07).
 - **TBL-03** Delete an entry after a confirmation. 🆕 ADDED · Must
-- **TBL-04** Filters: month, category, sub-category, bank account, and text search in notes. The total of the filtered rows is shown. 🆕 ADDED · Nice
+- **TBL-04** Filters: type (TBL-07), month, category, sub-category, bank account, and text search in notes. The total of the filtered rows is shown, per type ("5 entries · Spent SAR 1,600 · Moved SAR 500 · Income SAR 800"). 🆕 ADDED · Nice
 - **TBL-05** On phones each entry is a card instead of a wide table row. 🆕 ADDED · Must
-- **TBL-06** Export the filtered entries to CSV (also a simple backup). 🆕 ADDED · Nice
+- **TBL-06** Export the filtered entries to CSV (also a simple backup), every type in one list with the page's columns (Date, Month, Type, Details, Amount, Bank account, Note; owner note 33). 🆕 ADDED · Nice
+- **TBL-07** Entries lists every money movement you add, with its type, as Add has them (owner note 33, ✅ DECIDED 8 Nov 2026): **Expense** (an entry), **Transfer** (R-TRF-01; details "–", Bank account "Main → Savings") and **Income**: the additional income items (R-INC-03, Add's Income or Settings), one row per month each covers in the FY (a Once item one row, a Monthly item one per month), dated that month's payday, with its label and what it counts in ("Bonus · Planned and actual") and its account ("–" for a Planned item). The salary is not listed. Each type has its own chip color (orange, blue, green), with its name. A **Type** filter (All types by default, Expenses, Transfers, Income) is kept in the URL as `type`; a category or sub-category keeps expenses only (and is off while Transfers or Income is chosen); a bank account keeps the expenses paid from it, the transfers into or out of it and the income into it; the search also finds income labels. Links that mean spending (Tracker's "See all" and Year cells, Banks' "See its expenses") open Entries on Expenses. The page stays at 2 calls (NFR-01): the list call reads the FY's entries, the transfers and the income items at the same time.
 
 ### 5.6 Months and year view (MON)
 
@@ -608,14 +609,14 @@ Base path `/api`, JSON, errors as ProblemDetails. Every endpoint needs a valid t
 | `GET /api/income?fyId=` | Salary history, additional items, planned and actual income per month (R-INC-01) |  |
 | `POST /api/income/salary` | New salary amount with `effectiveFromPeriodKey` | Ends the previous salary item |
 | `POST /api/income/additional`, `PUT /api/income/additional/{id}`, `DELETE /api/income/additional/{id}` | Additional income items with `counts` (R-INC-04) and `bankAccountId` (R-INC-05); Settings and Add's Income (INC-01) | `GET /api/income` also lists the bank accounts; `GET /api/summary`'s accounts have `openingDate` for the preview |
-| `GET /api/entries?fyId=&periodKey=&categoryId=&subCategoryId=&bankAccountId=&q=` | List entries with filters |  |
+| `GET /api/entries?fyId=&periodKey=&categoryId=&subCategoryId=&bankAccountId=&q=&type=` | List entries with filters; with TBL-07 also `transfers` and `transferTotal`, and `income` (one row per month of each additional item: `incomeId`, `date`, `periodKey`, `label`, `counts`, `bankAccountId`, `amount`) and `incomeTotal`. `type` is `expense`, `transfer` or `income` (400 otherwise); a type left out is empty and not read | The connector's list_entries asks for expenses only |
 | `POST /api/entries`, `PUT /api/entries/{id}`, `DELETE /api/entries/{id}` | Create, edit, delete | 422 if the date is outside existing FYs. Updates `lastBankAccountId` |
 | `GET /api/projects` | Projects (PRJ-02, PRJ-03): every project with its money, progress, still to save, projected, short and extra a month, status, targets covered, milestones, its months so far (R-PRJ-06) and its plan (every month to the deadline with its amount, R-PRJ-05); the active accounts with the project that counts each (the dialog's account picker) | One call for both views. It reads what the balances read (7.4 "Reads") |
 | `GET /api/projects/months?deadline=&bankAccountId=&likely=&projectId=` | The dialog's months (PRJ-04): from the start month (this month for a new project) to the one that holds the deadline, today's month key, and the recommended amount (R-PRJ-12, null until it can be worked out) | 400 when the deadline is more than 50 years away; 404 for an unknown project |
 | `POST /api/projects`, `PUT /api/projects/{id}` | Add and edit a project (R-PRJ-01 to R-PRJ-12), with `monthly` (each month's `periodKey` and `amount`) | 400 when a month is outside the start month to the deadline; 409 when an account is counted by another project that is not Done. Answers like `GET /api/projects` |
 | `PUT /api/projects/{id}/status` | Pause, Resume, Mark done (`doneOn`), Reopen (R-PRJ-01) | Answers like `GET /api/projects` |
 | `DELETE /api/projects/{id}` | Delete a project | Removes the project from its expenses in the same write (in batches of at most 500) |
-| `GET /api/entries/export.csv` (same filters) | CSV export | Nice |
+| `GET /api/entries/export.csv` (same filters) | CSV export, every type (TBL-06, TBL-07) | Nice |
 | `GET /api/loans` | The Loans page (LON-02, LON-03): every loan, the totals (R-LON-04), By person, the accounts with their balance today, and the current FY's month-end balances (real or projected, as `GET /api/fiscal-years/{fyId}/balances`) | One call for both tabs. It reads what the balances read (7.4 "Reads") |
 | `GET /api/loans/totals` | Dashboard's Loans card (DSH-07): the totals only, no names | Only Dashboard calls it |
 | `POST /api/loans`, `PUT /api/loans/{id}`, `DELETE /api/loans/{id}` | Add, edit, delete a loan | Information only (R-LON-02). PUT keeps the settled date, and 400 if the new date is after it |

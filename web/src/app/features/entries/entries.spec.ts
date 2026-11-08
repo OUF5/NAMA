@@ -1,3 +1,4 @@
+import { BreakpointObserver } from '@angular/cdk/layout';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, TestRequest, provideHttpClientTesting } from '@angular/common/http/testing';
 import { signal } from '@angular/core';
@@ -7,9 +8,11 @@ import { MatFormFieldHarness } from '@angular/material/form-field/testing';
 import { MatSelectHarness } from '@angular/material/select/testing';
 import { Router, provideRouter } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { of } from 'rxjs';
 import { Me, MeService } from '../../core/me';
 import { Category, FiscalYear } from '../plan/plan-api';
-import { EntriesResponse, Entry } from '../add-entry/entry-api';
+import { EntriesResponse, Entry, IncomeRow, TransferRow } from '../add-entry/entry-api';
+import { Income } from '../settings/settings-api';
 import { Entries } from './entries';
 
 // Today is 17 Oct 2026; FY 2026 runs 27 Jan 2026 to 26 Jan 2027 with payday 27 (PRD section 3).
@@ -48,7 +51,13 @@ const categories: Category[] = [
 const big: Entry = { id: 'e2', date: '2026-10-17', periodKey: '2026-09', fyId: '2026-01', categoryId: 'food', subCategoryId: 'groceries', bankAccountId: 'rajhi', amount: 799.99, note: 'Big shop' };
 const fuel: Entry = { id: 'e1', date: '2026-09-10', periodKey: '2026-08', fyId: '2026-01', categoryId: 'transport', subCategoryId: 'fuel', bankAccountId: 'snb', amount: 400, note: '' };
 
-function list(entries: Entry[], total: number, fiscalYears = [fy2026]): EntriesResponse {
+// TBL-07 (owner note 33): a transfer of 250 from SNB to Al Rajhi on 5 Oct; a Gift of 500 into Al Rajhi
+// in Sep (Once, Actual); a Bonus of 300 in Aug (Monthly, Planned: no account).
+const topUp: TransferRow = { id: 't1', date: '2026-10-05', periodKey: '2026-09', fyId: '2026-01', fromBankAccountId: 'snb', toBankAccountId: 'rajhi', amount: 250, note: 'Top up' };
+const gift: IncomeRow = { incomeId: 'gift', date: '2026-09-27', periodKey: '2026-09', label: 'Gift', counts: 'actual', bankAccountId: 'rajhi', amount: 500 };
+const bonus: IncomeRow = { incomeId: 'bonus', date: '2026-08-27', periodKey: '2026-08', label: 'Bonus', counts: 'planned', bankAccountId: null, amount: 300 };
+
+function list(entries: Entry[], total: number, fiscalYears = [fy2026], transfers: TransferRow[] = [], income: IncomeRow[] = []): EntriesResponse {
   return {
     fiscalYears,
     fyId: '2026-01',
@@ -58,8 +67,30 @@ function list(entries: Entry[], total: number, fiscalYears = [fy2026]): EntriesR
     ],
     entries,
     total,
+    transfers,
+    transferTotal: transfers.reduce((sum, transfer) => sum + transfer.amount, 0),
+    income,
+    incomeTotal: income.reduce((sum, row) => sum + row.amount, 0),
   };
 }
+
+// GET /api/income, for the income dialog: the Bonus is Monthly from Aug to Sep.
+const incomeData: Income = {
+  fiscalYears: [fy2026],
+  fyId: '2026-01',
+  salaries: [],
+  additional: [
+    { id: 'bonus', kind: 'additional', label: 'Bonus', amount: 300, type: 'monthly', fromPeriodKey: '2026-08', toPeriodKey: '2026-09', counts: 'planned', bankAccountId: null },
+  ],
+  totals: [],
+  currentPeriodKey: '2026-09',
+  currentTotal: 17000,
+  currentPlanned: 17000,
+  bankAccounts: [
+    { id: 'rajhi', name: 'Al Rajhi', archived: false },
+    { id: 'snb', name: 'SNB', archived: false },
+  ],
+};
 
 describe('Entries (PRD 5.5)', () => {
   let http: HttpTestingController;
@@ -148,13 +179,88 @@ describe('Entries (PRD 5.5)', () => {
       Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent?.trim()).slice(0, 7),
     );
     expect(rows).toEqual([
-      ['17 Oct 2026', 'Sep 2026', 'Food', 'Groceries', 'SAR 799.99', 'Al Rajhi', 'Big shop'],
-      ['10 Sep 2026', 'Aug 2026', 'Transport', 'Fuel', 'SAR 400', 'SNB', ''],
+      ['17 Oct 2026', 'Sep 2026', 'Expense', 'Food · Groceries', 'SAR 799.99', 'Al Rajhi', 'Big shop'],
+      ['10 Sep 2026', 'Aug 2026', 'Expense', 'Transport · Fuel', 'SAR 400', 'SNB', ''],
     ]);
-    expect(text('.summary p')).toBe('2 entries · Total SAR 1,199.99');
+    expect(text('.summary p')).toBe('2 entries · Spent SAR 1,199.99');
     // One FY: no selector, the FY as a caption.
     expect(text('.fy')).toBe('FY 2026 · 27 Jan 2026 to 26 Jan 2027');
     expect(root().textContent).not.toContain('Fiscal year');
+  });
+
+  // TBL-07 (owner note 33): every type in one list, newest first, each with its colored chip and
+  // details; the summary gives each type's total.
+  it('lists transfers and additional income with the expenses, each with its type', async () => {
+    await open('/entries', list([big, fuel], 1199.99, [fy2026], [topUp], [gift, bonus]));
+
+    const rows = Array.from(root().querySelectorAll('tbody tr')).map((row) =>
+      Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent?.trim()).slice(0, 7),
+    );
+    expect(rows).toEqual([
+      ['17 Oct 2026', 'Sep 2026', 'Expense', 'Food · Groceries', 'SAR 799.99', 'Al Rajhi', 'Big shop'],
+      ['5 Oct 2026', 'Sep 2026', 'Transfer', '–', 'SAR 250', 'SNB → Al Rajhi', 'Top up'],
+      ['27 Sep 2026', 'Sep 2026', 'Income', 'Gift · Actual', 'SAR 500', 'Al Rajhi', ''],
+      ['10 Sep 2026', 'Aug 2026', 'Expense', 'Transport · Fuel', 'SAR 400', 'SNB', ''],
+      ['27 Aug 2026', 'Aug 2026', 'Income', 'Bonus · Planned', 'SAR 300', '–', ''],
+    ]);
+    expect(Array.from(root().querySelectorAll('tbody .type-chip')).map((chip) => chip.className)).toEqual([
+      'type-chip expense', 'type-chip transfer', 'type-chip income', 'type-chip expense', 'type-chip income',
+    ]);
+    expect(text('.summary p')).toBe('5 entries · Spent SAR 1,199.99 · Moved SAR 250 · Income SAR 800');
+  });
+
+  // TBL-07: the type is in the URL; Transfers or Income clears the category, which is off for them.
+  it('filters by type and turns the category off for transfers and income', async () => {
+    await open('/entries?categoryId=food');
+
+    await (await select('Type')).clickOptions({ text: 'Transfers' });
+
+    expect(TestBed.inject(Router).url).toBe('/entries?type=transfer');
+    const request = await entriesCall();
+    expect(params(request)).toEqual({ type: 'transfer' });
+    request.flush(list([], 0, [fy2026], [topUp]));
+    await settle();
+    expect(await (await select('Category')).isDisabled()).toBe(true);
+    expect(await (await select('Sub-category')).isDisabled()).toBe(true);
+    expect(text('.summary p')).toBe('1 entry · Moved SAR 250');
+  });
+
+  // TBL-07: a transfer opens Banks' transfer dialog (BNK-04).
+  it('edits a transfer in its own dialog and reloads the list', async () => {
+    await open('/entries', list([big], 799.99, [fy2026], [topUp]));
+
+    button(root(), 'Edit SNB → Al Rajhi, SAR 250, 5 Oct 2026').click();
+    // The dialog's code loads on demand.
+    await vi.waitFor(() => expect(dialog()).not.toBeNull());
+    await settle();
+    expect(dialog()!.textContent).toContain('Edit transfer');
+    button(dialog()!, 'Save').click();
+    const put = await vi.waitFor(() => http.expectOne('/api/transfers/t1'));
+    expect(put.request.body).toEqual({ fromBankAccountId: 'snb', toBankAccountId: 'rajhi', date: '2026-10-05', amount: 250, note: 'Top up' });
+    put.flush(topUp);
+
+    (await entriesCall()).flush(list([big], 799.99, [fy2026], [topUp]));
+    await settle();
+    await vi.waitFor(() => expect(dialog()).toBeNull());
+    expect(text('.status')).toBe('Transfer updated.');
+  });
+
+  // TBL-07: income opens Settings' income dialog, which edits the whole item; GET /api/income is
+  // loaded only then.
+  it('edits additional income in the income dialog, loaded when asked', async () => {
+    await open('/entries', list([], 0, [fy2026], [], [bonus]));
+
+    button(root(), 'Edit Bonus, SAR 300, 27 Aug 2026').click();
+    (await vi.waitFor(() => http.expectOne('/api/income'))).flush(incomeData);
+    await vi.waitFor(() => expect(dialog()).not.toBeNull());
+    await settle();
+
+    expect(dialog()!.textContent).toContain('Edit income');
+    expect(dialog()!.querySelector('.note')?.textContent?.trim()).toBe('Changes apply to every month of this income.');
+    button(dialog()!, 'Cancel').click();
+    await settle();
+    await vi.waitFor(() => expect(dialog()).toBeNull());
+    http.verify();
   });
 
   it('shows the FY selector when there is more than one FY, and a new FY clears the month', async () => {
@@ -188,7 +294,7 @@ describe('Entries (PRD 5.5)', () => {
     await settle();
     // Categories are not loaded again.
     http.verify();
-    expect(text('.summary p')).toBe('1 entry · Total SAR 799.99');
+    expect(text('.summary p')).toBe('1 entry · Spent SAR 799.99');
   });
 
   it('searches notes after a pause in typing', async () => {
@@ -207,6 +313,7 @@ describe('Entries (PRD 5.5)', () => {
     await open('/entries', list([], 0));
 
     expect(text('.empty h2')).toBe('No entries in FY 2026 yet');
+    expect(text('.empty .note')).toBe('Every expense, transfer and additional income you add shows up here. Add an entry.');
     expect(root().querySelector('.empty a')?.getAttribute('href')).toBe('/add');
   });
 
@@ -265,7 +372,7 @@ describe('Entries (PRD 5.5)', () => {
     reload.flush(list([{ ...big, amount: 750 }, fuel], 1150));
     await settle();
     await vi.waitFor(() => expect(dialog()).toBeNull());
-    expect(text('.summary p')).toBe('2 entries · Total SAR 1,150');
+    expect(text('.summary p')).toBe('2 entries · Spent SAR 1,150');
     expect(text('.status')).toBe('Entry updated.');
   });
 
@@ -292,7 +399,7 @@ describe('Entries (PRD 5.5)', () => {
     (await entriesCall()).flush(list([fuel], 400));
     await settle();
     await vi.waitFor(() => expect(dialog()).toBeNull());
-    expect(text('.summary p')).toBe('1 entry · Total SAR 400');
+    expect(text('.summary p')).toBe('1 entry · Spent SAR 400');
     expect(text('.status')).toBe('Entry deleted.');
   });
 
@@ -312,5 +419,38 @@ describe('Entries (PRD 5.5)', () => {
 
     expect(dialog()!.textContent).toContain('Edit entry');
     http.expectNone('/api/entries/e2');
+  });
+});
+
+// TBL-05, TBL-07: on phones one card per row, the type chip first and no name said twice.
+describe('Entries on phones (PRD 5.5)', () => {
+  it('shows one card per row with its type', async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([{ path: 'entries', component: Entries }]),
+        { provide: MeService, useValue: { me: signal(me), load: async () => me } },
+        { provide: BreakpointObserver, useValue: { observe: () => of({ matches: true, breakpoints: {} }), isMatched: () => true } },
+      ],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/entries');
+    (await vi.waitFor(() => http.expectOne('/api/categories'))).flush(categories);
+    (await vi.waitFor(() => http.expectOne((req) => req.url === '/api/entries'))).flush(list([big], 799.99, [fy2026], [topUp], [gift]));
+    await new Promise((resolve) => setTimeout(resolve));
+    await harness.fixture.whenStable();
+    harness.detectChanges();
+
+    const cards = Array.from(harness.routeNativeElement!.querySelectorAll('.entry-card')).map((card) =>
+      [card.querySelector('.name'), card.querySelector('.caption')].map((el) => el?.textContent?.replace(/\s+/g, ' ').trim()),
+    );
+    expect(cards).toEqual([
+      ['ExpenseGroceries', 'Food · 17 Oct 2026 · Sep 2026 · Al Rajhi'],
+      ['TransferSNB → Al Rajhi', '5 Oct 2026 · Sep 2026'],
+      ['IncomeGift', 'Actual · 27 Sep 2026 · Sep 2026 · Al Rajhi'],
+    ]);
+    http.verify();
   });
 });
