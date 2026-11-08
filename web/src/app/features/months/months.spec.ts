@@ -15,7 +15,7 @@ import { Me, MeService } from '../../core/me';
 import { Entry } from '../add-entry/entry-api';
 import { Category, FiscalYear } from '../plan/plan-api';
 import { Months } from './months';
-import { MonthDetail } from './month-api';
+import { MonthDetail, Overspent } from './month-api';
 import { BalancesResponse, MonthOverview, OverviewResponse } from './overview-api';
 
 // Today is 17 Oct 2026; FY 2026 has payday 27, so Sep 2026 (27 Sep to 26 Oct) is in progress. Owner
@@ -227,6 +227,17 @@ function days(period: typeof sep, spent: Record<string, number> = {}): MonthDeta
 
 // Sep 2026 as the API's hand check would give it: Fuel 100 on 1 Oct (SNB) and the 799.99 big shop
 // on 17 Oct (Al Rajhi); Aug had Food 50 and Transport 30.
+// Owner note 32 (R-PLN-09), counted over the last month: Taxi's 30 spent with no plan in Aug is still
+// to make up in Sep, against Transport's 300 left this month. Aug is the FY's first month: no months
+// back. In Oct nothing went over in Sep.
+function overspent(period: typeof sep): Overspent {
+  return period === aug
+    ? { monthsBack: 0, from: null, total: 0, categories: [] }
+    : period === sep
+      ? { monthsBack: 1, from: aug, total: 30, categories: [{ categoryId: 'transport', overspent: 30, left: 300, after: 270 }] }
+      : { monthsBack: 1, from: sep, total: 0, categories: [] };
+}
+
 function detail(period = sep, latest: Entry[] = [big, fuelEntry], count = latest.length): MonthDetail {
   const total = latest.reduce((sum, entry) => sum + entry.amount, 0);
   return {
@@ -254,6 +265,7 @@ function detail(period = sep, latest: Entry[] = [big, fuelEntry], count = latest
       { id: 'snb', name: 'SNB', archived: false },
     ],
     additionalIncome: [],
+    overspent: overspent(period),
   };
 }
 
@@ -380,10 +392,11 @@ describe('Tracker (PRD 5.6)', () => {
     const summary = section('month');
     expect(summary.classList).toContain('inProgress');
     expect(words(summary.querySelector('.card-head'))).toBe('Sep 2026 27 Sep to 26 Oct In progress');
-    // R-PLN-05: Remaining = From last month + Planned - Spent; Income is the month's own.
+    // Owner note 32: Remaining this month = Planned - Spent, then Remaining − Overspent last month
+    // (R-PLN-09: Taxi's 30 from Aug) beside it; Income is the month's own.
     expect(lines(summary, '.kpi')).toEqual([
-      'Remaining SAR 600.01',
-      'From last month SAR 0',
+      'Remaining this month SAR 600.01',
+      'Remaining − Overspent last month SAR 570.01 Overspent last month SAR 30',
       'Planned SAR 1,900',
       'Spent SAR 1,299.99',
       'Income SAR 17,500.25',
@@ -394,13 +407,14 @@ describe('Tracker (PRD 5.6)', () => {
 
     // Owner note 26: one line per category; a single sub-category is named beside it, not repeated;
     // no chip while within plan.
+    expect(words(section('plan').querySelector('.card-head'))).toBe("Plan vs spent Spent of this month's plan");
     expect(lines(section('plan'), '.spend-row')).toEqual([
       'Food Groceries SAR 1,199.99 of 1,500',
       'Transport Fuel SAR 100 of 400',
     ]);
     expect(section('plan').querySelector('.chip')).toBeNull();
     // Owner note 26: Plan vs spent and Compared with last month each go across the page.
-    expect([section('days'), section('plan'), section('change')].map((card) => card.classList.contains('wide'))).toEqual([true, true, true]);
+    expect([section('days'), section('plan'), section('overspent')].map((card) => card.classList.contains('wide'))).toEqual([true, true, true]);
 
     // The month picker, with each month's status.
     expect(root().querySelector('app-month-picker mat-select')?.textContent).toContain('Sep 2026');
@@ -426,11 +440,12 @@ describe('Tracker (PRD 5.6)', () => {
     expect(columns[20].querySelector<HTMLElement>('.bar')!.style.height).toBe('100%');
     expect(columns[20].title).toBe('17 Oct: SAR 799.99');
 
-    expect(words(section('change').querySelector('.card-head'))).toBe('Compared with last month Aug 2026');
-    expect(lines(section('change'), '.row')).toEqual([
-      'Food SAR 749.99 more than Aug 2026 SAR 799.99',
-      'Transport SAR 30 less than Aug 2026 SAR 100',
-    ]);
+    // Owner note 32: Overspent to make up, with no picker while only one month is before Sep.
+    const overspentCard = section('overspent');
+    expect(words(overspentCard.querySelector('.card-head'))).toBe('Overspent to make up Aug 2026 · SAR 30 in all');
+    expect(overspentCard.querySelector('mat-select')).toBeNull();
+    expect(lines(overspentCard, 'tr')).toEqual(['Category Overspent Left this month After covering', 'Transport 30 300 270']);
+    expect(overspentCard.querySelector('.short')).toBeNull();
     expect(lines(section('accounts'), '.row')).toEqual(['Al Rajhi 89% SAR 799.99', 'SNB 11% SAR 100']);
 
     expect(lines(section('biggest'), '.entry').map((line) => line.replace(' edit', ''))).toEqual([
@@ -486,13 +501,17 @@ describe('Tracker (PRD 5.6)', () => {
     // Spending without a plan is over plan (R-PLN-01): Taxi (archived) is listed in Aug.
     // Over plan comes first (owner note 26).
     expect(lines(section('plan'), '.spend-row')[0]).toBe('Transport Taxi (archived) Over by SAR 30 SAR 30 of 0');
-    expect(text(section('change').querySelector('.note'))).toBe('This is the first month NAMA has.');
+    expect(text(section('overspent').querySelector('.note'))).toBe(
+      'Aug 2026 is the first month of the fiscal year, so there is nothing before it to make up.',
+    );
     expect(text(section('latest').querySelector('.note'))).toBe('No entries in Aug 2026.');
   });
 
-  // R-PLN-05: what was left last month carries in. Groceries left 300 in Aug, so Sep has 1,800; Fuel
-  // spent 500 of its 400 but 200 carried in, so it is near its limit, not over.
-  it('shows what carried in from last month, and counts it in each line', async () => {
+  // Owner note 32: what was left last month (R-PLN-05) is not on the month card. The month and its
+  // lines are the month on its own: Groceries left 300 in Aug, but Sep's line is still "of 1,500";
+  // Fuel spent 500 of its 400, so it is over this month even with 200 carried in. Money left over
+  // does not carry into Remaining − Overspent last month (R-PLN-09).
+  it('leaves what was left last month out of the month', async () => {
     const data = overview();
     data.months[1] = month(sep, 'inProgress', 17500.25, 1900, 1699.99, 500);
     const food = data.rows[0];
@@ -501,23 +520,134 @@ describe('Tracker (PRD 5.6)', () => {
     const transport = data.rows[1];
     transport.months[1] = { ...transport.months[1], carriedIn: 200, spent: 500, remaining: 100 };
     transport.subCategories[0].months[1] = { ...transport.subCategories[0].months[1], carriedIn: 200, spent: 500, remaining: 100 };
-    await open('/months', data);
+    await open('/months', data, { ...detail(), overspent: { monthsBack: 1, from: aug, total: 0, categories: [] } });
 
-    expect(lines(section('month'), '.kpi').slice(0, 2)).toEqual(['Remaining SAR 700.01', 'From last month SAR 500']);
-    // Near limit before within plan (owner note 26).
+    const summary = section('month');
+    expect(lines(summary, '.kpi').slice(0, 2)).toEqual([
+      'Remaining this month SAR 200.01',
+      'Remaining − Overspent last month SAR 200.01 Nothing overspent last month',
+    ]);
+    expect(text(section('overspent').querySelector('.note'))).toBe('Nothing overspent last month.');
+    // 1,699.99 of 1,900 is 89%: near the limit this month.
+    expect(text(summary.querySelector('.bar-line .chip'))).toBe('Near limit');
+    expect(summary.querySelector('.remaining .value')!.classList).toContain('warn');
+    // Over plan first (owner note 26).
     expect(lines(section('plan'), '.spend-row')).toEqual([
-      'Transport Fuel Near limit SAR 500 of 600',
-      'Food Groceries SAR 1,199.99 of 1,800',
+      'Transport Fuel Over by SAR 100 SAR 500 of 400',
+      'Food Groceries SAR 1,199.99 of 1,500',
     ]);
   });
 
+  // Owner note 32, the owner's case: 800 went over plan before Sep and is not made up (R-PLN-09):
+  // 770 on Groceries and Taxi's 30 from Aug. Sep on its own is within plan, with SAR 600.01 left;
+  // "Remaining − Overspent last month" says it is still SAR 199.99 behind, in red. The lines are this
+  // month only (owner's choice): no overspend on them, and Taxi, with nothing in Sep, has no line.
+  // Overspent to make up lists Food first: 300.01 left cannot cover its 770.
+  it('keeps an overspend out of the month, and takes it off beside it', async () => {
+    const data = overview();
+    data.months[1] = month(sep, 'inProgress', 17500.25, 1900, 1299.99, -800);
+    const food = data.rows[0];
+    food.months[1] = { ...food.months[1], carriedIn: -770, remaining: -469.99 };
+    food.subCategories[0].months[1] = { ...food.subCategories[0].months[1], carriedIn: -770, remaining: -469.99 };
+    const transport = data.rows[1];
+    transport.months[1] = { ...transport.months[1], carriedIn: -30, remaining: 270 };
+    transport.subCategories[1].months[1] = { ...transport.subCategories[1].months[1], carriedIn: -30, remaining: -30 };
+    await open('/months', data, {
+      ...detail(),
+      overspent: {
+        monthsBack: 1,
+        from: aug,
+        total: 800,
+        categories: [
+          { categoryId: 'food', overspent: 770, left: 300.01, after: -469.99 },
+          { categoryId: 'transport', overspent: 30, left: 300, after: 270 },
+        ],
+      },
+    });
+
+    const summary = section('month');
+    expect(lines(summary, '.kpi').slice(0, 2)).toEqual([
+      'Remaining this month SAR 600.01',
+      'Remaining − Overspent last month SAR -199.99 Overspent last month SAR 800',
+    ]);
+    expect(summary.querySelector('.remaining .value')!.classList).toContain('ok');
+    expect(summary.querySelector('.after-last .value')!.classList).toContain('danger');
+    expect(text(summary.querySelector('.bar-line .chip'))).toBe('Within plan');
+    expect(lines(section('plan'), '.spend-row')).toEqual([
+      'Food Groceries SAR 1,199.99 of 1,500',
+      'Transport Fuel SAR 100 of 400',
+    ]);
+    const card = section('overspent');
+    expect(words(card.querySelector('.card-head'))).toBe('Overspent to make up Aug 2026 · SAR 800 in all');
+    expect(lines(card, 'tbody tr')).toEqual(['Food 770 300.01 -469.99', 'Transport 30 300 270']);
+    expect(Array.from(card.querySelectorAll('.short')).map((cell) => text(cell))).toEqual(['-469.99']);
+
+    await harness.navigateByUrl('/months?over=1');
+    await settle();
+    expect(words(section('plan'))).toContain('Nothing over plan in Sep 2026.');
+  });
+
+  // Owner note 32: the months back are picked on Overspent to make up and kept in the URL; only the
+  // month's detail is loaded again, and the month card follows. Oct has Aug and Sep before it in the
+  // FY: "Last month" (Sep) or "Since Aug 2026", where Taxi's 30 from Aug is still to make up.
+  it('counts the overspend over the months back picked', async () => {
+    await open('/months?month=2026-10', overview(), detail(oct, []));
+
+    let card = section('overspent');
+    expect(words(card.querySelector('.card-head .title'))).toBe('Overspent to make up Sep 2026');
+    expect(words(card.querySelector('mat-select'))).toContain('Last month');
+    expect(text(card.querySelector('.note'))).toBe('Nothing overspent last month.');
+    expect(words(section('month').querySelector('.after-last'))).toBe(
+      'Remaining − Overspent last month SAR 1,900 Nothing overspent last month',
+    );
+
+    const page = harness.routeDebugElement!.componentInstance as { setBack(back: string): void };
+    page.setBack('all');
+    const call = await monthCall('2026-10');
+    expect(call.request.params.get('back')).toBe('2');
+    call.flush({
+      ...detail(oct, []),
+      overspent: { monthsBack: 2, from: aug, total: 30, categories: [{ categoryId: 'transport', overspent: 30, left: 400, after: 370 }] },
+    });
+    await settle();
+    http.verify();
+
+    expect(TestBed.inject(Router).url).toBe('/months?month=2026-10&back=all');
+    card = section('overspent');
+    expect(words(card.querySelector('.card-head .title'))).toBe('Overspent to make up Aug 2026 to Sep 2026 · SAR 30 in all');
+    expect(words(card.querySelector('mat-select'))).toContain('Since Aug 2026');
+    expect(lines(card, 'tbody tr')).toEqual(['Transport 30 400 370']);
+    expect(words(section('month').querySelector('.after-last'))).toBe(
+      'Remaining − Overspent since Aug 2026 SAR 1,870 Overspent since Aug 2026 SAR 30',
+    );
+
+    page.setBack('1');
+    const back = await monthCall('2026-10');
+    expect(back.request.params.has('back')).toBe(false);
+    back.flush(detail(oct, []));
+    await settle();
+    expect(TestBed.inject(Router).url).toBe('/months?month=2026-10');
+  });
+
   // R-PLN-06: set up in Sep 2026, so Aug stands alone and the page says why.
-  it('says which month the carry starts in', async () => {
-    await open('/months', { ...overview(), carryFromPeriodKey: '2026-09' });
+  // Owner note 32: only on Totals, whose projection still carries from the setup month; the Year
+  // view's Available carries from the FY's first month, and the Months view shows each month alone.
+  it('says which month the carry starts in, on Totals only', async () => {
+    const data = { ...overview(), carryFromPeriodKey: '2026-09' };
+    await open('/months?view=totals', data, balances);
 
     expect(words(root().querySelector('.carry-from'))).toBe(
       'What is left carries from Sep 2026, the month you started NAMA. Earlier months stand alone.',
     );
+
+    await harness.navigateByUrl('/months?view=year');
+    await settle();
+    expect(root().querySelector('.carry-from')).toBeNull();
+
+    TestBed.inject(Router).navigateByUrl('/months?view=months');
+    (await monthCall('2026-09')).flush(detail());
+    await settle();
+    expect(root().querySelector('.carry-from')).toBeNull();
   });
 
   it('says nothing about the carry when it starts with the FY', async () => {
@@ -612,8 +742,13 @@ describe('Tracker (PRD 5.6)', () => {
     expect(plan).not.toContain('Groceries');
   });
 
+  // Owner note 32: over the month's own plan. Groceries carries 400 overspent into Sep, but its 1,199.99
+  // of Sep's 1,500 is within plan, so Food stays out.
   it('keeps only the rows over plan in the Year view', async () => {
-    await open('/months?over=1&view=year', overview(), balances);
+    const data = overview();
+    const groceries = data.rows[0].subCategories[0];
+    groceries.months[1] = { ...groceries.months[1], carriedIn: -400, remaining: -99.99 };
+    await open('/months?over=1&view=year', data, balances);
 
     const grid = words(root().querySelector('app-year-grid tbody'));
     expect(grid).toContain('Transport');
@@ -864,14 +999,20 @@ describe('Tracker (PRD 5.6)', () => {
     // The in-progress column is marked in every row (Food, Transport, Total, Balance).
     expect(root().querySelectorAll('td.now').length).toBe(4);
 
+    // Owner note 32: each month cell shows Spent, the month's own Plan and Available (R-PLN-05, the plan
+    // plus what carried in; nothing carries here); the FY column has Spent and Plan.
     const food = cell('Food, Sep 2026');
-    expect(words(food)).toBe('Spent 1,199.99 Plan 1,500');
+    expect(words(food)).toBe('Spent 1,199.99 Plan 1,500 Available 1,500');
     expect(food.classList).toContain('ok');
-    expect(food.getAttribute('aria-label')).toBe('Food, Sep 2026: SAR 1,199.99 of SAR 1,500 plan, Within plan. Open entries');
+    expect(food.getAttribute('aria-label')).toBe(
+      'Food, Sep 2026: SAR 1,199.99 of SAR 1,500 plan, SAR 1,500 available, Within plan. Open entries',
+    );
+    expect(words(cell('Food, Oct 2026'))).toBe('Spent 0 Plan 1,500 Available 1,500');
+    expect(words(cell('Food, FY 2026'))).toBe('Spent 1,249.99 Plan 4,500');
     expect(food.getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09&categoryId=food');
     expect(cell('Food, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&categoryId=food');
     expect(cell('Total, Sep 2026').getAttribute('href')).toBe('/entries?fyId=2026-01&periodKey=2026-09');
-    expect(words(cell('Total, Sep 2026'))).toBe('Spent 1,299.99 Plan 1,900');
+    expect(words(cell('Total, Sep 2026'))).toBe('Spent 1,299.99 Plan 1,900 Available 1,900');
     expect(cell('Total, FY 2026').getAttribute('href')).toBe('/entries?fyId=2026-01');
 
     // Spending without a plan is red, with "Over by" in the label.
@@ -893,7 +1034,37 @@ describe('Tracker (PRD 5.6)', () => {
     expect(text(fuelAug)).toBe('–');
     expect(fuelAug.getAttribute('aria-label')).toBe('Fuel, Aug 2026: nothing planned or spent. Open entries');
     expect(cell('Taxi (archived), Aug 2026').classList).toContain('danger');
+    expect(words(cell('Taxi (archived), Aug 2026'))).toBe('Spent 30 Plan 0 Available 0');
+    expect(words(root().querySelector('.hint'))).toContain(
+      "Plan is each month's own plan, and Available adds what was left (or overspent) in the FY's earlier months.",
+    );
     http.verify();
+  });
+
+  // Owner note 32: Groceries left 300 in Aug and Fuel went 200 over. Sep's Plan is the month's own and
+  // Spent's color is against it, so Fuel's 500 of its 400 is over plan; Available counts what carried
+  // in (R-PLN-05): 1,800 for Food, 200 for Fuel, and red below 0. A carried overspend with no plan or
+  // spending still shows its Available.
+  it('shows each Year cell with its own plan and what is available', async () => {
+    const data = overview();
+    const food = data.rows[0];
+    food.months[1] = { ...food.months[1], carriedIn: 300, remaining: 600.01 };
+    const transport = data.rows[1];
+    transport.subCategories[0].months[1] = { ...transport.subCategories[0].months[1], carriedIn: -200, spent: 500, remaining: -300 };
+    transport.subCategories[1].months[2] = { ...transport.subCategories[1].months[2], carriedIn: -30, remaining: -30 };
+    await open('/months?view=year', data, balances);
+
+    expect(words(cell('Food, Sep 2026'))).toBe('Spent 1,199.99 Plan 1,500 Available 1,800');
+    expect(cell('Food, Sep 2026').getAttribute('aria-label')).toBe(
+      'Food, Sep 2026: SAR 1,199.99 of SAR 1,500 plan, SAR 1,800 available, Within plan. Open entries',
+    );
+    button(root(), 'Show sub-categories of Transport').click();
+    await settle();
+    expect(words(cell('Fuel, Sep 2026'))).toBe('Spent 500 Plan 400 Available 200');
+    expect(cell('Fuel, Sep 2026').classList).toContain('danger');
+    const taxi = cell('Taxi (archived), Oct 2026');
+    expect(words(taxi)).toBe('Spent 0 Plan 0 Available -30');
+    expect(taxi.querySelector('.short')).not.toBeNull();
   });
 
   // Owner note 9: the balance at each month's end, real for closed months, projected after; the FY
@@ -926,6 +1097,7 @@ describe('Tracker (PRD 5.6)', () => {
       spent: 1199.99,
       remaining: 300.01,
       percent: 79,
+      overspentLastMonth: 0,
     });
     await settle();
     const dialog = document.querySelector('mat-dialog-container')!;
@@ -946,7 +1118,7 @@ describe('Tracker (PRD 5.6)', () => {
     http.verify();
 
     expect(text(root().querySelector('.status'))).toBe('Entry deleted.');
-    expect(words(section('month').querySelector('.kpi'))).toBe('Remaining SAR 1,400');
+    expect(words(section('month').querySelector('.kpi'))).toBe('Remaining this month SAR 1,400');
     expect(lines(section('latest'), '.entry .name')).toEqual(['Fuel']);
   });
 });

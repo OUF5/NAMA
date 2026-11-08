@@ -7,13 +7,14 @@ using Api.Infrastructure;
 namespace Api.Features.Indicator;
 
 // PRD 7.5 GET /api/indicator (ENT-01): planned, spent so far, remaining and percent for one
-// sub-category in the month of a date. R-PLN-05: what was left in the FY's earlier months carries in,
-// so available = carried in + planned, and remaining = available - spent.
+// sub-category in the month of a date, the month on its own (owner note 32, as Tracker's month):
+// remaining = planned - spent. Beside it, what went over plan last month and is not made up yet
+// (R-PLN-09, over the last month only; none in the FY's first month).
 public static class IndicatorEndpoint
 {
-    // Percent is null when nothing is available ("No plan for this month").
+    // Percent is null when nothing is planned ("No plan for this month").
     public record IndicatorResponse(
-        MeEndpoint.PeriodDto Period, decimal CarriedIn, decimal Planned, decimal Available, decimal Spent, decimal Remaining, int? Percent);
+        MeEndpoint.PeriodDto Period, decimal Planned, decimal Spent, decimal Remaining, int? Percent, decimal OverspentLastMonth);
 
     public static IEndpointRouteBuilder MapIndicator(this IEndpointRouteBuilder api)
     {
@@ -35,22 +36,20 @@ public static class IndicatorEndpoint
             var spent = (await store.GetSubCategoryEntriesAsync(uid, subCategoryId, found.FiscalYear.Id))
                 .GroupBy(entry => entry.PeriodKey)
                 .ToDictionary(group => group.Key, group => group.Sum(entry => entry.AmountMinor));
-            // The FY's months up to the month of the date, carried from the month NAMA was set up (R-PLN-06).
-            var carryStart = PlanCalculator.CarryStart(found.FiscalYear.Periods, (await store.GetProfileAsync(uid))?.StartedOn);
-            var months = PlanCalculator.Carry(found.FiscalYear.Periods
-                .TakeWhile(period => string.CompareOrdinal(period.Key, found.Period.Key) <= 0)
-                .Select(period => (plan is null ? 0 : PlanCalculator.AmountFor(plan, period.Key), spent.GetValueOrDefault(period.Key))),
-                carryStart);
-            var month = months[^1];
+            (long Planned, long Spent) Month(Period period) =>
+                (plan is null ? 0 : PlanCalculator.AmountFor(plan, period.Key), spent.GetValueOrDefault(period.Key));
+            var (planned, spentNow) = Month(found.Period);
+            // R-PLN-09: the month before, within the FY, whatever month NAMA was set up in.
+            var index = found.FiscalYear.Periods.ToList().FindIndex(period => period.Key == found.Period.Key);
+            var overspent = index > 0 ? PlanCalculator.Overspent([Month(found.FiscalYear.Periods[index - 1])]) : 0;
 
             return Results.Ok(new IndicatorResponse(
                 MeEndpoint.PeriodDto.From(found.Period),
-                Money.FromMinor(month.CarriedIn),
-                Money.FromMinor(month.Planned),
-                Money.FromMinor(month.Available),
-                Money.FromMinor(month.Spent),
-                Money.FromMinor(month.Remaining),
-                PlanCalculator.Percent(month.Available, month.Spent)));
+                Money.FromMinor(planned),
+                Money.FromMinor(spentNow),
+                Money.FromMinor(PlanCalculator.Remaining(planned, spentNow)),
+                PlanCalculator.Percent(planned, spentNow),
+                Money.FromMinor(overspent)));
         });
         return api;
     }

@@ -56,12 +56,11 @@ const accounts: BankAccount[] = [
 
 const indicator: Indicator = {
   period: sep,
-  carriedIn: 0,
   planned: 1500,
-  available: 1500,
   spent: 1199.99,
   remaining: 300.01,
   percent: 79,
+  overspentLastMonth: 0,
 };
 
 describe('Add entry (PRD 5.4)', () => {

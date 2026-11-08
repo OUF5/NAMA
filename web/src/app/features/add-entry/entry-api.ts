@@ -13,14 +13,15 @@ export interface BankAccount {
 
 // ENT-01, for one sub-category in the month of a date. R-PLN-05: available is what carried in from
 // the FY's earlier months plus the plan; percent is null when nothing is available.
+// ENT-01, the month on its own (owner note 32): remaining = planned - spent. overspentLastMonth is
+// what went over plan last month and is not made up yet (R-PLN-09).
 export interface Indicator {
   period: PeriodInfo;
-  carriedIn: number;
   planned: number;
-  available: number;
   spent: number;
   remaining: number;
   percent: number | null;
+  overspentLastMonth: number;
 }
 
 export interface NewEntry {

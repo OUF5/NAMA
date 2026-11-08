@@ -160,11 +160,13 @@ public static class OverviewEndpoint
             .ToDictionary(group => group.Key, group => group.Sum(entry => entry.AmountMinor));
         var plansBySub = plans.ToDictionary(plan => plan.SubCategoryId);
 
-        // R-PLN-05: each sub-category carries on its own; categories and months are their sums.
+        // R-PLN-05: each sub-category carries on its own; categories and months are their sums. Owner
+        // note 32: the rows and months carry from the FY's first month (Tracker's Year view, Available),
+        // not from the month NAMA was set up (R-PLN-06), which the projection keeps.
         IReadOnlyList<CarriedMonth> SubCells(SubCategory sub) => PlanCalculator.Carry(periods
             .Select(period => (
                 plansBySub.TryGetValue(sub.Id, out var plan) ? PlanCalculator.AmountFor(plan, period.Key) : 0L,
-                spent.GetValueOrDefault((sub.Id, period.Key)))), carryStart);
+                spent.GetValueOrDefault((sub.Id, period.Key)))));
 
         List<CellDto> Cells(IReadOnlyList<CarriedMonth> cells) => cells
             .Select((cell, i) => new CellDto(periods[i].Key, Money.FromMinor(cell.CarriedIn), Money.FromMinor(cell.Planned),
@@ -205,9 +207,10 @@ public static class OverviewEndpoint
         }
 
         // Month and FY spent count every entry, so they equal the Entries totals (M7 "Done when").
-        var months = PlanCalculator.Carry(periods.Select(period => (
+        var monthAmounts = periods.Select(period => (
             PlanCalculator.MonthPlanned(plans, period.Key),
-            entries.Where(entry => entry.PeriodKey == period.Key).Sum(entry => entry.AmountMinor))), carryStart);
+            entries.Where(entry => entry.PeriodKey == period.Key).Sum(entry => entry.AmountMinor))).ToList();
+        var months = PlanCalculator.Carry(monthAmounts);
         var totalPlanned = months.Sum(month => month.Planned);
         var totalSpent = entries.Sum(entry => entry.AmountMinor);
         // R-PLN-03, R-PLN-04 over the whole budget (a filter has no income).
@@ -233,7 +236,8 @@ public static class OverviewEndpoint
         // Owner note 23: the month in progress spends the rest of its whole-budget plan (R-PLN-07), and
         // each month yet to come gets its actual income minus its planned.
         var current = periods.ToList().FindIndex(period => FiscalCalendar.Status(period, today) == PeriodStatus.InProgress);
-        var stillToSpend = current >= 0 ? Math.Max(0, months[current].Remaining) : 0;
+        // R-PLN-07 carries from the month NAMA was set up (R-PLN-06; owner note 32 left it as it is).
+        var stillToSpend = current >= 0 ? Math.Max(0, PlanCalculator.Carry(monthAmounts, carryStart)[current].Remaining) : 0;
         var projectedMonths = PlanCalculator.ProjectSaved(
             savedMonths,
             current >= 0,

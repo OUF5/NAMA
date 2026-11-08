@@ -143,6 +143,14 @@ public static class PlanCalculator
         return result;
     }
 
+    // R-PLN-09 (owner note 32): what went over plan in these months and is not made up yet, for one
+    // sub-category. From 0, each month adds its spent minus its planned, never below 0: a month under
+    // plan pays back what went over before it, and what is left after that does not carry. Tracker
+    // passes the months back the owner picks, whatever month NAMA was set up in (not R-PLN-06): an
+    // overspend entered for an earlier month is real.
+    public static long Overspent(IEnumerable<(long Planned, long Spent)> months) =>
+        months.Aggregate(0L, (overspent, month) => Math.Max(0, overspent + month.Spent - month.Planned));
+
     // R-PLN-07, R-PLN-08. Months is the whole FY's Unassigned (R-PLN-03, planned income); toToday is
     // the whole budget carried (R-PLN-05) from the FY's first month to the month in progress, its last
     // item. Saved to date is actual income (month key → amount, R-INC-01) minus spent, from the first

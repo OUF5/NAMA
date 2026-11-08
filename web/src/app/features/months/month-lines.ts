@@ -11,8 +11,8 @@ export const STATUS_LABELS: Record<MonthStatus, string> = {
 };
 
 // One planned-vs-spent line: a month card's row (docs/DESIGN.md "Category rows on phones") or a
-// Year grid cell. status is null when nothing is available and nothing is spent (M7). R-PLN-05:
-// "of" is what was available, the month's plan plus what carried in.
+// Year grid cell. status is null when nothing is planned and nothing is spent (M7). Owner note 32:
+// "of" is the month's own plan (what was available, R-PLN-05, before).
 export interface SpendLine {
   status: PlanStatus | null;
   chip: string;
@@ -22,20 +22,43 @@ export interface SpendLine {
 }
 
 // Amounts are minor units: "SAR 1,240" "of 2,000".
-export function spendLine(available: number, spent: number, currency: string): SpendLine {
-  const status = spendStatus(available, spent);
+export function spendLine(planned: number, spent: number, currency: string): SpendLine {
+  const status = spendStatus(planned, spent);
   return {
     status,
-    chip: status ? planStatusLabel(status, available, spent, currency) : '',
-    bar: available > 0 ? Math.min(100, (spent * 100) / available) : null,
+    chip: status ? planStatusLabel(status, planned, spent, currency) : '',
+    bar: planned > 0 ? Math.min(100, (spent * 100) / planned) : null,
     spent: formatMoney(spent, currency),
-    of: `of ${formatAmount(available)}`,
+    of: `of ${formatAmount(planned)}`,
   };
 }
 
-// R-PLN-05: a cell's or a month's plan plus what carried in, in minor units.
-export function availableMinor(item: { carriedIn: number; planned: number }): number {
-  return toMinor(item.carriedIn) + toMinor(item.planned);
+// Owner note 32 (R-PLN-09): how many months back the overspend to make up is counted over, kept in
+// the URL as ?back=: 1 (the default), 2, 3, 6, or "all" (since the FY's first month). Never more than
+// the FY's months before the month shown (before), so 0 in the FY's first month.
+const BACK_CHOICES = [1, 2, 3, 6];
+
+export function monthsBack(back: string, before: number): number {
+  const picked = back === 'all' ? before : Number(back);
+  return Math.min(Number.isInteger(picked) && picked > 0 ? picked : 1, before);
+}
+
+// "last month", "last 3 months" or "since Aug 2026" (all the FY's months before this one).
+export function backWords(count: number, before: number, firstLabel: string): string {
+  return count <= 1 ? 'last month' : count === before ? `since ${firstLabel}` : `last ${count} months`;
+}
+
+// The picker's choices for a month with `before` months before it in its FY.
+export function backOptions(before: number, firstLabel: string): { value: string; count: number; label: string }[] {
+  const counts = [...BACK_CHOICES.filter((count) => count < before), ...(before > 0 ? [before] : [])];
+  return counts.map((count) => {
+    const words = backWords(count, before, firstLabel);
+    return {
+      value: count === before && count > 1 ? 'all' : String(count),
+      count,
+      label: words[0].toUpperCase() + words.slice(1),
+    };
+  });
 }
 
 // Category and sub-category names by id; archived ones are marked, as in the Entries filters (M6).

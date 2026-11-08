@@ -61,24 +61,20 @@
           </div>
           <span class="now-chip">{{ inProgressLabel }}</span>
         </div>
-        <span class="caption">Remaining</span>
+        <span class="caption">Remaining this month</span>
         <div class="hero-line">
           <span class="money hero" [class]="c.line.status">{{ c.remaining }}</span>
           @if (c.line.status) {
             <span class="chip" [class]="c.line.status">{{ c.line.chip }}</span>
           }
         </div>
-        <!-- Owner note 24: what carried in (R-PLN-05), now that "From last month" is not a number below. -->
-        @if (c.carried) {
-          <p class="caption carried">{{ c.carried }}</p>
-        }
         <div class="bar">
           @if (c.line.bar !== null) {
             <mat-progress-bar
               mode="determinate"
               [class]="c.line.status"
               [value]="c.line.bar"
-              [attr.aria-label]="'Share of the available amount spent: ' + c.line.chip"
+              [attr.aria-label]="'Share of this month\'s plan spent: ' + c.line.chip"
             />
           } @else {
             <div class="empty-bar"></div>
@@ -101,6 +97,16 @@
             </div>
           }
         </div>
+        <!-- Owner note 32 (R-PLN-09): only when last month went over plan, as Add's indicator. -->
+        @if (c.overspent; as o) {
+          <div class="overspent">
+            <div class="overspent-line">
+              <span class="caption">Remaining − Overspent last month</span>
+              <span class="money value" [class.danger]="o.short">{{ o.after }}</span>
+            </div>
+            <span class="caption money">{{ o.caption }}</span>
+          </div>
+        }
         <h3 class="sub-title">Watch</h3>
         @if (watch().length > 0) {
           <ul class="watch">

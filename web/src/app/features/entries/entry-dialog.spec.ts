@@ -55,7 +55,7 @@ describe('Entry dialog (TBL-02, TBL-03)', () => {
     fixture = TestBed.createComponent(EntryDialog);
     // The indicator shows the month as saved.
     (await vi.waitFor(() => http.expectOne('/api/indicator?subCategoryId=old&date=2026-10-17'))).flush({
-      period: sep, planned: 0, spent: 1500.5, remaining: -1500.5, percent: null,
+      period: sep, planned: 0, spent: 1500.5, remaining: -1500.5, percent: null, overspentLastMonth: 0,
     });
     await settle();
   });

@@ -10,7 +10,7 @@
     mode="determinate"
     [class]="status()"
     [value]="barValue()"
-    [attr.aria-label]="'Share of the plan spent: ' + chip()"
+    [attr.aria-label]="'Share of this month\'s plan spent: ' + chip()"
   />
   <dl class="numbers">
     <div>
@@ -22,17 +22,10 @@
       <dd class="money">{{ money(spent()) }}</dd>
     </div>
     <div>
-      <dt class="caption">Remaining</dt>
-      <dd class="money">{{ money(available() - spent()) }}</dd>
+      <dt class="caption">Remaining this month</dt>
+      <dd class="money">{{ money(remaining()) }}</dd>
     </div>
   </dl>
-  <!-- R-PLN-05: what was left (or overspent) last month carries in. -->
-  @if (carriedIn() !== 0) {
-    <p class="caption money carried">
-      {{ carriedIn() > 0 ? 'Includes' : 'Less' }} {{ money(carriedIn() > 0 ? carriedIn() : -carriedIn()) }}
-      {{ carriedIn() > 0 ? 'left' : 'overspent' }} last month · {{ money(available()) }} available
-    </p>
-  }
   @if (pending() > 0) {
     <p class="after money" [class]="status()">{{ after() }}</p>
   }
@@ -41,4 +34,15 @@
   <p class="caption money">
     Spent so far {{ money(spent()) }}@if (pending() > 0) {<span>, {{ money(total()) }} after this entry</span>}
   </p>
+}
+
+<!-- Owner note 32 (R-PLN-09): only when last month went over plan, as Tracker's month card. -->
+@if (overspent() > 0) {
+  <div class="overspent">
+    <div class="overspent-line">
+      <span class="caption">Remaining − Overspent last month</span>
+      <span class="money value" [class.danger]="afterOverspent() < 0">{{ money(afterOverspent()) }}</span>
+    </div>
+    <span class="caption money">Overspent last month {{ money(overspent()) }}</span>
+  </div>
 }

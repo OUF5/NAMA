@@ -14,7 +14,8 @@ export interface SummaryAccount {
 }
 
 // The month in progress for the whole budget: remaining carries (R-PLN-05), unassigned carries
-// (R-PLN-03). daysLeft counts today.
+// (R-PLN-03). daysLeft counts today. overspentLastMonth is what went over plan last month and is not
+// made up yet (R-PLN-09, owner note 32), for Dashboard's current month.
 export interface SummaryMonth {
   period: PeriodInfo;
   // Today's day of the month (1 on payday) and the month's length (DSH-01's marker).
@@ -27,6 +28,7 @@ export interface SummaryMonth {
   spent: number;
   remaining: number;
   unassigned: number;
+  overspentLastMonth: number;
 }
 
 // A month yet to come with its income minus its planned (R-PLN-07).

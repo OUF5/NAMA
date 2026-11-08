@@ -18,7 +18,9 @@ public static class SummaryEndpoint
     // The month in progress, for the whole budget. Day is today's day of the month (1 on payday), Days
     // the month's length, and DaysLeft counts today (DSH-01's marker). Income is the actual income
     // (R-INC-01). Remaining carries (R-PLN-05) and Unassigned carries (R-PLN-03, planned income), from
-    // the FY's first month.
+    // the FY's first month. OverspentLastMonth is what went over plan last month and is not made up yet
+    // (R-PLN-09, each sub-category on its own, added up; 0 in the FY's first month), for Dashboard's
+    // current month (owner note 32).
     public record MonthDto(
         MeEndpoint.PeriodDto Period,
         int Day,
@@ -29,7 +31,8 @@ public static class SummaryEndpoint
         decimal Planned,
         decimal Spent,
         decimal Remaining,
-        decimal Unassigned);
+        decimal Unassigned,
+        decimal OverspentLastMonth);
 
     // A month yet to come with its planned income minus its planned (R-PLN-07).
     public record FutureMonthDto(MeEndpoint.PeriodDto Period, decimal Unallocated);
@@ -62,7 +65,7 @@ public static class SummaryEndpoint
     // (R-PLN-03) and the projection (R-PLN-07, R-PLN-08), all from the month NAMA was set up (R-PLN-06).
     // The FY's entries come from data (one entries query serves the balances too). Tracker's Year view
     // uses it for the projected month ends (owner note 9).
-    public static async Task<(CarriedMonth Remaining, UnassignedMonth Unassigned, Projection Projection)> CurrentMonthAsync(
+    public static async Task<(CarriedMonth Remaining, UnassignedMonth Unassigned, Projection Projection, long OverspentLastMonth)> CurrentMonthAsync(
         string uid, IUserStore store, BalanceData data, (FiscalYear FiscalYear, Period Period) found, long? balance)
     {
         var periods = found.FiscalYear.Periods.TakeWhile(period => string.CompareOrdinal(period.Key, found.Period.Key) <= 0).ToList();
@@ -73,7 +76,20 @@ public static class SummaryEndpoint
             PlanCalculator.MonthPlanned(plans, period.Key),
             entries.Where(entry => entry.PeriodKey == period.Key).Sum(entry => entry.AmountMinor))), carryStart);
         var wholeYear = PlanCalculator.RunningUnassigned(found.FiscalYear.Periods, data.Income.Planned, plans, carryStart);
-        return (toToday[^1], wholeYear[periods.Count - 1], PlanCalculator.Project(wholeYear, toToday, carryStart, balance, data.Income.Actual));
+
+        // R-PLN-09 (owner note 32): last month, within the FY, whatever month NAMA was set up in.
+        var overspent = 0L;
+        if (periods.Count > 1)
+        {
+            var last = periods[^2].Key;
+            var spent = entries.Where(entry => entry.PeriodKey == last)
+                .GroupBy(entry => entry.SubCategoryId)
+                .ToDictionary(group => group.Key, group => group.Sum(entry => entry.AmountMinor));
+            var planned = plans.ToDictionary(plan => plan.SubCategoryId, plan => PlanCalculator.AmountFor(plan, last));
+            overspent = planned.Keys.Union(spent.Keys)
+                .Sum(id => PlanCalculator.Overspent([(planned.GetValueOrDefault(id), spent.GetValueOrDefault(id))]));
+        }
+        return (toToday[^1], wholeYear[periods.Count - 1], PlanCalculator.Project(wholeYear, toToday, carryStart, balance, data.Income.Actual), overspent);
     }
 
     public static IEndpointRouteBuilder MapSummary(this IEndpointRouteBuilder api)
@@ -99,7 +115,7 @@ public static class SummaryEndpoint
         ProjectionDto? projection = null;
         if (current is { } found)
         {
-            var (remaining, unassigned, projected) = await CurrentMonthAsync(uid, store, data, found, balance);
+            var (remaining, unassigned, projected, overspent) = await CurrentMonthAsync(uid, store, data, found, balance);
             month = new MonthDto(
                 MeEndpoint.PeriodDto.From(found.Period),
                 data.Today.DayNumber - found.Period.StartDate.DayNumber + 1,
@@ -110,7 +126,8 @@ public static class SummaryEndpoint
                 Money.FromMinor(remaining.Planned),
                 Money.FromMinor(remaining.Spent),
                 Money.FromMinor(remaining.Remaining),
-                Money.FromMinor(unassigned.Unassigned));
+                Money.FromMinor(unassigned.Unassigned),
+                Money.FromMinor(overspent));
 
             projection = new ProjectionDto(
                 found.FiscalYear.Label,

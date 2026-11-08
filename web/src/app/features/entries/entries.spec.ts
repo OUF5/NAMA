@@ -133,7 +133,7 @@ describe('Entries (PRD 5.5)', () => {
   async function openEdit(): Promise<HTMLElement> {
     button(root(), 'Edit Groceries, SAR 799.99, 17 Oct 2026').click();
     (await vi.waitFor(() => http.expectOne('/api/indicator?subCategoryId=groceries&date=2026-10-17'))).flush({
-      period: sep, planned: 1500, spent: 1199.99, remaining: 300.01, percent: 79,
+      period: sep, planned: 1500, spent: 1199.99, remaining: 300.01, percent: 79, overspentLastMonth: 0,
     });
     await settle();
     return dialog()!;
@@ -306,7 +306,7 @@ describe('Entries (PRD 5.5)', () => {
     await settle();
     // Back on the form; its indicator loads again.
     (await vi.waitFor(() => http.expectOne('/api/indicator?subCategoryId=groceries&date=2026-10-17'))).flush({
-      period: sep, planned: 1500, spent: 1199.99, remaining: 300.01, percent: 79,
+      period: sep, planned: 1500, spent: 1199.99, remaining: 300.01, percent: 79, overspentLastMonth: 0,
     });
     await settle();
 

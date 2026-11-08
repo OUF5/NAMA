@@ -12,7 +12,13 @@
         <span class="status-text">{{ statusLabels[m.status] }}</span>
       }
     </div>
-    <app-month-summary [month]="m" [currency]="currency()" />
+    <!-- Owner note 32: the overspend to make up comes with the month's detail. -->
+    <app-month-summary
+      [month]="m"
+      [currency]="currency()"
+      [overspent]="overspent()?.total ?? null"
+      [overspentWords]="overspent()?.words ?? 'last month'"
+    />
   </section>
 
   @let d = detail();
@@ -47,11 +53,15 @@
       }
     </section>
 
-    <!-- R-PLN-05: plan vs spent, what carried in counted. -->
+    <!-- Owner note 32: plan vs spent for the month on its own; what carried in is not counted here. -->
     <!-- Owner note 26: across the page, like Spending by day, with Compared with last month under it. -->
     <section class="card wide" aria-labelledby="plan-title">
       <div class="card-head">
-        <h2 id="plan-title">Plan vs spent</h2>
+        <div class="title">
+          <h2 id="plan-title">Plan vs spent</h2>
+          <!-- Owner note 32: this month only; the overspend is on the month card. -->
+          <span class="caption">Spent of this month's plan</span>
+        </div>
       </div>
       @if (categories().length === 0) {
         <p class="note">
@@ -108,36 +118,55 @@
       }
     </section>
 
-    <!-- Each category against the month before. -->
-    <section class="card wide" aria-labelledby="change-title">
+    <!-- Owner note 32 (R-PLN-09): what went over plan in the months back and is not made up yet, by
+         category, against what is left of this month's plan. Across the page, under Plan vs spent. -->
+    <section class="card wide" aria-labelledby="overspent-title">
       <div class="card-head">
         <div class="title">
-          <h2 id="change-title">Compared with last month</h2>
-          @if (data()?.lastMonth; as last) {
-            <span class="caption">{{ last.label }}</span>
+          <h2 id="overspent-title">Overspent to make up</h2>
+          @if (overspent()?.caption; as caption) {
+            <span class="caption">{{ caption }}</span>
           }
         </div>
+        @if (backOptions().length > 1) {
+          <mat-form-field subscriptSizing="dynamic" class="back">
+            <mat-label>Months back</mat-label>
+            <mat-select [value]="backValue()" (selectionChange)="backChange.emit($event.value)">
+              @for (option of backOptions(); track option.value) {
+                <mat-option [value]="option.value">{{ option.label }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        }
       </div>
-      @if (!data()) {
+      @let o = overspent();
+      @if (!o) {
         <ng-container *ngTemplateOutlet="loading" />
-      } @else if (!data()!.lastMonth) {
-        <p class="note">This is the first month NAMA has.</p>
-      } @else if (changes().length === 0) {
-        <p class="note">Nothing spent in either month.</p>
+      } @else if (o.count === 0) {
+        <p class="note">{{ m.period.label }} is the first month of the fiscal year, so there is nothing before it to make up.</p>
+      } @else if (o.rows.length === 0) {
+        <p class="note">Nothing overspent {{ o.words }}.</p>
       } @else {
-        <ul class="rows">
-          @for (change of changes(); track change.id) {
-            <li class="row">
-              <span class="name">
-                {{ change.name }}
-                <span class="caption block" [class.warn-text]="change.more">{{
-                  change.words
-                }}</span>
-              </span>
-              <span class="money">{{ change.spent }}</span>
-            </li>
-          }
-        </ul>
+        <table class="overspent-table">
+          <thead>
+            <tr>
+              <th scope="col">Category</th>
+              <th scope="col">Overspent</th>
+              <th scope="col">Left this month</th>
+              <th scope="col">After covering</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of o.rows; track row.id) {
+              <tr>
+                <th scope="row">{{ row.name }}</th>
+                <td class="money">{{ row.overspent }}</td>
+                <td class="money">{{ row.left }}</td>
+                <td class="money" [class.short]="row.short">{{ row.after }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
       }
     </section>
 

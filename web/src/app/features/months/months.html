@@ -117,8 +117,10 @@
         [currency]="currency()"
         [today]="today()"
         [entriesQuery]="entriesQuery()"
+        [back]="back()"
         (edit)="edit($event)"
         (retry)="retryMonth()"
+        (backChange)="setBack($event)"
       />
     }
   } @else if (filtered() && gridData()!.rows.length === 0) {

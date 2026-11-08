@@ -151,9 +151,31 @@
   margin: 8px 0 0;
 }
 
-// Owner note 24: what carried into the month, under Remaining.
-.carried {
-  margin: 4px 0 0;
+// Owner note 32: Remaining − Overspent last month after the numbers, behind a --divider line, as on
+// Add's indicator: the label left, the amount right (500, --danger below 0), the overspend under it.
+.overspent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--divider);
+}
+
+.overspent-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+
+  .value {
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .danger {
+    color: var(--danger);
+  }
 }
 
 .mini {

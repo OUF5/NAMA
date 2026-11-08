@@ -28,10 +28,10 @@ describe('planned indicator (ENT-01)', () => {
     expect(planStatusLabel('danger', 0, 3_000, 'SAR')).toBe('Over by SAR 30');
   });
 
-  async function render(planned: number, spent: number, pending = 0, carriedIn = 0): Promise<ComponentFixture<PlannedIndicator>> {
+  async function render(planned: number, spent: number, pending = 0, overspent = 0): Promise<ComponentFixture<PlannedIndicator>> {
     const fixture = TestBed.createComponent(PlannedIndicator);
     fixture.componentRef.setInput('period', sep);
-    fixture.componentRef.setInput('carriedIn', carriedIn);
+    fixture.componentRef.setInput('overspent', overspent);
     fixture.componentRef.setInput('planned', planned);
     fixture.componentRef.setInput('spent', spent);
     fixture.componentRef.setInput('pending', pending);
@@ -52,6 +52,9 @@ describe('planned indicator (ENT-01)', () => {
     expect(numbers).toEqual(['SAR 1,500', 'SAR 1,199.99', 'SAR 300.01']);
     expect(text(fixture, '.chip')).toBe('Within plan');
     expect(text(fixture, '.after')).toBeUndefined();
+    expect(text(fixture, 'dl div:last-child dt')).toBe('Remaining this month');
+    // Nothing went over last month: no second row (owner note 32).
+    expect(text(fixture, '.overspent')).toBeUndefined();
   });
 
   it('previews the month after this entry while an amount is typed', async () => {
@@ -78,22 +81,28 @@ describe('planned indicator (ENT-01)', () => {
     expect((fixture.nativeElement as HTMLElement).querySelector('mat-progress-bar')).toBeNull();
   });
 
-  // R-PLN-05: what was left last month carries in; the bar and the chip count it.
-  it('counts what was left last month', async () => {
-    const fixture = await render(150_000, 170_000, 0, 30_000);
+  // Owner note 32, the owner's case (R-PLN-09): Rent 1,000 this month, 500 over last month. This month
+  // leads, with its own bar and chip; the overspend is a second row under it.
+  it('shows this month first, and last month\'s overspend under it', async () => {
+    const fixture = await render(100_000, 0, 0, 50_000);
     const numbers = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('dd')).map((dd) => dd.textContent);
 
-    expect(numbers).toEqual(['SAR 1,500', 'SAR 1,700', 'SAR 100']);
-    expect(text(fixture, '.carried')).toBe('Includes SAR 300 left last month · SAR 1,800 available');
-    expect(text(fixture, '.chip')).toBe('Near limit');
+    expect(numbers).toEqual(['SAR 1,000', 'SAR 0', 'SAR 1,000']);
+    expect(text(fixture, '.chip')).toBe('Within plan');
+    expect(text(fixture, '.overspent-line .caption')).toBe('Remaining − Overspent last month');
+    expect(text(fixture, '.overspent .value')).toBe('SAR 500');
+    expect(text(fixture, '.overspent > .caption')).toBe('Overspent last month SAR 500');
+    expect((fixture.nativeElement as HTMLElement).querySelector('.overspent .value')?.classList).not.toContain('danger');
   });
 
-  // R-PLN-05: an overspend carries in too, and is over plan until a plan covers it.
-  it('counts an overspend carried in, even without a plan', async () => {
-    const fixture = await render(0, 0, 0, -20_000);
+  // R-PLN-09: red when this month cannot cover it; shown even with no plan this month.
+  it('is red when this month cannot cover last month\'s overspend, even without a plan', async () => {
+    const covered = await render(100_000, 80_000, 0, 50_000);
+    expect(text(covered, '.overspent .value')).toBe('SAR -300');
+    expect(covered.nativeElement.querySelector('.overspent .value')?.classList).toContain('danger');
 
-    expect(text(fixture, '.no-plan')).toBeUndefined();
-    expect(text(fixture, '.carried')).toBe('Less SAR 200 overspent last month · SAR -200 available');
-    expect(text(fixture, '.chip')).toBe('Over by SAR 200');
+    const noPlan = await render(0, 0, 0, 20_000);
+    expect(text(noPlan, '.no-plan')).toBe('No plan for this month');
+    expect(text(noPlan, '.overspent .value')).toBe('SAR -200');
   });
 });

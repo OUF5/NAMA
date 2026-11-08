@@ -10,7 +10,7 @@ import { SummaryService } from '../../core/summary';
 import { formatMoney, toMinor } from '../../shared/money';
 import { formatDate, formatDay } from '../../shared/month-label';
 import { RolloverBanner } from '../../shared/rollover-banner';
-import { STATUS_LABELS, availableMinor, nameMaps, spendLine } from '../months/month-lines';
+import { STATUS_LABELS, nameMaps, spendLine } from '../months/month-lines';
 import { MonthOverview, OverviewApi, OverviewResponse } from '../months/overview-api';
 import { LoanTotals, LoansApi } from '../loans/loans-api';
 import { PlanApi } from '../plan/plan-api';
@@ -97,22 +97,33 @@ export class Dashboard {
   });
 
   // DSH-01: the month in progress, its status line and today's marker (from the summary, when it is
-  // the same month). Owner note 24: no "From last month"; what carried in is said under Remaining, and
-  // Income (actual) says how much of it is additional income.
+  // the same month). Owner note 32: Remaining this month (planned - spent), its bar and chip against
+  // the month's plan; what carried in (R-PLN-05) is not shown. Only when last month went over plan, a
+  // last row: Remaining − Overspent last month (R-PLN-09, from the summary). Income (actual) says how
+  // much of it is additional income (owner note 24).
   protected readonly current = computed(() => {
     const month = this.data()?.months.find((m) => m.status === 'inProgress');
     if (!month) {
       return null;
     }
-    const line = spendLine(availableMinor(month), toMinor(month.spent), this.currency());
+    const line = spendLine(toMinor(month.planned), toMinor(month.spent), this.currency());
+    const remaining = toMinor(month.planned) - toMinor(month.spent);
     const today = this.summaryService.summary()?.month;
     const day = today && today.period.key === month.period.key ? today : null;
+    const overspent = day ? toMinor(day.overspentLastMonth) : 0;
     return {
       month,
       line,
       dates: `${formatDay(month.period.startDate)} to ${formatDay(month.period.endDate)}`,
-      remaining: this.money(month.remaining),
-      carried: toMinor(month.carriedIn) === 0 ? null : `incl. ${this.money(month.carriedIn)} from last month`,
+      remaining: formatMoney(remaining, this.currency()),
+      overspent:
+        overspent > 0
+          ? {
+              after: formatMoney(remaining - overspent, this.currency()),
+              short: remaining - overspent < 0,
+              caption: `Overspent last month ${formatMoney(overspent, this.currency())}`,
+            }
+          : null,
       kpis: [
         { label: 'Planned', value: this.money(month.planned), note: null },
         { label: 'Spent', value: this.money(month.spent), note: null },
@@ -136,7 +147,7 @@ export class Dashboard {
   });
 
   // DSH-01: the 3 sub-categories nearest to or over their plan this month (Near limit or Over),
-  // over plan first, then by the share of the available amount spent.
+  // over plan first, then by the share of the plan spent (owner note 32: the month on its own).
   protected readonly watch = computed(() => {
     const data = this.data();
     const key = this.current()?.month.period.key;
@@ -148,7 +159,7 @@ export class Dashboard {
       .flatMap((row) =>
         row.subCategories.map((sub) => {
           const cell = sub.months.find((item) => item.periodKey === key);
-          const available = cell ? availableMinor(cell) : 0;
+          const available = cell ? toMinor(cell.planned) : 0;
           const spent = cell ? toMinor(cell.spent) : 0;
           return { categoryId: row.categoryId, subCategoryId: sub.subCategoryId, available, spent };
         }),

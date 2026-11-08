@@ -213,6 +213,36 @@ public class PlanCalculatorTests
         Assert.Equal(-20_000, months[1].Available);
     }
 
+    // R-PLN-09, the owner's case (owner note 32): Rent 1,000 a month and 1,500 spent in Sep and in Oct.
+    // Counted over the last month (Oct) 500 is to make up; over the last 2 months, 1,000.
+    [Fact]
+    public void An_overspend_adds_up_over_the_months_back()
+    {
+        Assert.Equal(50_000, PlanCalculator.Overspent([(100_000, 150_000)]));
+        Assert.Equal(100_000, PlanCalculator.Overspent([(100_000, 150_000), (100_000, 150_000)]));
+        Assert.Equal(0, PlanCalculator.Overspent([]));
+    }
+
+    // R-PLN-09, the owner's pick ("still to make up"): a month under plan pays back what went over
+    // before it, and what is left after that does not carry. Sep 500 over and Oct 300 under leave 200.
+    // The R-PLN-05 example (1,500 a month; 1,200 then 1,700 spent): January's 300 does not cover
+    // February's 200 over; then 1,000 spent pays the 200 back and its other 300 does not carry.
+    [Fact]
+    public void Only_an_overspend_carries()
+    {
+        Assert.Equal(20_000, PlanCalculator.Overspent([(100_000, 150_000), (100_000, 70_000)]));
+        Assert.Equal(20_000, PlanCalculator.Overspent([(150_000, 120_000), (150_000, 170_000)]));
+        Assert.Equal(0, PlanCalculator.Overspent([(150_000, 120_000), (150_000, 170_000), (150_000, 100_000)]));
+    }
+
+    // R-PLN-09: spending with no plan is all over plan (R-PLN-01).
+    [Fact]
+    public void Spending_without_a_plan_is_overspent()
+    {
+        Assert.Equal(20_000, PlanCalculator.Overspent([(0, 20_000), (0, 0)]));
+        Assert.Equal(0, PlanCalculator.Overspent([(0, 20_000), (50_000, 30_000)]));
+    }
+
     // Owner's choice (M4): 0 clears a month.
     [Fact]
     public void Normalize_drops_zero_amounts()

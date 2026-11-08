@@ -113,9 +113,10 @@ export class App {
   // Owner note 15: read by header, so it comes first.
   protected readonly balanceHidden = signal(loadBalanceHidden());
 
-  // UX-08: "Left in Sep 2026 · 6 days left" (the month's remaining, carried, R-PLN-05, in its plan
-  // status color) and "Balance" (the active accounts' total, R-BAL-03), or "Set up" until every
-  // account has its opening balance. The API makes the sums; this only formats.
+  // UX-08: "Left in Sep 2026 · 6 days left" (the month's remaining on its own, planned - spent, in its
+  // plan status color; owner note 32, R-PLN-05's carry before) and "Balance" (the active accounts'
+  // total, R-BAL-03), or "Set up" until every account has its opening balance. The API makes the sums;
+  // this only formats.
   protected readonly header = computed(() => {
     const summary = this.summaryService.summary();
     if (!summary) {
@@ -125,6 +126,7 @@ export class App {
     const money = (amount: number) => formatMoney(toMinor(amount), currency);
     const month = summary.month;
     const days = month ? (month.daysLeft === 1 ? 'last day' : `${month.daysLeft} days left`) : '';
+    const left = month ? formatMoney(toMinor(month.planned) - toMinor(month.spent), currency) : '';
     const accounts = summary.accounts
       .filter((account) => account.balance !== null)
       .map((account) => `${account.name} ${money(account.balance!)}`)
@@ -133,9 +135,9 @@ export class App {
       left: month
         ? {
             caption: `Left in ${month.period.label} · ${days}`,
-            amount: money(month.remaining),
-            status: spendStatus(toMinor(month.carriedIn) + toMinor(month.planned), toMinor(month.spent)) ?? '',
-            label: `Left to spend in ${month.period.label}: ${money(month.remaining)}, ${days}. Open Tracker`,
+            amount: left,
+            status: spendStatus(toMinor(month.planned), toMinor(month.spent)) ?? '',
+            label: `Left to spend in ${month.period.label}: ${left}, ${days}. Open Tracker`,
           }
         : null,
       balance:

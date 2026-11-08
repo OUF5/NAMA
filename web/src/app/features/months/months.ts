@@ -21,7 +21,7 @@ import { openEntryDialog } from '../entries/entry-dialog';
 import { PlanApi } from '../plan/plan-api';
 import { MonthApi } from './month-api';
 import { MonthDetail, MonthDetailState } from './month-detail';
-import { STATUS_LABELS, SpendLine, availableMinor, nameMaps, spendLine } from './month-lines';
+import { STATUS_LABELS, SpendLine, monthsBack, nameMaps, spendLine } from './month-lines';
 import { BalancesResponse, Cell, CategoryRow, OverviewApi, OverviewResponse } from './overview-api';
 import { TrackerTotals } from './tracker-totals';
 import { MonthsView, isMonthsView, loadView, saveView } from './view-choice';
@@ -74,6 +74,8 @@ export class Months {
   protected readonly view = signal<MonthsView>(loadView());
   // Owner note 9: the month in the URL (?month=YYYY-MM), and its detail call.
   private readonly urlMonth = signal<string | null>(null);
+  // Owner note 32: how many months back the overspend to make up is counted over (?back=, "1" by default).
+  protected readonly back = signal('1');
   protected readonly monthDetail = signal<MonthDetailState | null>(null);
   // Owner note 9: the Balance row of the Year view and Totals (null while it loads).
   protected readonly balances = signal<BalancesResponse | 'error' | null>(null);
@@ -86,11 +88,13 @@ export class Months {
 
   private readonly names = computed(() => nameMaps(this.data()?.categories ?? []));
 
-  // R-PLN-06: "Oct 2026" when the carry starts after the FY's first month; null otherwise.
+  // R-PLN-06: "Oct 2026" when the carry starts after the FY's first month; null otherwise. Owner note
+  // 32: only on Totals, whose projection spends the carried remaining (R-PLN-07); the Year view's
+  // Available carries from the FY's first month, and the Months view shows each month on its own.
   protected readonly carryFrom = computed(() => {
     const data = this.data();
     const key = data?.carryFromPeriodKey;
-    return data && key && key !== data.months[0]?.period.key
+    return data && key && this.view() === 'totals' && key !== data.months[0]?.period.key
       ? (data.months.find((month) => month.period.key === key)?.period.label ?? null)
       : null;
   });
@@ -169,6 +173,7 @@ export class Months {
       this.subCategoryId.set(params.get('subCategoryId') ?? '');
       this.overOnly.set(params.get('over') === '1');
       this.urlMonth.set(params.get('month'));
+      this.back.set(params.get('back') ?? '1');
       // Plan's "See the year grid" link (M8) opens the Year view.
       const view = params.get('view');
       if (isMonthsView(view)) {
@@ -197,6 +202,11 @@ export class Months {
   // Owner note 9: the month lives in the URL, so a reload or a shared link keeps it.
   protected setMonth(key: string): void {
     this.navigate({ month: key });
+  }
+
+  // Owner note 32: the months back live in the URL too; only the month's detail is loaded again.
+  protected setBack(back: string): void {
+    this.navigate({ back: back === '1' ? null : back });
   }
 
   // MON-03: the selected FY lives in the URL, so a reload keeps it. The filters stay.
@@ -295,21 +305,23 @@ export class Months {
     }
   }
 
-  // GET .../months/{periodKey} for the shown month, with Tracker's filter. Only the latest answer, for
-  // the month still shown, is kept.
+  // GET .../months/{periodKey} for the shown month, with Tracker's filter and the months back (owner
+  // note 32, never more than the FY's months before it). Only the latest answer, for the month still
+  // shown, is kept.
   private async loadMonth(): Promise<void> {
     const fyId = this.data()?.fyId;
     const key = this.monthKey();
     if (!fyId || !key) {
       return;
     }
+    const back = monthsBack(this.back(), Math.max(0, this.data()!.months.findIndex((month) => month.period.key === key)));
     const request = ++this.monthRequest;
     this.monthDetail.update((detail) => ({ state: 'loading', data: detail?.data?.period.key === key ? detail.data : undefined }));
     let next: MonthDetailState;
     try {
       next = {
         state: 'ok',
-        data: await this.monthApi.month(fyId, key, { categoryId: this.categoryId(), subCategoryId: this.subCategoryId() }),
+        data: await this.monthApi.month(fyId, key, { categoryId: this.categoryId(), subCategoryId: this.subCategoryId() }, back),
       };
     } catch {
       next = { state: 'error' };
@@ -346,8 +358,8 @@ export class Months {
     });
   }
 
-  // The "Over by" status of docs/DESIGN.md: spent above what was available (R-PLN-05); spending
-  // without a plan counts.
+  // The "Over by" status of docs/DESIGN.md: spent above the month's own plan (owner note 32, what
+  // was available, R-PLN-05, before); spending without a plan counts.
   private isOver(cell: Cell): boolean {
     return this.line(cell).status === 'danger';
   }
@@ -358,8 +370,8 @@ export class Months {
       .filter((row) => row.subCategories.length > 0);
   }
 
-  // docs/DESIGN.md category rows: name and chip, progress bar, "SAR 1,240 of 2,000" (available).
+  // docs/DESIGN.md category rows: name and chip, progress bar, "SAR 1,240 of 2,000" (the month's plan).
   private line(cell: Cell): SpendLine {
-    return spendLine(availableMinor(cell), toMinor(cell.spent), this.currency());
+    return spendLine(toMinor(cell.planned), toMinor(cell.spent), this.currency());
   }
 }

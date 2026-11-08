@@ -53,22 +53,81 @@ public class StartMonthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal((Fy, new DateOnly(2026, 8, 1), new DateOnly(2027, 7, 31)), (FiscalYear.Id, FiscalYear.StartDate, FiscalYear.EndDate));
     }
 
-    // Tracker: Aug and Sep stand alone; Oct starts from 0; what Oct leaves carries into Nov.
+    // Owner note 32: Tracker's rows and months (the Year view's Available) carry from the FY's first
+    // month, Aug, whatever month NAMA was set up in: Rent's unspent 1,000 a month adds up. The
+    // projection's still to spend keeps R-PLN-06: Oct starts from 0, so 1,000 is left to spend.
     [Fact]
-    public async Task Tracker_months_and_cells_carry_from_October()
+    public async Task Tracker_months_and_cells_carry_from_the_fiscal_years_first_month()
     {
         var overview = await Get(await SetUp(), $"/api/fiscal-years/{Fy}/overview");
 
         Assert.Equal("2026-10", overview["carryFromPeriodKey"]!.GetValue<string>());
         var months = overview["months"]!.AsArray();
-        Assert.Equal([0m, 0m, 0m, 1_000m], months.Take(4).Select(month => Dec(month!["carriedIn"])));
-        Assert.Equal([1_000m, 1_000m, 1_000m, 2_000m], months.Take(4).Select(month => Dec(month!["remaining"])));
+        Assert.Equal([0m, 1_000m, 2_000m, 3_000m], months.Take(4).Select(month => Dec(month!["carriedIn"])));
+        Assert.Equal([1_000m, 2_000m, 3_000m, 4_000m], months.Take(4).Select(month => Dec(month!["remaining"])));
         var rentOct = overview["rows"]![0]!["subCategories"]![0]!["months"]![2]!;
-        Assert.Equal((0m, 1_000m, 1_000m), (Dec(rentOct["carriedIn"]), Dec(rentOct["planned"]), Dec(rentOct["remaining"])));
+        Assert.Equal((2_000m, 1_000m, 3_000m), (Dec(rentOct["carriedIn"]), Dec(rentOct["planned"]), Dec(rentOct["remaining"])));
+        Assert.Equal(1_000m, Dec(overview["planVsActual"]!["stillToSpend"]));
         // DSH-02 from Oct: one started month, 10,000 income, nothing spent; the plan meant to keep 9,000.
         var toDate = overview["toDate"]!;
         Assert.Equal((10_000m, 0m, 10_000m, 9_000m),
             (Dec(toDate["income"]), Dec(toDate["spent"]), Dec(toDate["saved"]), Dec(toDate["plannedSaved"])));
+    }
+
+    // R-PLN-09, the owner's case (owner note 32): 1,500 of Rent's 1,000 was spent in Aug and in Sep,
+    // entered after NAMA was set up in Oct. Those overspends count, though Aug and Sep stand alone for
+    // the carry (R-PLN-06). Oct counted over the last month (Sep, the default) has 500 to make up, and
+    // 1,000 left of its plan; over the last 2 months (since Aug), 1,000 and nothing after covering. Aug,
+    // the FY's first month, has no months back. The same with Tracker filtered to Rent.
+    [Fact]
+    public async Task Overspent_to_make_up_counts_the_months_back_whenever_NAMA_was_set_up()
+    {
+        var sub = await SetUp();
+        await factory.Store.AddEntryAsync(sub, new Entry("e1", new DateOnly(2026, 8, 5), "2026-08", Fy, "food", "rent", "rajhi", 150_000, ""));
+        await factory.Store.AddEntryAsync(sub, new Entry("e2", new DateOnly(2026, 9, 5), "2026-09", Fy, "food", "rent", "rajhi", 150_000, ""));
+        async Task<JsonNode> Overspent(string periodKey, string query) =>
+            (await Get(sub, $"/api/fiscal-years/{Fy}/months/{periodKey}{query}"))["overspent"]!;
+        static (int, string?, decimal) Head(JsonNode node) =>
+            (node["monthsBack"]!.GetValue<int>(), node["from"]?["key"]?.GetValue<string>(), Dec(node["total"]));
+        static (string, decimal, decimal, decimal) Row(JsonNode node) =>
+            (node["categoryId"]!.GetValue<string>(), Dec(node["overspent"]), Dec(node["left"]), Dec(node["after"]));
+
+        foreach (var filter in new[] { "?", "?categoryId=food&subCategoryId=rent&" })
+        {
+            var lastMonth = await Overspent("2026-10", filter);
+            Assert.Equal((1, "2026-09", 500m), Head(lastMonth));
+            Assert.Equal(("food", 500m, 1_000m, 500m), Row(lastMonth["categories"]![0]!));
+
+            var twoMonths = await Overspent("2026-10", $"{filter}back=2");
+            Assert.Equal((2, "2026-08", 1_000m), Head(twoMonths));
+            Assert.Equal(("food", 1_000m, 1_000m, 0m), Row(twoMonths["categories"]![0]!));
+
+            // At most the FY's months before Oct.
+            Assert.Equal((2, "2026-08", 1_000m), Head(await Overspent("2026-10", $"{filter}back=6")));
+
+            var first = await Overspent("2026-08", $"{filter}back=3");
+            Assert.Equal((0, null, 0m), Head(first));
+            Assert.Empty(first["categories"]!.AsArray());
+        }
+
+        // 600 spent in Oct leaves 400 of its plan: 600 short of the 1,000 to make up.
+        await factory.Store.AddEntryAsync(sub, new Entry("e3", new DateOnly(2026, 10, 5), "2026-10", Fy, "food", "rent", "rajhi", 60_000, ""));
+        Assert.Equal(("food", 1_000m, 400m, -600m), Row((await Overspent("2026-10", "?back=2"))["categories"]![0]!));
+    }
+
+    // Owner note 32, the owner's case: 1,500 of Rent's 1,000 in Aug and in Sep, entered after the setup
+    // in Oct, carry into the Year view: Oct has 1,000 - 1,000 = 0 available.
+    [Fact]
+    public async Task An_overspend_before_the_setup_carries_into_the_year_view()
+    {
+        var sub = await SetUp();
+        await factory.Store.AddEntryAsync(sub, new Entry("e1", new DateOnly(2026, 8, 5), "2026-08", Fy, "food", "rent", "rajhi", 150_000, ""));
+        await factory.Store.AddEntryAsync(sub, new Entry("e2", new DateOnly(2026, 9, 5), "2026-09", Fy, "food", "rent", "rajhi", 150_000, ""));
+
+        var rent = (await Get(sub, $"/api/fiscal-years/{Fy}/overview"))["rows"]![0]!["subCategories"]![0]!["months"]!.AsArray();
+
+        Assert.Equal([0m, -500m, -1_000m, 0m], rent.Take(4).Select(cell => Dec(cell!["carriedIn"])));
+        Assert.Equal(0m, Dec(rent[2]!["carriedIn"]) + Dec(rent[2]!["planned"]));
     }
 
     // Tracker's Totals (owner note 18): the owner's choice is that months before NAMA was set up count
@@ -156,11 +215,34 @@ public class StartMonthTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(91_000m, Dec(projection["plannedSaved"]));
     }
 
+    // Owner note 32: Dashboard's current month (from the summary): Sep's 500 over on Rent, entered after
+    // the setup in Oct, is last month's overspend; the 300 Groceries left in Sep does not offset it,
+    // because each sub-category counts on its own (R-PLN-09).
     [Fact]
-    public async Task The_add_form_indicator_shows_october_alone()
+    public async Task The_summary_says_last_months_overspend_by_sub_category()
     {
-        var indicator = await Get(await SetUp(), "/api/indicator?subCategoryId=rent&date=2026-10-20");
+        var sub = await SetUp();
+        await factory.Store.AddSubCategoryAsync(sub, new SubCategory("groceries", "food", "Groceries", 1));
+        await factory.Store.SetPlanAsync(sub, Fy, new PlanAmounts("groceries", "food", new Dictionary<string, long> { ["2026-09"] = 30_000 }));
+        await factory.Store.AddEntryAsync(sub, new Entry("e1", new DateOnly(2026, 9, 5), "2026-09", Fy, "food", "rent", "rajhi", 150_000, ""));
 
-        Assert.Equal((0m, 1_000m, 1_000m), (Dec(indicator["carriedIn"]), Dec(indicator["available"]), Dec(indicator["remaining"])));
+        var month = (await Get(sub, "/api/summary"))["month"]!;
+
+        Assert.Equal(("2026-10", 500m), (month["period"]!["key"]!.GetValue<string>(), Dec(month["overspentLastMonth"])));
+    }
+
+    // Owner note 32: Add's indicator shows October on its own, and Sep's overspend (1,500 of Rent's
+    // 1,000, entered after NAMA was set up in Oct) beside it (R-PLN-09, not R-PLN-06).
+    [Fact]
+    public async Task The_add_form_indicator_shows_october_alone_and_septembers_overspend()
+    {
+        var sub = await SetUp();
+        await factory.Store.AddEntryAsync(sub, new Entry("e1", new DateOnly(2026, 9, 5), "2026-09", Fy, "food", "rent", "rajhi", 150_000, ""));
+
+        var indicator = await Get(sub, "/api/indicator?subCategoryId=rent&date=2026-10-20");
+
+        Assert.Equal(
+            (1_000m, 0m, 1_000m, 500m),
+            (Dec(indicator["planned"]), Dec(indicator["spent"]), Dec(indicator["remaining"]), Dec(indicator["overspentLastMonth"])));
     }
 }

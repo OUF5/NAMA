@@ -98,6 +98,7 @@ describe('App', () => {
   });
 
   // UX-08: Left this month (in its plan status color) and the balance, each a link, on every page.
+  // Owner note 32: Left is the month on its own, 1,500 - 1,199.99; the 11,950 carried in is not counted.
   it('should show this month and the balance in the top bar', async () => {
     summary.set({
       balance: 28000,
@@ -117,6 +118,7 @@ describe('App', () => {
         spent: 1199.99,
         remaining: 12250.01,
         unassigned: 139500,
+        overspentLastMonth: 0,
       },
       projection: null,
     });
@@ -127,7 +129,7 @@ describe('App', () => {
 
     const stats = Array.from(compiled.querySelectorAll<HTMLAnchorElement>('.stats.bar .stat'));
     expect(stats.map(statText)).toEqual([
-      'Left in Sep 2026 · 10 days left SAR 12,250.01',
+      'Left in Sep 2026 · 10 days left SAR 300.01',
       'Balance SAR 28,000',
     ]);
     expect(stats.map((a) => a.getAttribute('href'))).toEqual(['/tracker', '/banks']);

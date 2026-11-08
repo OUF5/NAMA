@@ -204,6 +204,7 @@ function summary(): Summary {
       spent: 1199.99,
       remaining: 12250.01,
       unassigned: 139500,
+      overspentLastMonth: 0,
     },
     projection: {
       fiscalYearLabel: 'FY 2026',
@@ -343,28 +344,44 @@ describe('Dashboard (PRD 5.9)', () => {
     expect(root().querySelector('app-rollover-banner')).toBeNull();
   });
 
-  // DSH-01: label and dates, Remaining in its status color with the chip, the bar of spent against
-  // what was available (11,950 + 1,900), today's marker, and the month's numbers.
+  // DSH-01: label and dates, Remaining this month in its status color with the chip, the bar of spent
+  // against this month's plan (owner note 32: the 11,950 carried in is not counted), today's marker,
+  // and the month's numbers.
   it('shows the current month with its numbers, bar and day', async () => {
     await open();
 
     const current = card('current');
     expect(text(current.querySelector('.card-head'))).toBe('Sep 2026 27 Sep to 26 Oct In progress');
-    expect(text(current.querySelector('.hero-line'))).toBe('SAR 12,550.01 Within plan');
+    expect(text(current.querySelector('.hero-line'))).toBe('SAR 600.01 Within plan');
     expect(current.querySelector('.hero')!.classList).toContain('ok');
     expect(current.querySelector('mat-progress-bar')!.getAttribute('aria-valuenow')).toBe(
-      String((129999 * 100) / 1385000),
-    ); // 9%
+      String((129999 * 100) / 190000),
+    ); // 68%
     expect(current.querySelector<HTMLElement>('.marker')!.style.left).toBe('70%');
     expect(text(current.querySelector('.day'))).toBe('Day 21 of 30 · 10 days left');
-    // Owner note 24: what carried in is said under Remaining, and Income says its additional part.
-    expect(text(current.querySelector('.carried'))).toBe('incl. SAR 11,950 from last month');
+    // Nothing went over last month: no last row (owner note 32). Income says its additional part.
+    expect(current.querySelector('.carried, .overspent')).toBeNull();
     expect(lines(current, '.mini > div')).toEqual([
       'Planned SAR 1,900',
       'Spent SAR 1,299.99',
       'Income SAR 17,500.25 incl. SAR 2,500.25 additional',
     ]);
-    expect(text(current.querySelector('.note'))).toBe('Every sub-category is within plan.');
+    // Owner note 32: Groceries spent 1,200 of this month's 1,500 (80%); the carry no longer hides it.
+    expect(lines(current, '.watch li')).toEqual(['Groceries SAR 1,200 of SAR 1,500 Near limit']);
+  });
+
+  // Owner note 32 (R-PLN-09): last month went 800 over plan, so a last row takes it off this month's
+  // 600.01, in red: 199.99 short.
+  it('shows Remaining − Overspent last month when last month went over plan', async () => {
+    const withOverspend = summary();
+    withOverspend.month = { ...withOverspend.month!, overspentLastMonth: 800 };
+    await open(overview(), withOverspend);
+
+    const current = card('current');
+    expect(text(current.querySelector('.hero-line'))).toBe('SAR 600.01 Within plan');
+    expect(text(current.querySelector('.overspent-line'))).toBe('Remaining − Overspent last month SAR -199.99');
+    expect(current.querySelector('.overspent .value')!.classList).toContain('danger');
+    expect(text(current.querySelector('.overspent > .caption'))).toBe('Overspent last month SAR 800');
   });
 
   it('has no day marker until the summary is loaded', async () => {
@@ -508,7 +525,7 @@ describe('Dashboard (PRD 5.9)', () => {
 
   // DSH-03: a column chart, one Planned and one Spent column per month, on one scale (the largest
   // value, 1,900). The month in progress is written out under the chart; a tap picks another month.
-  // R-PLN-05: the status counts what carried in, so Aug here carries nothing in and goes over.
+  // Owner note 32: the status is the month on its own, so Aug goes over and Sep is within plan.
   it('shows planned vs spent per month as a column chart', async () => {
     const data = overview();
     data.months[7] = { ...data.months[7], carriedIn: 0, spent: 1600, remaining: -100 };
@@ -532,7 +549,7 @@ describe('Dashboard (PRD 5.9)', () => {
     );
     expect(cols[8].getAttribute('aria-pressed')).toBe('true');
     expect(text(chart.querySelector('.detail'))).toBe(
-      'Sep 2026 In progress Within plan Planned SAR 1,900 · Spent SAR 1,299.99 · From last month SAR 11,950',
+      'Sep 2026 In progress Within plan Planned SAR 1,900 · Spent SAR 1,299.99',
     );
     expect(text(chart.querySelector('.over'))).toBe('Over plan: Aug 2026 (Over by SAR 100)');
 

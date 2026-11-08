@@ -73,7 +73,7 @@ public sealed class NamaTools(IUserStore store, TimeProvider time, EmailAllowlis
     }
 
     [McpServerTool(Name = "get_month", Title = "Tracker month", ReadOnly = true, Destructive = false, Idempotent = true, OpenWorld = false)]
-    [Description("One month in detail: spending by day and by bank account, each category against the month before, the 5 newest and 5 biggest entries, the count and total, and the month's additional income.")]
+    [Description("One month in detail: spending by day and by bank account, each category against the month before, the 5 newest and 5 biggest entries, the count and total, the month's additional income, and what went over plan last month and is not made up yet, by category.")]
     public async Task<MonthEndpoint.MonthResponse> GetMonth(
         ClaimsPrincipal user,
         [Description("The FY's id. Leave out for the current FY.")] string? fyId = null,

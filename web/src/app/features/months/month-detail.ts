@@ -1,17 +1,19 @@
 import { NgTemplateOutlet } from '@angular/common';
 import { Component, computed, input, output, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { countsLabel } from '../../shared/income-months';
-import { formatMoney, toMinor } from '../../shared/money';
+import { formatAmount, formatMoney, toMinor } from '../../shared/money';
 import { formatDate, formatDay } from '../../shared/month-label';
 import { MonthSummary } from '../../shared/month-summary';
 import { Entry } from '../add-entry/entry-api';
 import { DayBars } from './day-bars';
 import { MonthDetail as MonthDetailData } from './month-api';
-import { STATUS_LABELS, SpendLine, availableMinor, nameMaps, spendLine } from './month-lines';
+import { STATUS_LABELS, SpendLine, backOptions, backWords, monthsBack, nameMaps, spendLine } from './month-lines';
 import { Cell, OverviewResponse } from './overview-api';
 
 // The selected month's detail call (owner note 9). data stays while a reload runs, so the page does
@@ -22,8 +24,9 @@ export interface MonthDetailState {
 }
 
 // Owner note 9: Tracker shows one month at a time, in detail. The month's numbers (MON-02), then:
-// spending by day, plan vs spent by category (R-PLN-05), each category against the month before, each
-// bank account's share, the biggest entries and the newest ones (MON-04 "See all" opens Entries). The
+// spending by day, plan vs spent by category (the month on its own, owner note 32), the overspend
+// still to make up by category over the months back picked here (owner note 32, R-PLN-09), each bank
+// account's share, the biggest entries and the newest ones (MON-04 "See all" opens Entries). The
 // overview gives the plan lines; GET .../months/{periodKey} gives the rest. The API makes every sum;
 // this picks and formats.
 @Component({
@@ -32,8 +35,10 @@ export interface MonthDetailState {
     NgTemplateOutlet,
     RouterLink,
     MatButtonModule,
+    MatFormFieldModule,
     MatIconModule,
     MatProgressBarModule,
+    MatSelectModule,
     DayBars,
     MonthSummary,
   ],
@@ -49,9 +54,12 @@ export class MonthDetail {
   readonly today = input<string | null>(null);
   // Entries' filters for "See all": the FY, the month and Tracker's filter.
   readonly entriesQuery = input.required<Record<string, string>>();
+  // Owner note 32: ?back=, the months back the overspend is counted over ("1" by default).
+  readonly back = input('1');
 
   readonly edit = output<Entry>();
   readonly retry = output<void>();
+  readonly backChange = output<string>();
 
   protected readonly statusLabels = STATUS_LABELS;
   protected readonly formatDay = formatDay;
@@ -69,8 +77,9 @@ export class MonthDetail {
       : '';
   });
 
-  // Plan vs spent: the categories and sub-categories with a plan, spending or a carry this month
-  // (owner's choice, M7); with "Over plan only", only what went over. Owner note 26: one line each,
+  // Plan vs spent: the categories and sub-categories with a plan or spending this month (owner's
+  // choice, M7; owner note 32: this month only, a carry or an overspend alone is not listed); with
+  // "Over plan only", only what went over this month's plan. Owner note 26: one line each,
   // over plan first, then near the limit, then the largest share spent (Plan's order for ties). A
   // category opens to its sub-categories; one with a single sub-category does not repeat it, and
   // says its name beside the category's when it differs.
@@ -134,28 +143,44 @@ export class MonthDetail {
     return top ? `${formatDay(top.date)} · ${this.money(top.spent)}` : null;
   });
 
-  // Each category against the month before, the change in words (UX-07: never color alone).
-  protected readonly changes = computed(() => {
-    const data = this.data();
+  // Owner note 32: the picker's months back (only the FY's months before this one), and the one shown,
+  // matched by count so "6" in Nov of an FY that started in Sep shows "Since Sep 2026".
+  private readonly firstLabel = computed(() => this.overview().months[0]?.period.label ?? '');
+  protected readonly backOptions = computed(() => backOptions(Math.max(this.index(), 0), this.firstLabel()));
+  protected readonly backValue = computed(() => {
+    const count = monthsBack(this.back(), Math.max(this.index(), 0));
+    return this.backOptions().find((option) => option.count === count)?.value ?? '1';
+  });
+
+  // Owner note 32 (R-PLN-09): what went over plan in the months back and is not made up yet, by
+  // category, against what is left of this month's plan. The words and the months come from the
+  // answer, so they always match its amounts. Amounts without the currency, which the caption names
+  // ("Sep 2026 to Oct 2026 · SAR 700 in all"), so four columns fit a phone.
+  protected readonly overspent = computed(() => {
+    const data = this.data()?.overspent;
     if (!data) {
-      return [];
+      return null;
     }
+    const months = this.overview().months;
+    const count = data.monthsBack;
+    const last = months[this.index() - 1]?.period.label ?? '';
+    const span = !data.from ? '' : count === 1 ? last : `${data.from.label} to ${last}`;
+    const total = toMinor(data.total);
     const names = this.names().categories;
-    const last = data.lastMonth?.label ?? '';
-    return data.categories.map((change) => {
-      const diff = toMinor(change.spent) - toMinor(change.lastSpent);
-      return {
-        id: change.categoryId,
-        name: names.get(change.categoryId) ?? '',
-        spent: this.money(change.spent),
-        last: this.money(change.lastSpent),
-        more: diff > 0,
-        words:
-          diff === 0
-            ? `Same as ${last}`
-            : `${formatMoney(Math.abs(diff), this.currency())} ${diff > 0 ? 'more' : 'less'} than ${last}`,
-      };
-    });
+    return {
+      count,
+      total: data.total,
+      words: backWords(count, this.index(), this.firstLabel()),
+      caption: total > 0 ? `${span} · ${formatMoney(total, this.currency())} in all` : span,
+      rows: data.categories.map((category) => ({
+        id: category.categoryId,
+        name: names.get(category.categoryId) ?? '',
+        overspent: formatAmount(toMinor(category.overspent)),
+        left: formatAmount(toMinor(category.left)),
+        after: formatAmount(toMinor(category.after)),
+        short: toMinor(category.after) < 0,
+      })),
+    };
   });
 
   // Owner note 17 (R-INC-04, R-INC-05): the month's additional income by name, what it counts in and
@@ -216,14 +241,15 @@ export class MonthDetail {
     };
   }
 
-  // A plan, spending, or money (or an overspend) carried in from last month.
+  // A plan or spending this month (owner note 32: the month on its own).
   private hasMoney(cell: Cell): boolean {
-    return cell.planned > 0 || cell.spent > 0 || cell.carriedIn !== 0;
+    return cell.planned > 0 || cell.spent > 0;
   }
 
-  // docs/DESIGN.md category rows: name and chip, progress bar, "SAR 1,240 of 2,000" (available).
+  // docs/DESIGN.md category rows: name and chip, progress bar, "SAR 1,240 of 2,000". Owner note 32:
+  // "of" is this month's plan, not what carried in (the month card's "Remaining − Overspent last month" has the overspend).
   private line(cell: Cell): SpendLine {
-    return spendLine(availableMinor(cell), toMinor(cell.spent), this.currency());
+    return spendLine(toMinor(cell.planned), toMinor(cell.spent), this.currency());
   }
 }
 

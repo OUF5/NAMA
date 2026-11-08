@@ -225,9 +225,61 @@
   display: block;
 }
 
-// Spent more than last month: amber words (the words carry it, not the color).
-.warn-text {
-  color: var(--warn);
+// Owner note 32: Overspent to make up. The months-back picker sits in the card head, like Dashboard's
+// category picker.
+.back {
+  width: 200px;
+  flex: none;
+}
+
+// One row per category: the name, then Overspent, Left this month and After covering right-aligned in
+// equal columns, with --divider lines as Entries. After covering below 0 is --danger; its minus sign
+// says it too (UX-07).
+.overspent-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+
+  th,
+  td {
+    padding: 12px 0 12px 12px;
+    border-bottom: 1px solid var(--divider);
+    text-align: right;
+    font-weight: 400;
+    white-space: nowrap;
+  }
+
+  th:first-child {
+    width: auto;
+    padding-left: 0;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: break-word;
+  }
+
+  thead th {
+    padding-top: 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    white-space: normal;
+  }
+
+  thead th:not(:first-child) {
+    width: 22%;
+  }
+
+  tbody th {
+    font-weight: 500;
+  }
+
+  tbody tr:last-child > * {
+    border-bottom: 0;
+    padding-bottom: 0;
+  }
+
+  .short {
+    color: var(--danger);
+  }
 }
 
 // A share is no status: a neutral bar, like Banks' income split.
@@ -311,6 +363,26 @@
 
   .top-day {
     text-align: left;
+  }
+
+  .back {
+    width: 100%;
+  }
+
+  // Columns sized by their content, so a name keeps whole words ("Entertainment") and the headings
+  // wrap between theirs.
+  .overspent-table {
+    table-layout: auto;
+
+    th,
+    td {
+      padding-left: 8px;
+      font-size: 13px;
+    }
+
+    thead th:not(:first-child) {
+      width: auto;
+    }
   }
 
   .share {

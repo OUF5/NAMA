@@ -7,8 +7,8 @@ using static Api.Tests.ApiCalls;
 namespace Api.Tests;
 
 // PRD 5.4 GET /api/indicator (ENT-01): planned, spent so far, remaining and percent for one
-// sub-category in the month of a date, with what carried in from the FY's earlier months (R-PLN-05).
-// Today is 17 Oct 2026; FY 2026 has payday 27.
+// sub-category in the month of a date, the month on its own (owner note 32), and what went over plan
+// last month and is not made up yet (R-PLN-09). Today is 17 Oct 2026; FY 2026 has payday 27.
 public class IndicatorTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     // The hand check of the M5 "Done when":
@@ -16,8 +16,8 @@ public class IndicatorTests(ApiFactory factory) : IClassFixture<ApiFactory>
     // Entries: Groceries 400 on 1 Oct and 799.99 on 17 Oct (Sep), Groceries 50 on 10 Sep (Aug),
     // and Fuel 100 on 1 Oct (Sep, another sub-category).
     // Aug: planned 1,000, spent 50, remaining 950, percent 5.
-    // Sep: Aug's 950 carries in, so available is 950 + 1,500 = 2,450; spent 400 + 799.99 = 1,199.99;
-    // remaining 1,250.01; percent 48 (48.98 rounded down).
+    // Sep on its own (owner note 32; Aug's 950 left does not carry): planned 1,500, spent 400 + 799.99 =
+    // 1,199.99, remaining 300.01, percent 79 (79.99 rounded down); nothing overspent in Aug.
     private async Task<string> SetUp()
     {
         var sub = await SetUpUser(factory);
@@ -54,13 +54,12 @@ public class IndicatorTests(ApiFactory factory) : IClassFixture<ApiFactory>
         return await Json(response);
     }
 
-    private static (decimal, decimal, decimal, decimal, decimal, int?) Numbers(JsonNode indicator) => (
-        indicator["carriedIn"]!.GetValue<decimal>(),
+    private static (decimal, decimal, decimal, int?, decimal) Numbers(JsonNode indicator) => (
         indicator["planned"]!.GetValue<decimal>(),
-        indicator["available"]!.GetValue<decimal>(),
         indicator["spent"]!.GetValue<decimal>(),
         indicator["remaining"]!.GetValue<decimal>(),
-        indicator["percent"]?.GetValue<int>());
+        indicator["percent"]?.GetValue<int>(),
+        indicator["overspentLastMonth"]!.GetValue<decimal>());
 
     [Fact]
     public async Task Numbers_match_the_hand_check()
@@ -69,7 +68,7 @@ public class IndicatorTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
         var indicator = await GetOk(sub, "groceries", "2026-10-17");
 
-        Assert.Equal((950m, 1500m, 2450m, 1199.99m, 1250.01m, (int?)48), Numbers(indicator));
+        Assert.Equal((1500m, 1199.99m, 300.01m, (int?)79, 0m), Numbers(indicator));
         Assert.Equal(
             """{"key":"2026-09","label":"Oct 2026","startDate":"2026-09-27","endDate":"2026-10-26"}""",
             indicator["period"]!.ToJsonString());
@@ -77,11 +76,11 @@ public class IndicatorTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
     // Any date of the month gives the same month; a closed month works too (R-STA-02).
     [Theory]
-    [InlineData("2026-09-27", "2026-09", "950", "1500", "1199.99", "1250.01", 48)]
-    [InlineData("2026-10-26", "2026-09", "950", "1500", "1199.99", "1250.01", 48)]
-    [InlineData("2026-09-26", "2026-08", "0", "1000", "50", "950", 5)]
+    [InlineData("2026-09-27", "2026-09", "1500", "1199.99", "300.01", 79)]
+    [InlineData("2026-10-26", "2026-09", "1500", "1199.99", "300.01", 79)]
+    [InlineData("2026-09-26", "2026-08", "1000", "50", "950", 5)]
     public async Task The_month_comes_from_the_date(
-        string date, string periodKey, string carriedIn, string planned, string spent, string remaining, int percent)
+        string date, string periodKey, string planned, string spent, string remaining, int percent)
     {
         static decimal D(string value) => decimal.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
         var sub = await SetUp();
@@ -89,25 +88,39 @@ public class IndicatorTests(ApiFactory factory) : IClassFixture<ApiFactory>
         var indicator = await GetOk(sub, "groceries", date);
 
         Assert.Equal(periodKey, indicator["period"]!["key"]!.GetValue<string>());
-        Assert.Equal((D(carriedIn), D(planned), D(carriedIn) + D(planned), D(spent), D(remaining), (int?)percent), Numbers(indicator));
+        Assert.Equal((D(planned), D(spent), D(remaining), (int?)percent, 0m), Numbers(indicator));
     }
 
-    // ENT-01 "No plan for this month": nothing available and no percent; spent still counts.
+    // ENT-01 "No plan for this month": nothing planned and no percent; spent still counts.
     [Fact]
     public async Task Without_a_plan_percent_is_null()
     {
         var sub = await SetUp();
 
-        Assert.Equal((0m, 0m, 0m, 100m, -100m, (int?)null), Numbers(await GetOk(sub, "fuel", "2026-10-17")));
+        Assert.Equal((0m, 100m, -100m, (int?)null, 0m), Numbers(await GetOk(sub, "fuel", "2026-10-17")));
     }
 
-    // R-PLN-05: Sep's overspend on Fuel (100 without a plan) carries into Oct as it is.
+    // R-PLN-09: Sep's 100 on Fuel without a plan is overspent last month in Oct, beside the month on
+    // its own. Two months later it is not counted: only the last month is (owner's choice).
     [Fact]
-    public async Task An_overspend_carries_into_the_next_month()
+    public async Task Last_months_overspend_is_said_beside_the_month()
     {
         var sub = await SetUp();
 
-        Assert.Equal((-100m, 0m, -100m, 0m, -100m, (int?)null), Numbers(await GetOk(sub, "fuel", "2026-10-27")));
+        Assert.Equal((0m, 0m, 0m, (int?)null, 100m), Numbers(await GetOk(sub, "fuel", "2026-10-27")));
+        Assert.Equal((0m, 0m, 0m, (int?)null, 0m), Numbers(await GetOk(sub, "fuel", "2026-11-27")));
+    }
+
+    // R-PLN-09: the FY's first month has no month before it to make up, and a month under plan
+    // last month leaves nothing.
+    [Fact]
+    public async Task Nothing_is_overspent_before_the_fiscal_year_or_after_a_month_under_plan()
+    {
+        var sub = await SetUp();
+        await AddEntry(sub, "groceries", "2026-01-28", 30m);
+
+        Assert.Equal(0m, Numbers(await GetOk(sub, "groceries", "2026-01-28")).Item5);
+        Assert.Equal(0m, Numbers(await GetOk(sub, "groceries", "2026-10-17")).Item5);
     }
 
     [Fact]

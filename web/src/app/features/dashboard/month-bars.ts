@@ -1,6 +1,6 @@
 import { Component, computed, input, signal } from '@angular/core';
 import { formatAmount, formatMoney, toMinor } from '../../shared/money';
-import { STATUS_LABELS, availableMinor, spendLine } from '../months/month-lines';
+import { STATUS_LABELS, spendLine } from '../months/month-lines';
 import { MonthOverview } from '../months/overview-api';
 
 // DSH-03: planned vs spent per month as a column chart in plain CSS (no chart library in Phase 1).
@@ -63,7 +63,7 @@ import { MonthOverview } from '../months/overview-api';
           }
         </div>
         <p class="caption money">
-          Planned {{ s.planned }} · Spent {{ s.spent }}@if (s.carried) { · From last month {{ s.carried }}}
+          Planned {{ s.planned }} · Spent {{ s.spent }}
         </p>
       </div>
     }
@@ -95,9 +95,8 @@ export class MonthBars {
     return this.months().map((month) => {
       const planned = toMinor(month.planned);
       const spent = toMinor(month.spent);
-      // R-PLN-05: the status counts what carried in, as on Tracker; the columns are the month's own.
-      const line = spendLine(availableMinor(month), spent, this.currency());
-      const carried = toMinor(month.carriedIn);
+      // Owner note 32: the status is the month on its own, as on Tracker's month (R-PLN-05's carry before).
+      const line = spendLine(planned, spent, this.currency());
       // Closed months need no label; In progress and Upcoming match the Months cards (MON-01).
       const statusText = month.status === 'closed' ? '' : STATUS_LABELS[month.status];
       const plannedText = formatMoney(planned, this.currency());
@@ -112,7 +111,6 @@ export class MonthBars {
         line,
         planned: plannedText,
         spent: spentText,
-        carried: carried === 0 ? '' : formatMoney(carried, this.currency()),
         plannedHeight: height(planned),
         spentHeight: height(spent),
         ariaLabel: [

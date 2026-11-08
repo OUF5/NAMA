@@ -22,6 +22,13 @@
   gap: 8px;
   margin: 0;
 
+  // "Remaining this month" wraps in the 320px panel: the amounts stay on one line along the bottom.
+  > div {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+
   dd {
     margin: 0;
   }
@@ -52,7 +59,29 @@
   }
 }
 
-// "Includes SAR 300 left last month · SAR 1,800 available" (R-PLN-05).
-.carried {
-  margin: 0;
+// Owner note 32: Remaining − Overspent last month behind a --divider line, the label left and the
+// amount right (500, --danger below 0), with the overspend as a caption under it.
+.overspent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--divider);
+}
+
+.overspent-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+
+  .value {
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .danger {
+    color: var(--danger);
+  }
 }

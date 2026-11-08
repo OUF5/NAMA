@@ -192,7 +192,8 @@ tfoot td.now {
   }
 }
 
-// Owner note 9: each value with its label, "Spent 1,200" over "Plan 1,500".
+// Owner note 9: each value with its label, "Spent 1,200" over "Plan 1,500"; owner note 32: then
+// "Available 1,800" (the plan plus what carried in), --danger below 0.
 .value-line {
   display: flex;
   align-items: baseline;
@@ -203,6 +204,10 @@ tfoot td.now {
   .label {
     font-size: 11px;
     color: var(--text-muted);
+  }
+
+  .short {
+    color: var(--danger);
   }
 }
 
