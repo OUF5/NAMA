@@ -362,6 +362,15 @@ describe('Tracker (PRD 5.6)', () => {
     return parts.join(' ').replace(/\s+/g, ' ').trim();
   }
 
+  // UX-09: the title's ⓘ panel (in the overlay, not the page), opened if it is not open yet.
+  async function info(): Promise<Element> {
+    if (!document.querySelector('.info-panel')) {
+      (root().querySelector('.page-title app-info button') as HTMLButtonElement).click();
+      await settle();
+    }
+    return document.querySelector('.info-panel')!;
+  }
+
   function section(title: string): HTMLElement {
     return root().querySelector(`[aria-labelledby="${title}-title"]`)!;
   }
@@ -636,24 +645,34 @@ describe('Tracker (PRD 5.6)', () => {
     const data = { ...overview(), carryFromPeriodKey: '2026-09' };
     await open('/months?view=totals', data, balances);
 
-    expect(words(root().querySelector('.carry-from'))).toBe(
+    // UX-09 (owner note 37): a note in the Totals view's ⓘ.
+    expect(root().querySelector('.carry-from')).toBeNull();
+    expect(lines(await info(), '.note')).toEqual([
+      'Accumulated savings is not your balance: Balance starts from the balances you set on Banks.',
       'What is left carries from Sep 2026, the month you started NAMA. Earlier months stand alone.',
-    );
+    ]);
 
     await harness.navigateByUrl('/months?view=year');
     await settle();
-    expect(root().querySelector('.carry-from')).toBeNull();
+    expect(lines(await info(), '.note')).toEqual(['Tap a cell to see its entries.']);
 
     TestBed.inject(Router).navigateByUrl('/months?view=months');
     (await monthCall('2026-09')).flush(detail());
     await settle();
-    expect(root().querySelector('.carry-from')).toBeNull();
+    const panel = await info();
+    expect(words(panel.querySelector('.info-title'))).toBe('Months view');
+    expect(lines(panel, 'li')).toEqual([
+      "Remaining this month: the month's plan minus what you spent.",
+      'Overspent last month: what went over plan last month and is not made up yet.',
+      'After covering: what is left this month once the overspend is made up.',
+    ]);
+    expect(lines(panel, '.note')).toEqual([]);
   });
 
   it('says nothing about the carry when it starts with the FY', async () => {
-    await open();
+    await open('/months?view=totals', overview(), balances);
 
-    expect(root().querySelector('.carry-from')).toBeNull();
+    expect(lines(await info(), '.note')).toEqual(['Accumulated savings is not your balance: Balance starts from the balances you set on Banks.']);
   });
 
   // UX-03: the Months view says what to do when nothing is planned or spent in the FY.
@@ -925,7 +944,17 @@ describe('Tracker (PRD 5.6)', () => {
     expect(card.querySelectorAll('tbody td.now').length).toBe(6);
     // Aug, Sep, Oct (projected) and the FY are green.
     expect(card.querySelectorAll('tr.result td.ok').length).toBe(4);
-    expect(text(card.querySelector('.totals-note'))).toContain('It is not your balance');
+    // UX-09 (owner note 37): what the rows mean is behind the title's ⓘ, not under the table.
+    expect(card.querySelector('.totals-note')).toBeNull();
+    const panel = await info();
+    expect(words(panel.querySelector('.info-title'))).toBe('Totals view');
+    expect(lines(panel, 'li')).toEqual([
+      "Unspent this month: the month's income minus what you spent.",
+      "Accumulated savings: each month's unspent added up from the FY's first month.",
+      "Projected: the rest of this month's plan is spent, then each month to come adds its income minus its plan.",
+      'Balance: the money in your accounts at the end of the month, projected from today on.',
+    ]);
+    expect(lines(panel, '.note')).toEqual(['Accumulated savings is not your balance: Balance starts from the balances you set on Banks.']);
   });
 
   // Owner note 23: the plan is on Plan, so neither Planned income nor Planned is shown, even when they differ.
@@ -987,7 +1016,11 @@ describe('Tracker (PRD 5.6)', () => {
 
     expect(totalsRows()).toEqual(['Spent 80 1,299.99 – 1,379.99']);
     expect(section('totals').querySelector('.saved-kpi')).toBeNull();
-    expect(text(section('totals').querySelector('.totals-note'))).toContain('hidden while a category is picked');
+    const panel = await info();
+    expect(lines(panel, 'li')).toEqual([]);
+    expect(lines(panel, '.note')).toEqual([
+      'Income, savings and the balance belong to the whole budget, so they are hidden while a category is picked.',
+    ]);
   });
 
   // MON-02 Year view and MON-04 links; owner note 9: every value has its label.
@@ -995,7 +1028,7 @@ describe('Tracker (PRD 5.6)', () => {
     await open('/months?view=year', overview(), balances);
 
     const headers = Array.from(root().querySelectorAll('thead th')).map((th) => words(th));
-    expect(headers).toEqual(['Category', 'Aug 2026 Closed', 'Sep 2026 In progress', 'Oct 2026 Upcoming', 'FY total']);
+    expect(headers).toEqual(['Category Amounts in SAR', 'Aug 2026 Closed', 'Sep 2026 In progress', 'Oct 2026 Upcoming', 'FY total']);
     // The in-progress column is marked in every row (Food, Transport, Total, Balance).
     expect(root().querySelectorAll('td.now').length).toBe(4);
 
@@ -1035,9 +1068,32 @@ describe('Tracker (PRD 5.6)', () => {
     expect(fuelAug.getAttribute('aria-label')).toBe('Fuel, Aug 2026: nothing planned or spent. Open entries');
     expect(cell('Taxi (archived), Aug 2026').classList).toContain('danger');
     expect(words(cell('Taxi (archived), Aug 2026'))).toBe('Spent 30 Plan 0 Available 0');
-    expect(words(root().querySelector('.hint'))).toContain(
-      "Plan is each month's own plan, and Available adds what was left (or overspent) in the FY's earlier months.",
-    );
+    http.verify();
+  });
+
+  // UX-09 (owner note 37): the paragraph is gone; the ⓘ after the title says what the words mean,
+  // and the currency is under Category in the table's corner.
+  it("says what the Year view's words mean behind an ⓘ", async () => {
+    await open('/months?view=year', overview(), balances);
+
+    expect(root().querySelector('.hint')).toBeNull();
+    expect(words(root().querySelector('.grid thead .sticky'))).toBe('Category Amounts in SAR');
+    const info = root().querySelector('.page-title app-info button')!;
+    expect(info.getAttribute('aria-label')).toBe('Year view: what it means');
+    expect(info.getAttribute('aria-expanded')).toBe('false');
+
+    (info as HTMLButtonElement).click();
+    await settle();
+    expect(info.getAttribute('aria-expanded')).toBe('true');
+    const panel = document.querySelector('.info-panel')!;
+    expect(words(panel.querySelector('.info-title'))).toBe('Year view');
+    expect(Array.from(panel.querySelectorAll('li')).map((li) => words(li))).toEqual([
+      'Spent: what you spent in the month.',
+      "Plan: the month's own plan.",
+      "Available: the month's plan plus what was left (or overspent) in the FY's earlier months.",
+      'Balance: the money in your accounts at the end of the month, projected from today on.',
+    ]);
+    expect(words(panel.querySelector('.note'))).toBe('Tap a cell to see its entries.');
     http.verify();
   });
 

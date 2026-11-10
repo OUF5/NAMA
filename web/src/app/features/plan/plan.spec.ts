@@ -221,15 +221,23 @@ describe('Plan (PRD 5.3)', () => {
     expect(cells.at(-1)).toBe('2,500.50');
   });
 
-  // Owner note 10: the note says the running total starts in the FY's first month.
-  it('says Accumulated Planned Savings adds up from the FY\'s first month', async () => {
+  // Owner note 10: the running total starts in the FY's first month. UX-09 (owner note 37): said behind
+  // the title's ⓘ, which follows the tab, instead of a note under the table.
+  it("says what Allocating's and Planning's words mean behind the title's ⓘ", async () => {
     const root = await open([food], plansResponse(), '/plan?tab=allocating');
 
-    expect(text(root.querySelector('.totals-note'))).toBe(
-      "Unallocated is income that no plan uses yet. Accumulated Planned Savings adds up each month's unallocated from " +
-        'Jan 2026, the first month of FY 2026, so its FY total is what your plan saves this FY. Select a month to see ' +
-        'its amounts on Planning.',
-    );
+    expect(root.querySelector('.totals-note')).toBeNull();
+    const button = root.querySelector('.page-title app-info button') as HTMLButtonElement;
+    expect(button.getAttribute('aria-label')).toBe('Allocating: what it means');
+    button.click();
+    await settle();
+    const panel = document.querySelector('.info-panel')!;
+    const all = (selector: string) => Array.from(panel.querySelectorAll(selector)).map((el) => text(el));
+    expect(all('li')).toEqual([
+      "Unallocated this month: the month's income that no plan uses yet.",
+      "Accumulated Planned Savings: each month's unallocated added up from the FY's first month; its FY total is what your plan saves this FY.",
+    ]);
+    expect(all('.note')).toEqual(['Select a month to see its amounts on Planning.']);
   });
 
   // Categories start closed; the selected month drives the amounts. The month picker steps through

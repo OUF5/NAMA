@@ -9,17 +9,15 @@
     </p>
   </section>
 } @else {
-  <p class="caption hint">
-    Amounts in {{ currency() }}. Plan is each month's own plan, and Available adds what was left (or overspent) in
-    the FY's earlier months. Balance is the money in your accounts at the end of each month, projected from today on. Tap a cell
-    to see its entries.
-  </p>
   <!-- MON-02: scrolls sideways inside its card with the first column fixed; the page never does. -->
   <section class="card grid-card" aria-label="Year">
     <table class="grid">
       <thead>
         <tr>
-          <th scope="col" class="sticky">Category</th>
+          <th scope="col" class="sticky">
+            Category
+            <span class="caption block">Amounts in {{ currency() }}</span>
+          </th>
           @for (month of g.months; track month.period.key) {
             <th scope="col" class="month-col" [class]="month.status">
               <span class="month-label">{{ month.period.label }}</span>

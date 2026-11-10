@@ -12,6 +12,8 @@ import { MatSelectModule } from '@angular/material/select';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MeService } from '../../core/me';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
+import { GlossaryKey } from '../../shared/glossary';
+import { Info } from '../../shared/info';
 import { toMinor } from '../../shared/money';
 import { formatDate } from '../../shared/month-label';
 import { MonthOption, MonthPicker } from '../../shared/month-picker';
@@ -45,6 +47,7 @@ const PHONE = '(max-width: 767.98px)';
     MatFormFieldModule,
     MatIconModule,
     MatSelectModule,
+    Info,
     MonthDetail,
     MonthPicker,
     RolloverBanner,
@@ -91,6 +94,35 @@ export class Months {
   // R-PLN-06: "Oct 2026" when the carry starts after the FY's first month; null otherwise. Owner note
   // 32: only on Totals, whose projection spends the carried remaining (R-PLN-07); the Year view's
   // Available carries from the FY's first month, and the Months view shows each month on its own.
+  // UX-09 (owner note 37): what the shown view's words mean, behind the title's ⓘ. Totals' notes
+  // follow the filter (the whole budget's rows hide while a category is picked) and the carry.
+  protected readonly info = computed((): { title: string; terms: GlossaryKey[]; notes: string[] } | null => {
+    const data = this.data();
+    if (!data) {
+      return null;
+    }
+    switch (this.view()) {
+      case 'year':
+        return { title: 'Year view', terms: ['spent', 'plan', 'available', 'balance'], notes: ['Tap a cell to see its entries.'] };
+      case 'months':
+        return { title: 'Months view', terms: ['remainingThisMonth', 'overspentLastMonth', 'afterCovering'], notes: [] };
+      default: {
+        const whole = data.totals.income !== null;
+        const from = this.carryFrom();
+        return {
+          title: 'Totals view',
+          terms: whole ? ['unspentThisMonth', 'accumulatedSavings', 'projected', 'balance'] : [],
+          notes: [
+            whole
+              ? 'Accumulated savings is not your balance: Balance starts from the balances you set on Banks.'
+              : 'Income, savings and the balance belong to the whole budget, so they are hidden while a category is picked.',
+            ...(from ? [`What is left carries from ${from}, the month you started NAMA. Earlier months stand alone.`] : []),
+          ],
+        };
+      }
+    }
+  });
+
   protected readonly carryFrom = computed(() => {
     const data = this.data();
     const key = data?.carryFromPeriodKey;

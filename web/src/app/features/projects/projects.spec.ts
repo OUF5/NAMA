@@ -228,6 +228,23 @@ describe('Projects (PRD 5.14)', () => {
     expect(text('h1')).toBe('Road to DE');
     expect(text('.title .chip')).toBe('Off track');
     expect(text('.status')).toBe('By 30 Aug 2027 · 11 months left');
+    // UX-09 (owner note 37): what the page's words mean is behind the title's ⓘ, not under each card.
+    expect(root().querySelectorAll('p.caption').length).toBe(0);
+    (root().querySelector('.title app-info button') as HTMLButtonElement).click();
+    await settle();
+    const panel = document.querySelector('.info-panel')!;
+    expect(Array.from(panel.querySelectorAll('li')).map(words)).toEqual([
+      "Now: the money in the project's account today.",
+      "By the deadline: the money now, plus what is still to put in this month, plus each month's amount to come.",
+      'Put in: what reached its account in the month (your share of income, income items, transfers), less money taken out.',
+      'Milestone: money you need on a day, compared with the money in its account that day.',
+      'Behind or ahead: what was planned but not put in (or put in beyond it), carried into the next month.',
+    ]);
+    expect(Array.from(panel.querySelectorAll('.note')).map(words)).toEqual([
+      'Expected income is not added: it counts once it reaches the account.',
+    ]);
+    (root().querySelector('.title app-info button') as HTMLButtonElement).click();
+    await settle();
     expect(texts('.story > div')).toEqual([
       'Now SAR 65,375 In Alinma Saving',
       'By 30 Aug 2027 SAR 141,175 With SAR 19,800 more as planned',

@@ -9,6 +9,7 @@ import { RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 import { MeService } from '../../core/me';
 import { dialogSize } from '../../shared/dialog';
+import { Info } from '../../shared/info';
 import { formatMoney, formatPercent, toBasisPoints, toMinor } from '../../shared/money';
 import { formatDate, formatDay, monthKeyLabel } from '../../shared/month-label';
 import { monthGroups } from '../settings/settings-lines';
@@ -29,7 +30,7 @@ const TRANSFER_LIMIT = 10;
 // restore are reversible, so they need no confirmation. The API makes every sum; this only formats.
 @Component({
   selector: 'app-banks',
-  imports: [RouterLink, MatButtonModule, MatIconModule],
+  imports: [RouterLink, MatButtonModule, MatIconModule, Info],
   templateUrl: './banks.html',
   styleUrl: './banks.scss',
 })

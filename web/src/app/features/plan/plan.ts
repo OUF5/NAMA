@@ -14,6 +14,8 @@ import { firstValueFrom } from 'rxjs';
 import { MeService } from '../../core/me';
 import { dialogSize } from '../../shared/dialog';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
+import { GlossaryKey } from '../../shared/glossary';
+import { Info } from '../../shared/info';
 import { formatAmount, formatMoney, toMinor } from '../../shared/money';
 import { PeriodInfo, formatDate, formatDay } from '../../shared/month-label';
 import { MonthOption, MonthPicker } from '../../shared/month-picker';
@@ -59,6 +61,7 @@ interface ArchivedRow {
   imports: [
     NgTemplateOutlet,
     RouterLink,
+    Info,
     MatButtonModule,
     MatFormFieldModule,
     MatIconModule,
@@ -82,6 +85,16 @@ export class Plan {
   protected readonly formatDate = formatDate;
   protected readonly tabs = PLAN_TABS;
   protected readonly tab = signal<PlanTab>('allocating');
+  // UX-09 (owner note 37): what the tab's words mean, behind the title's ⓘ.
+  protected readonly info = computed((): { title: string; terms: GlossaryKey[]; notes: string[] } =>
+    this.tab() === 'planning'
+      ? { title: 'Planning', terms: [], notes: ['Open a category to plan its sub-categories or add one.'] }
+      : {
+          title: 'Allocating',
+          terms: ['unallocatedThisMonth', 'accumulatedPlannedSavings'],
+          notes: ['Select a month to see its amounts on Planning.'],
+        },
+  );
   protected readonly formatDay = formatDay;
 
   protected readonly loadError = signal('');

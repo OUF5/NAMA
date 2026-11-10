@@ -177,17 +177,4 @@
       </tbody>
     </table>
   </div>
-  <!-- Under the table, not its caption, so it wraps instead of scrolling with the months. -->
-  <p class="caption totals-note">
-    @if (whole()) {
-      Unspent is income that was not spent. Accumulated savings adds up each month's unspent from
-      {{ firstMonth() }}, the first month of {{ fiscalYearLabel() }}, with what you entered for months
-      before you started NAMA. It is not your balance: Balance starts from the balances you set on Banks.
-      Projected: the rest of this month's plan is spent, then each month yet to come adds its income
-      minus its plan (on Plan), so every expense or income you add moves it.
-    } @else {
-      Income, savings and the balance belong to the whole budget, so they are hidden while a category is
-      picked.
-    }
-  </p>
 </section>

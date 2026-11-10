@@ -127,7 +127,20 @@ describe('Loans (PRD 5.12)', () => {
   it('shows the totals and the account balance today while typing', async () => {
     const page = await open();
 
-    expect(text('.info')).toBe('Information only: your balances, plan and Tracker stay the same.');
+    // UX-09 (owner note 37): Lent, Borrowed and "information only" are behind the title's ⓘ.
+    expect(root().querySelector('.info')).toBeNull();
+    (root().querySelector('.page-head app-info button') as HTMLButtonElement).click();
+    await settle();
+    const panel = document.querySelector('.info-panel')!;
+    const words = (el: Element) => el.textContent!.replace(/\s+/g, ' ').trim();
+    expect(Array.from(panel.querySelectorAll('li')).map(words)).toEqual([
+      'Lent: you gave the money: they owe you.',
+      'Borrowed: you received the money: you owe it.',
+    ]);
+    expect(Array.from(panel.querySelectorAll('.note')).map(words)).toEqual([
+      'Information only: your balances, plan and Tracker stay the same.',
+      'If the money really left or reached an account, set its balance today on Banks to match the bank.',
+    ]);
     expect(text('.totals')).toBe('Lent · open (1) SAR 1,000 Borrowed SAR 3,000 Lent − Borrowed SAR -2,000');
     expect(text('.outlook')).toContain('SNB today SAR 4,100');
 

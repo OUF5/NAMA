@@ -14,6 +14,7 @@ import { firstValueFrom, map } from 'rxjs';
 import { MeService } from '../../core/me';
 import { dialogSize } from '../../shared/dialog';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
+import { Info } from '../../shared/info';
 import { formatMoney, parseAmount, toMinor } from '../../shared/money';
 import { formatDate, fromDateString, toDateString } from '../../shared/month-label';
 import { LoanDialog, LoanDialogData } from './loan-dialog';
@@ -74,6 +75,7 @@ export function loanStatus(loan: Loan, today: string): string {
     MatIconModule,
     MatInputModule,
     MatSelectModule,
+    Info,
     LoanFields,
   ],
   providers: [OUTLINE_FORM_FIELDS],

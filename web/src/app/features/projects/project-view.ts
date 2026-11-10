@@ -8,6 +8,7 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { firstValueFrom, map } from 'rxjs';
 import { MeService } from '../../core/me';
 import { dialogSize } from '../../shared/dialog';
+import { Info } from '../../shared/info';
 import { formatDate } from '../../shared/month-label';
 import { ProjectBarView } from './project-bar';
 import { ProjectDialog, ProjectDialogData } from './project-dialog';
@@ -20,7 +21,7 @@ const PHONE = '(max-width: 767.98px)';
 // the deadline, and what to change. The numbers come from GET /api/projects, as on the list.
 @Component({
   selector: 'app-project-view',
-  imports: [RouterLink, MatButtonModule, MatIconModule, ProjectBarView],
+  imports: [RouterLink, MatButtonModule, MatIconModule, Info, ProjectBarView],
   templateUrl: './project-view.html',
   styleUrl: './projects.scss',
 })

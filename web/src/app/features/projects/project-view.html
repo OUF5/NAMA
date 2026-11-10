@@ -13,7 +13,15 @@
 } @else if (view(); as v) {
   <div class="page-head">
     <div class="title">
-      <h1>{{ v.project.name }}</h1>
+      <div class="titled">
+        <h1>{{ v.project.name }}</h1>
+        <!-- UX-09 (owner note 37): what the page's words mean, instead of a caption under each card. -->
+        <app-info
+          title="A project"
+          [terms]="['projectNow', 'byTheDeadline', 'putIn', 'milestone', 'behindOrAhead']"
+          [notes]="['Expected income is not added: it counts once it reaches the account.']"
+        />
+      </div>
       <span class="chip" [class.ok]="v.chip.tone === 'ok'" [class.danger]="v.chip.tone === 'danger'" [class.neutral]="v.chip.tone === 'neutral'">{{ v.chip.label }}</span>
     </div>
     <button mat-stroked-button type="button" (click)="edit()">
@@ -65,10 +73,6 @@
             <dd class="money">{{ v.projected }}</dd>
           </div>
         </dl>
-        <p class="caption">
-          Progress is the money in its account. Each month's amount counts from its first day, as income
-          does. Expected income is not added: it counts once it reaches the account.
-        </p>
       }
     }
   </section>
@@ -103,7 +107,6 @@
             <span [class.danger]="month.before.tone === 'danger'" [class.ok]="month.before.tone === 'ok'">{{ month.before.text }}</span>
           </li>
         </ul>
-        <p class="caption">What goes into its account counts: your share of income, income items and transfers. Money taken out for anything else counts against it.</p>
       </section>
     }
   </div>
@@ -129,7 +132,6 @@
           </li>
         }
       </ul>
-      <p class="caption">A milestone is money you need on a day, so it is compared with the money in its account that day.</p>
     </section>
   }
 
@@ -154,7 +156,6 @@
           </tbody>
         </table>
       </div>
-      <p class="caption">What is behind carries into the next month, as plan leftovers do. Months to come show what is planned; "–" when the balances are not known yet.</p>
     </section>
   }
 }

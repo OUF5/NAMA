@@ -151,6 +151,23 @@ describe('Banks (PRD 5.11)', () => {
       '18 Oct 2026 Main arrow_forward Savings Savings SAR 500 edit',
     ]);
 
+    // UX-09 (owner note 37): what a balance, the split and a transfer are is behind the title's ⓘ.
+    expect(root.querySelector('.how')).toBeNull();
+    (root.querySelector('.page-head app-info button') as HTMLButtonElement).click();
+    await settle(fixture);
+    const panel = document.querySelector('.info-panel')!;
+    expect(Array.from(panel.querySelectorAll('li')).map(text)).toEqual([
+      'Balance: its opening balance, plus its share of income on each payday, plus transfers in, minus transfers out, minus the expenses paid from it.',
+      'Opening balance: what the account held at the start of a day; NAMA keeps it up to date from then on.',
+      "Income split: which share of each month's income goes into which account on payday.",
+      'Transfer: money moved between two of your own accounts. It is never spending or income.',
+    ]);
+    expect(Array.from(panel.querySelectorAll('.note')).map(text)).toEqual([
+      'Record a transfer only for money you move outside the income split.',
+    ]);
+    (root.querySelector('.page-head app-info button') as HTMLButtonElement).click();
+    await settle(fixture);
+
     // Archived accounts fold away, with their balance kept out of the total.
     expect(text(root)).not.toContain('Old card');
     button(root, 'Archived (1)').click();

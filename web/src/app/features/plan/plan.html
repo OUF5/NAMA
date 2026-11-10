@@ -1,5 +1,11 @@
 <div class="page-head">
-  <h1>Plan</h1>
+  <div class="titled page-title">
+    <h1>Plan</h1>
+    <!-- UX-09 (owner note 37): what the tab's words mean, instead of paragraphs. -->
+    @if (data()) {
+      <app-info [title]="info().title" [terms]="info().terms" [notes]="info().notes" />
+    }
+  </div>
 </div>
 
 @if (loadError()) {
@@ -64,7 +70,6 @@
           <app-month-picker [months]="monthOptions()" [selected]="selected()?.key ?? null" (selectedChange)="selectMonth($event)" />
         </div>
         <p class="caption list-note">
-          Open a category to plan its sub-categories or add one.
           <a routerLink="/tracker" [queryParams]="{ fyId: d.fiscalYear.id, view: 'year' }">See the year grid</a>
         </p>
         <ul class="list">
@@ -272,12 +277,6 @@
             </tbody>
           </table>
         </div>
-        <!-- Under the table, not its caption, so it wraps instead of scrolling with the months. -->
-        <p class="caption totals-note">
-          Unallocated is income that no plan uses yet. Accumulated Planned Savings adds up each month's
-          unallocated from {{ firstMonth() }}, the first month of {{ d.fiscalYear.label }}, so its FY total is
-          what your plan saves this FY. Select a month to see its amounts on Planning.
-        </p>
       </section>
       }
     }

@@ -314,6 +314,20 @@ h2 {
   font-variant-numeric: tabular-nums;
 }
 
+// UX-09: a page or card title with its ⓘ (shared/info.ts) right after it, centered on its line. A page
+// moves its title's bottom margin to this row.
+.titled {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+
+  > h1,
+  > h2 {
+    margin: 0;
+  }
+}
+
 // The secondary button sits on a surface, not on the page.
 .mat-mdc-outlined-button {
   background: var(--surface);

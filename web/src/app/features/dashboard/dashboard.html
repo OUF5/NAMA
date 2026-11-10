@@ -56,7 +56,10 @@
       @if (current(); as c) {
         <div class="card-head">
           <div class="title">
-            <h2 id="current-title">{{ c.month.period.label }}</h2>
+            <div class="titled">
+              <h2 id="current-title">{{ c.month.period.label }}</h2>
+              <app-info title="Current month" [terms]="['remainingThisMonth', 'overspentLastMonth']" />
+            </div>
             <span class="caption">{{ c.dates }}</span>
           </div>
           <span class="now-chip">{{ inProgressLabel }}</span>
@@ -136,7 +139,14 @@
       <section class="card" aria-labelledby="versus-title">
         <div class="card-head">
           <div class="title">
-            <h2 id="versus-title">Plan vs actual</h2>
+            <div class="titled">
+              <h2 id="versus-title">Plan vs actual</h2>
+              <app-info
+                title="Plan vs actual"
+                [terms]="['accumulatedPlannedSavings', 'accumulatedSavings']"
+                [notes]="['It counts from the first month of the FY, as Tracker and Plan do.']"
+              />
+            </div>
             <span class="caption">{{ v.range }}</span>
           </div>
         </div>
@@ -187,7 +197,10 @@
       <section class="card wide" aria-labelledby="saving-title">
         <div class="card-head">
           <div class="title">
-            <h2 id="saving-title">Saving: plan vs projection</h2>
+            <div class="titled">
+              <h2 id="saving-title">Saving: plan vs projection</h2>
+              <app-info title="Saving" [terms]="['plannedSaving', 'projectedSaving']" />
+            </div>
             <span class="caption">By the end of {{ s.fy }}</span>
           </div>
           <span class="chip" [class.ok]="s.ok" [class.danger]="!s.ok">{{ s.verdict }}</span>
@@ -219,7 +232,6 @@
             </p>
           </div>
         }
-        <p class="caption reason">{{ s.reason }}</p>
         <button mat-button type="button" class="fold" [attr.aria-expanded]="savingHow()" (click)="savingHow.set(!savingHow())">
           <mat-icon class="chevron" [class.open]="savingHow()" aria-hidden="true">chevron_right</mat-icon>
           How?
@@ -237,12 +249,6 @@
               <dd class="money">{{ s.projected }}</dd>
             </div>
           </dl>
-          <p class="caption">
-            Planned saving is Plan's Accumulated Planned Savings: planned income minus planned, every month
-            from {{ s.first }} to the end of {{ s.fy }}. Projected saving is Tracker's: what really
-            happened so far, the rest of this month's plan spent, then each month to come's income minus
-            its plan.
-          </p>
         }
       </section>
     }
@@ -306,7 +312,10 @@
       <section class="card wide" aria-labelledby="banks-title">
         <div class="card-head">
           <div class="title">
-            <h2 id="banks-title">Total balance</h2>
+            <div class="titled">
+              <h2 id="banks-title">Total balance</h2>
+              <app-info title="Total balance" [terms]="['thisFyAdded']" />
+            </div>
             <span class="caption">Today · {{ b.count }}</span>
           </div>
           <a routerLink="/banks">Open Banks</a>
@@ -315,8 +324,7 @@
           <span class="money hero" [class.danger]="b.negative">{{ b.total }}</span>
           @if (b.added) {
             <p class="caption added">
-              This FY added <span class="money" [class.danger]="b.addedNegative">{{ b.added }}</span> · income minus
-              spent in the closed months
+              This FY added <span class="money" [class.danger]="b.addedNegative">{{ b.added }}</span>
             </p>
           }
           <app-bank-bar [accounts]="b.accounts" [currency]="currency()" />

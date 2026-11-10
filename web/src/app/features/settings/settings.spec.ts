@@ -252,6 +252,16 @@ describe('Settings (PRD 5.7)', () => {
       'Claude Code (nama) Connected 17 Oct 2026 · Last active 19 Oct 2026 Disconnect',
     ]);
     expect(root.querySelector('.command')).toBeNull();
+    // UX-09 (owner note 37): what connected apps can do is behind the section title's ⓘ.
+    expect(root.querySelector('[aria-labelledby="apps-title"] p.caption')).toBeNull();
+    (root.querySelector('.card-head app-info button') as HTMLButtonElement).click();
+    await settle();
+    const panel = document.querySelector('.info-panel')!;
+    expect(panel.querySelector('li')).toBeNull();
+    expect(Array.from(panel.querySelectorAll('.note')).map(text)).toEqual([
+      'Apps you allowed to read your NAMA data, such as Claude Code. They cannot change anything.',
+      'Disconnect stops one on its next call.',
+    ]);
   });
 
   it('disconnects an app straight away', async () => {

@@ -431,6 +431,13 @@ describe('Dashboard (PRD 5.9)', () => {
     return Array.from(scope.querySelectorAll(selector)).map((el) => text(el));
   }
 
+  // UX-09: opens the card's ⓘ and gives its bullets (the panel lives in the overlay, not the card).
+  async function info(scope: Element): Promise<string[]> {
+    (scope.querySelector('app-info button') as HTMLButtonElement).click();
+    await settle();
+    return lines(document.querySelector('.info-panel')!, 'li');
+  }
+
   // Owner note 8: the chart first, then the cards in this order, every card with the month's border.
   it('shows the FY and the cards in order', async () => {
     await open();
@@ -459,7 +466,12 @@ describe('Dashboard (PRD 5.9)', () => {
     await open();
 
     const current = card('current');
-    expect(text(current.querySelector('.card-head'))).toBe('Sep 2026 27 Sep to 26 Oct In progress');
+    expect(text(current.querySelector('.card-head'))).toBe('Sep 2026 info 27 Sep to 26 Oct In progress');
+    expect(current.querySelector('app-info button')!.getAttribute('aria-label')).toBe('Current month: what it means');
+    expect(await info(current)).toEqual([
+      "Remaining this month: the month's plan minus what you spent.",
+      'Overspent last month: what went over plan last month and is not made up yet.',
+    ]);
     expect(text(current.querySelector('.hero-line'))).toBe('SAR 600.01 Within plan');
     expect(current.querySelector('.hero')!.classList).toContain('ok');
     expect(current.querySelector('mat-progress-bar')!.getAttribute('aria-valuenow')).toBe(
@@ -526,7 +538,12 @@ describe('Dashboard (PRD 5.9)', () => {
     await open();
 
     const versus = card('versus');
-    expect(text(versus.querySelector('.card-head'))).toBe('Plan vs actual Jan 2026 to Sep 2026 · 9 of 12 months');
+    expect(text(versus.querySelector('.card-head'))).toBe('Plan vs actual info Jan 2026 to Sep 2026 · 9 of 12 months');
+    expect(await info(versus)).toEqual([
+      "Accumulated Planned Savings: each month's unallocated added up from the FY's first month; its FY total is what your plan saves this FY.",
+      "Accumulated savings: each month's unspent added up from the FY's first month.",
+    ]);
+    expect(text(document.querySelector('.info-panel .note'))).toBe('It counts from the first month of the FY, as Tracker and Plan do.');
     expect(lines(versus, 'thead th')).toEqual(['Planned', 'Actual']);
     expect(lines(versus, 'tbody')).toEqual([
       'Income SAR 153,500.25 SAR 153,500.25 As planned Actual incl. SAR 18,500.25 additional income',
@@ -570,13 +587,18 @@ describe('Dashboard (PRD 5.9)', () => {
     await open();
 
     const saving = card('saving');
-    expect(text(saving.querySelector('.card-head'))).toBe('Saving: plan vs projection By the end of FY 2026 On track');
+    expect(text(saving.querySelector('.card-head'))).toBe('Saving: plan vs projection info By the end of FY 2026 On track');
     expect(saving.querySelector('.card-head .chip')!.classList).toContain('ok');
     expect(lines(saving, '.kpi')).toEqual(['Planned saving SAR 184,900.25', 'Projected saving SAR 184,900.25']);
     expect(lines(saving, '.progress-text span')).toEqual(['Saved so far SAR 152,150.26 of SAR 184,900.25', 'Plan by now SAR 139,600.25']);
     expect(saving.querySelector('.progress mat-progress-bar')!.getAttribute('aria-valuenow')).toBe(String((15215026 * 100) / 18490025));
     expect(saving.querySelector<HTMLElement>('.progress .marker')!.style.left).toBe(`${(13960025 * 100) / 18490025}%`);
-    expect(text(saving.querySelector('.reason'))).toBe('Your plan is covered so far.');
+    // UX-09 (owner note 37): no "why" line; what the two figures are is behind the ⓘ.
+    expect(saving.querySelector('.reason')).toBeNull();
+    expect(await info(saving)).toEqual([
+      "Planned saving: Plan's Accumulated Planned Savings at the end of the FY.",
+      "Projected saving: Tracker's Accumulated savings at the end of the FY: what happened so far, then each month to come's income minus its plan.",
+    ]);
 
     button(saving, 'chevron_right How?').click();
     harness.detectChanges();
@@ -586,11 +608,7 @@ describe('Dashboard (PRD 5.9)', () => {
       '+ Months to come: income − plan SAR 45,300',
       '= Projected saving SAR 184,900.25',
     ]);
-    expect(text(saving.querySelector('.breakdown + .caption'))).toBe(
-      "Planned saving is Plan's Accumulated Planned Savings: planned income minus planned, every month from Jan 2026 " +
-        "to the end of FY 2026. Projected saving is Tracker's: what really happened so far, the rest of this month's " +
-        "plan spent, then each month to come's income minus its plan.",
-    );
+    expect(saving.querySelector('.breakdown + .caption')).toBeNull();
   });
 
   it('says how far above plan the projection is', async () => {
@@ -601,7 +619,6 @@ describe('Dashboard (PRD 5.9)', () => {
     const saving = card('saving');
     expect(text(saving.querySelector('.card-head .chip'))).toBe('SAR 7,926 above plan');
     expect(saving.querySelector('.card-head .chip')!.classList).toContain('ok');
-    expect(text(saving.querySelector('.reason'))).toBe('More came in or less went out than planned so far.');
   });
 
   it('says how far below plan the projection is', async () => {
@@ -612,7 +629,6 @@ describe('Dashboard (PRD 5.9)', () => {
     const saving = card('saving');
     expect(text(saving.querySelector('.card-head .chip'))).toBe('SAR 500 below plan');
     expect(saving.querySelector('.card-head .chip')!.classList).toContain('danger');
-    expect(text(saving.querySelector('.reason'))).toBe('Less came in or more went out than planned so far.');
   });
 
   // Nothing to measure progress against when the plan saves nothing.
@@ -718,11 +734,10 @@ describe('Dashboard (PRD 5.9)', () => {
     await open();
 
     const banks = card('banks');
-    expect(text(banks.querySelector('.card-head'))).toBe('Total balance Today · 2 accounts Open Banks');
+    expect(text(banks.querySelector('.card-head'))).toBe('Total balance info Today · 2 accounts Open Banks');
     expect(text(banks.querySelector('.hero'))).toBe('SAR 300.01');
-    expect(text(banks.querySelector('.added'))).toBe(
-      'This FY added SAR 135,950 · income minus spent in the closed months',
-    );
+    expect(text(banks.querySelector('.added'))).toBe('This FY added SAR 135,950');
+    expect(await info(banks)).toEqual(["This FY added: income minus spent in the FY's closed months."]);
     const bar = banks.querySelector('app-bank-bar')!;
     expect(bar.querySelectorAll('.part').length).toBe(1);
     expect(bar.querySelector('.bar')!.getAttribute('aria-label')).toBe('Balances by account: Al Rajhi SAR 500, 100%');

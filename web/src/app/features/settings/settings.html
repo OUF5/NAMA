@@ -61,7 +61,17 @@
           <!-- STG-02, R-CAL-07 -->
           <section class="card" aria-labelledby="calendar-title">
             <div class="card-head">
-              <h2 id="calendar-title">Start month and payday</h2>
+              <!-- UX-09 (owner note 37): what a change does, behind the title's ⓘ. -->
+              <div class="titled">
+                <h2 id="calendar-title">Start month and payday</h2>
+                <app-info
+                  title="Start month and payday"
+                  [notes]="[
+                    'A change takes effect from the next fiscal year. The current one keeps its dates.',
+                    'Start the next fiscal year on the Dashboard or Tracker when its last month begins.'
+                  ]"
+                />
+              </div>
               <button mat-stroked-button type="button" (click)="editCalendar()">Edit</button>
             </div>
             <dl class="facts">
@@ -80,11 +90,7 @@
               </div>
             </dl>
             <p>Takes effect from the fiscal year starting {{ formatDate(d.calendar.takesEffectFrom) }}.</p>
-            <p class="caption">
-              Next: {{ nextFiscalYear() }}. The current fiscal year keeps its dates. Start the next one on
-              the <a routerLink="/">Dashboard</a> or <a routerLink="/tracker">Tracker</a> when its last month
-              begins.
-            </p>
+            <p class="caption">Next: {{ nextFiscalYear() }}.</p>
           </section>
         }
         @case ('income') {
@@ -194,13 +200,18 @@
 
             <section class="card" aria-labelledby="links-title">
               <div class="card-head">
-                <h2 id="links-title">Invite links</h2>
+                <div class="titled">
+                  <h2 id="links-title">Invite links</h2>
+                  <app-info
+                    title="Invite links"
+                    [notes]="[
+                      'Each link works once and expires after 7 days.',
+                      'The person who opens it signs in with Google and gets NAMA with their own data.'
+                    ]"
+                  />
+                </div>
                 <button mat-stroked-button type="button" [disabled]="busy()" (click)="createInvite()">Create invite link</button>
               </div>
-              <p class="caption">
-                Each link works once and expires after 7 days. The person who opens it signs in with Google and
-                gets NAMA with their own data.
-              </p>
               @if (people.invites.length === 0) {
                 <p class="note">No unused links.</p>
               }
@@ -233,13 +244,18 @@
           <!-- STG-08, MCP-05: connections is null while the connector is off (MCP-06). -->
           <section class="card" aria-labelledby="apps-title">
             <div class="card-head">
-              <h2 id="apps-title">Connected apps</h2>
+              <div class="titled">
+                <h2 id="apps-title">Connected apps</h2>
+                <app-info
+                  title="Connected apps"
+                  [notes]="[
+                    'Apps you allowed to read your NAMA data, such as Claude Code. They cannot change anything.',
+                    'Disconnect stops one on its next call.'
+                  ]"
+                />
+              </div>
             </div>
             @if (d.connections; as connections) {
-              <p class="caption">
-                Apps you allowed to read your NAMA data, such as Claude Code. They cannot change anything.
-                Disconnect stops one on its next call.
-              </p>
               @if (connections.length === 0) {
                 <p class="note">No apps connected. To connect Claude Code, run this in a terminal, then sign in from /mcp:</p>
                 <code class="command">{{ connectCommand }}</code>

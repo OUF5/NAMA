@@ -1,5 +1,13 @@
 <div class="page-head">
-  <h1>Banks</h1>
+  <div class="titled">
+    <h1>Banks</h1>
+    <!-- UX-09 (owner note 37): what the page's words mean, instead of paragraphs. -->
+    <app-info
+      title="Banks"
+      [terms]="['accountBalance', 'openingBalance', 'incomeSplit', 'transfer']"
+      [notes]="['Record a transfer only for money you move outside the income split.']"
+    />
+  </div>
   @if (data()) {
     <div class="head-actions">
       <!-- TRF-01 lives on Add, next to expenses. -->
@@ -61,10 +69,6 @@
     <span class="caption">
       Today, {{ formatDate(d.today) }} · {{ active().length }} {{ active().length === 1 ? 'account' : 'accounts' }}@if (!d.complete && d.total !== null) { · not complete yet}
     </span>
-    <p class="caption how">
-      A balance is its opening balance, plus its share of income on each payday, plus transfers in, minus
-      transfers out, minus the expenses paid from it.
-    </p>
   </section>
 
   <!-- BNK-02: one card per active account, the balance first and how it adds up under it. -->
@@ -179,12 +183,9 @@
           </li>
         }
       </ul>
-      <p class="caption">
-        @if (monthIncome(); as income) {
-          Income in {{ monthLabel() }}: <span class="money">{{ income }}</span>, split on payday.
-        }
-        Record a transfer only for money you move outside this split.
-      </p>
+      @if (monthIncome(); as income) {
+        <p class="caption">Income in {{ monthLabel() }}: <span class="money">{{ income }}</span>, split on payday.</p>
+      }
       @if (history().length > 1) {
         <button mat-button type="button" class="fold" [attr.aria-expanded]="historyOpen()" (click)="historyOpen.set(!historyOpen())">
           <mat-icon class="chevron" [class.open]="historyOpen()" aria-hidden="true">chevron_right</mat-icon>
@@ -210,10 +211,7 @@
       <a mat-stroked-button routerLink="/add" [queryParams]="{ type: 'transfer' }">Add transfer</a>
     </div>
     @if (transfers().length === 0) {
-      <p class="note">
-        No transfers yet. When you move money between your own accounts, add it as a transfer, so both
-        balances stay right. A transfer is never spending.
-      </p>
+      <p class="note">No transfers yet. When you move money between your own accounts, add it as a transfer.</p>
     } @else {
       <ul class="list">
         @for (row of shownTransfers(); track row.transfer.id) {

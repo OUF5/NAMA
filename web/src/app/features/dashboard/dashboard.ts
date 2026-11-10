@@ -9,6 +9,7 @@ import { MeService } from '../../core/me';
 import { SummaryService } from '../../core/summary';
 import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
 import { formatMoney, toMinor } from '../../shared/money';
+import { Info } from '../../shared/info';
 import { formatDate, formatDay } from '../../shared/month-label';
 import { RolloverBanner } from '../../shared/rollover-banner';
 import { STATUS_LABELS, nameMaps, spendLine } from '../months/month-lines';
@@ -58,6 +59,7 @@ function saveProjectChoice(id: string): void {
     MatProgressBarModule,
     MatSelectModule,
     BankBar,
+    Info,
     MonthBars,
     ProjectBarView,
     RolloverBanner,
@@ -334,7 +336,6 @@ export class Dashboard {
     const share = (amount: number) => Math.max(0, Math.min(100, (amount * 100) / planned));
     return {
       fy: fiscalYear.label,
-      first: data.months[0]?.period.label ?? '',
       planned: this.money(vs.plannedSavedAtEnd),
       projected: this.money(vs.projectedSaved),
       plannedNegative: planned < 0,
@@ -346,12 +347,6 @@ export class Dashboard {
           : difference > 0
             ? `${formatMoney(difference, currency)} above plan`
             : `${formatMoney(-difference, currency)} below plan`,
-      reason:
-        difference === 0
-          ? 'Your plan is covered so far.'
-          : difference > 0
-            ? 'More came in or less went out than planned so far.'
-            : 'Less came in or more went out than planned so far.',
       // Progress toward the FY's planned saving; only when there is a positive plan to measure against.
       progress:
         planned > 0

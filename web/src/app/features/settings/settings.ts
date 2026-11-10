@@ -13,6 +13,7 @@ import { Me, MeService } from '../../core/me';
 import { SummaryService } from '../../core/summary';
 import { dialogSize } from '../../shared/dialog';
 import { countsLabel, incomeMonths } from '../../shared/income-months';
+import { Info } from '../../shared/info';
 import { formatMoney, toMinor } from '../../shared/money';
 import { MONTH_NAMES, MONTH_NAMINGS, MonthNaming, formatDate, monthKeyLabel, periodWithDates } from '../../shared/month-label';
 import { CalendarDialog } from './calendar-dialog';
@@ -38,7 +39,7 @@ const PHONE = '(max-width: 767.98px)';
 // only to them. Connected apps (STG-08, MCP-05) lists the apps allowed to read your data.
 @Component({
   selector: 'app-settings',
-  imports: [NgTemplateOutlet, RouterLink, MatButtonModule, MatIconModule],
+  imports: [NgTemplateOutlet, RouterLink, MatButtonModule, MatIconModule, Info],
   templateUrl: './settings.html',
   styleUrl: './settings.scss',
 })

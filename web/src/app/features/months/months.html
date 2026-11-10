@@ -1,6 +1,12 @@
 <!-- Tracker: plan vs actual (owner's choice, 20 Oct 2026). Edit plan goes back to Plan for the same FY. -->
 <div class="page-head">
-  <h1>Actual vs projection</h1>
+  <div class="titled page-title">
+    <h1>Actual vs projection</h1>
+    <!-- UX-09 (owner note 37): what the shown view's words mean, instead of paragraphs. -->
+    @if (info(); as i) {
+      <app-info [title]="i.title" [terms]="i.terms" [notes]="i.notes" />
+    }
+  </div>
   @if (data(); as d) {
     <a routerLink="/plan" [queryParams]="{ fyId: d.fyId, tab: 'planning' }">Edit plan</a>
   }
@@ -78,11 +84,6 @@
       <button mat-button type="button" (click)="clearFilters()">Clear filters</button>
     }
   </div>
-  @if (carryFrom(); as from) {
-    <p class="caption carry-from">
-      What is left carries from {{ from }}, the month you started NAMA. Earlier months stand alone.
-    </p>
-  }
   <p class="status" aria-live="polite">{{ status() }}</p>
 
   @if (view() === 'totals') {
