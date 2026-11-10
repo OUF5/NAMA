@@ -7,6 +7,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { RouterLink } from '@angular/router';
 import { MeService } from '../../core/me';
 import { SummaryService } from '../../core/summary';
+import { OUTLINE_FORM_FIELDS } from '../../shared/form-field';
 import { formatMoney, toMinor } from '../../shared/money';
 import { formatDate, formatDay } from '../../shared/month-label';
 import { RolloverBanner } from '../../shared/rollover-banner';
@@ -14,10 +15,34 @@ import { STATUS_LABELS, nameMaps, spendLine } from '../months/month-lines';
 import { MonthOverview, OverviewApi, OverviewResponse } from '../months/overview-api';
 import { LoanTotals, LoansApi } from '../loans/loans-api';
 import { PlanApi } from '../plan/plan-api';
+import { ProjectBarView } from '../projects/project-bar';
+import { projectDetails } from '../projects/project-lines';
+import { ProjectsApi, ProjectsResponse, stateChip } from '../projects/projects-api';
 import { BankBar } from './bank-bar';
 import { MonthBars } from './month-bars';
 
-// PRD 5.9 Dashboard (DSH-01 to DSH-04, DSH-06, DSH-07) and the FY-01 banner (owner note 8). It shows
+// DSH-08: the project picked is remembered on this device. It is a display preference only, so one
+// key serves every account; an id that is not an open project falls back to the first. Storage can
+// be missing or blocked, so every call is guarded.
+const PROJECT_KEY = 'nama.dashboard.project';
+
+function loadProjectChoice(): string {
+  try {
+    return localStorage.getItem(PROJECT_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+function saveProjectChoice(id: string): void {
+  try {
+    localStorage.setItem(PROJECT_KEY, id);
+  } catch {
+    // Without storage the dropdown still works; only the memory is lost.
+  }
+}
+
+// PRD 5.9 Dashboard (DSH-01 to DSH-04, DSH-06 to DSH-08) and the FY-01 banner (owner note 8). It shows
 // the FY that contains today, else the latest; there is no FY selector. One call: the overview
 // (NFR-01), plus GET /api/fiscal-years only when no FY contains today. Today's day of the month and
 // the bank balances come from the top bar's summary (UX-08), so they cost no call. Plan vs actual and
@@ -34,8 +59,11 @@ import { MonthBars } from './month-bars';
     MatSelectModule,
     BankBar,
     MonthBars,
+    ProjectBarView,
     RolloverBanner,
   ],
+  // docs/DESIGN.md "Inputs": the two card-head dropdowns are outline fields, as on every page.
+  providers: [OUTLINE_FORM_FIELDS],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
 })
@@ -45,6 +73,7 @@ export class Dashboard {
   private readonly meService = inject(MeService);
   private readonly summaryService = inject(SummaryService);
   private readonly loansApi = inject(LoansApi);
+  private readonly projectsApi = inject(ProjectsApi);
 
   protected readonly formatDate = formatDate;
   protected readonly inProgressLabel = STATUS_LABELS.inProgress;
@@ -382,9 +411,34 @@ export class Dashboard {
     };
   });
 
+  // DSH-08 (owner note 36): one project at a time, picked in the head, with its page's main card
+  // (PRJ-03): the bar, Now, By the deadline, Still to save and the verdict. Only projects that are not
+  // Done, in the API's order (PRJ-02). Its own call, made only here; the card stays hidden when it fails.
+  private readonly projectsData = signal<ProjectsResponse | null>(null);
+  private readonly projectChoice = signal(loadProjectChoice());
+  protected readonly projects = computed(() => {
+    const data = this.projectsData();
+    if (!data) {
+      return null;
+    }
+    const open = data.projects.filter((project) => project.status !== 'done');
+    const picked = open.find((project) => project.id === this.projectChoice()) ?? open[0];
+    return {
+      options: open.map((project) => ({ id: project.id, name: project.name, status: stateChip(project.state).label })),
+      view: picked ? projectDetails(picked, data.accounts, this.currency()) : null,
+      empty: data.projects.length === 0 ? 'No projects yet.' : 'No open projects.',
+    };
+  });
+
   constructor() {
     void this.load();
     void this.loadLoans();
+    void this.loadProjects();
+  }
+
+  protected pickProject(id: string): void {
+    this.projectChoice.set(id);
+    saveProjectChoice(id);
   }
 
   // FY-01, FY-02: the banner already set the new /api/me. The page shows the FY that now contains
@@ -415,6 +469,14 @@ export class Dashboard {
       this.loanTotals.set(await this.loansApi.totals());
     } catch {
       this.loanTotals.set(null);
+    }
+  }
+
+  private async loadProjects(): Promise<void> {
+    try {
+      this.projectsData.set(await this.projectsApi.projects());
+    } catch {
+      this.projectsData.set(null);
     }
   }
 

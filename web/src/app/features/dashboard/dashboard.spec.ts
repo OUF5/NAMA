@@ -16,6 +16,7 @@ import { Summary, SummaryService } from '../../core/summary';
 import { LoanTotals } from '../loans/loans-api';
 import { Cell, MonthOverview, OverviewResponse } from '../months/overview-api';
 import { Category, FiscalYear } from '../plan/plan-api';
+import { Project, ProjectsResponse } from '../projects/projects-api';
 import { Dashboard } from './dashboard';
 
 // The M7 hand check, today 17 Oct 2026: FY 2026 with payday 27, Sep 2026 (27 Sep to 26 Oct) in
@@ -223,6 +224,99 @@ function summary(): Summary {
   };
 }
 
+// DSH-08: PRD R-PRJ-07's worked example, as GET /api/projects answers it (as in projects.spec.ts;
+// payday 25, today 31 Oct 2026, months named by the month they end in).
+const prjOct = { key: '2026-10', label: 'Nov 2026', startDate: '2026-10-25', endDate: '2026-11-24' };
+const prjSep = { key: '2026-09', label: 'Oct 2026', startDate: '2026-09-25', endDate: '2026-10-24' };
+const prjNov = { key: '2026-11', label: 'Dec 2026', startDate: '2026-11-25', endDate: '2026-12-24' };
+const prjAug = { key: '2027-07', label: 'Aug 2027', startDate: '2027-07-25', endDate: '2027-08-24' };
+
+const de: Project = {
+  id: 'de',
+  name: 'Road to DE',
+  deadline: '2027-08-30',
+  status: 'active',
+  doneOn: null,
+  startPeriodKey: '2026-09',
+  targets: [
+    { level: 'best', amount: 126000, active: false, covered: true },
+    { level: 'likely', amount: 144000, active: true, covered: false },
+    { level: 'worst', amount: 184000, active: false, covered: false },
+  ],
+  activeTarget: 'likely',
+  bankAccountId: 'alinma',
+  monthlyAmount: 7000,
+  plan: [
+    { period: prjSep, amount: 7000 },
+    { period: prjOct, amount: 7000 },
+    { period: prjNov, amount: 7000 },
+    { period: prjAug, amount: 7000 },
+  ],
+  state: 'offTrack',
+  asOf: '2026-10-31',
+  currentMonth: prjOct,
+  money: 65375,
+  progress: 65375,
+  target: 144000,
+  stillToSave: 78625,
+  percent: 45,
+  months: [
+    { period: prjSep, planned: 7000, actual: 7000, behind: 0 },
+    { period: prjOct, planned: 7000, actual: 1200, behind: 5800 },
+  ],
+  behindBefore: 0,
+  stillToPutIn: 5800,
+  monthsToCome: [
+    { period: prjNov, amount: 7000 },
+    { period: prjAug, amount: 7000 },
+  ],
+  deadlinePassed: false,
+  projected: 141175,
+  short: 2825,
+  extraAMonth: 257,
+  monthsLeft: 11,
+  milestones: [
+    { id: 'm1', label: 'Deposit', date: '2027-05-01', amount: 50116, passed: false, money: 106175, difference: 56059 },
+    { id: 'm0', label: 'Visa', date: '2026-10-01', amount: 60000, passed: true, money: 57175, difference: -2825 },
+  ],
+};
+
+const car: Project = {
+  ...de,
+  id: 'car',
+  name: 'Car',
+  deadline: '2027-06-30',
+  targets: [{ level: 'likely', amount: 20000, active: true, covered: true }],
+  bankAccountId: 'snb',
+  monthlyAmount: 2000,
+  state: 'onTrack',
+  money: 16000,
+  progress: 16000,
+  target: 20000,
+  stillToSave: 4000,
+  percent: 80,
+  projected: 22000,
+  short: 0,
+  extraAMonth: 0,
+  monthsLeft: 9,
+  milestones: [],
+};
+
+const wedding: Project = { ...car, id: 'wedding', name: 'Wedding', status: 'done', state: 'done', doneOn: '2026-10-20', asOf: '2026-10-20', bankAccountId: 'rajhi' };
+
+function projectsResponse(projects: Project[] = [de, car, wedding]): ProjectsResponse {
+  return {
+    today: '2026-10-31',
+    currentMonth: prjOct,
+    projects,
+    accounts: [
+      { id: 'alinma', name: 'Alinma Saving', archived: false, balance: 65375, projectId: 'de' },
+      { id: 'rajhi', name: 'Al Rajhi', archived: false, balance: 4100, projectId: null },
+      { id: 'snb', name: 'SNB', archived: false, balance: 16000, projectId: 'car' },
+    ],
+  };
+}
+
 const rollover = {
   fyId: '2026-01',
   label: 'FY 2026',
@@ -238,6 +332,7 @@ describe('Dashboard (PRD 5.9)', () => {
   let meSignal: WritableSignal<Me | null>;
 
   beforeEach(() => {
+    localStorage.clear();
     meValue = me;
     meSignal = signal(me);
     TestBed.configureTestingModule({
@@ -282,14 +377,25 @@ describe('Dashboard (PRD 5.9)', () => {
     return vi.waitFor(() => http.expectOne('/api/loans/totals'));
   }
 
-  // NFR-01: the overview (/api/me is cached by setupGuard; the summary is the shell's), and the loan
-  // totals for DSH-07.
-  async function open(data = overview(), withSummary: Summary | null = summary(), loans: LoanTotals = noLoans): Promise<void> {
+  // DSH-08's own call: the projects.
+  async function projectsCall(): Promise<TestRequest> {
+    return vi.waitFor(() => http.expectOne('/api/projects'));
+  }
+
+  // NFR-01: the overview (/api/me is cached by setupGuard; the summary is the shell's), the loan
+  // totals for DSH-07 and the projects for DSH-08.
+  async function open(
+    data = overview(),
+    withSummary: Summary | null = summary(),
+    loans: LoanTotals = noLoans,
+    projects: ProjectsResponse = projectsResponse([]),
+  ): Promise<void> {
     TestBed.inject(SummaryService).summary.set(withSummary);
     harness = await RouterTestingHarness.create();
     await harness.navigateByUrl('/');
     (await overviewCall(data.fyId)).flush(data);
     (await loansCall()).flush(loans);
+    (await projectsCall()).flush(projects);
     await settle();
     http.verify();
   }
@@ -336,10 +442,11 @@ describe('Dashboard (PRD 5.9)', () => {
       'current-title',
       'versus-title',
       'saving-title',
+      'projects-title',
       'banks-title',
       'loans-title',
     ]);
-    expect(root().querySelectorAll('.cards > section.card').length).toBe(6);
+    expect(root().querySelectorAll('.cards > section.card').length).toBe(7);
     // Owner note 24: no Projection card; the saving card goes across the page.
     expect(card('saving').classList).toContain('wide');
     expect(root().querySelector('app-rollover-banner')).toBeNull();
@@ -721,8 +828,112 @@ describe('Dashboard (PRD 5.9)', () => {
     await harness.navigateByUrl('/');
     (await overviewCall()).flush(overview());
     (await loansCall()).flush('down', { status: 500, statusText: 'Server Error' });
+    (await projectsCall()).flush(projectsResponse([]));
     await settle();
     expect(card('loans')).toBeNull();
+  });
+
+  // DSH-08 (owner note 36): one project at a time, with its page's main card (PRJ-03).
+  async function projectSelect(): Promise<MatSelectHarness> {
+    const field = await TestbedHarnessEnvironment.loader(harness.fixture).getHarness(
+      MatFormFieldHarness.with({ floatingLabelText: 'Project' }),
+    );
+    return (await field.getControl(MatSelectHarness))!;
+  }
+
+  it('shows the first open project: its bar, three numbers and verdict', async () => {
+    await open(overview(), summary(), noLoans, projectsResponse());
+
+    const projects = card('projects');
+    expect(card('saving').nextElementSibling).toBe(projects);
+    expect(projects.classList).toContain('wide');
+    expect(text(projects.querySelector('.title'))).toBe('Projects By 30 Aug 2027 · 11 months left');
+    expect(projects.querySelector('app-project-bar .bar')!.getAttribute('aria-label')).toBe('SAR 65,375 of SAR 144,000');
+    expect(lines(projects, '.story .kpi')).toEqual([
+      'Now SAR 65,375 In Alinma Saving',
+      'By 30 Aug 2027 SAR 141,175 With SAR 19,800 more as planned',
+      'Still to save SAR 78,625 SAR 65,375 of 144,000 · 45% · Likely',
+    ]);
+    // The verdict says the status in words and its color; no chip beside it.
+    expect(text(projects.querySelector('.verdict'))).toBe('Short SAR 2,825: put in SAR 257 more a month. Open project');
+    expect(projects.querySelector('.verdict .danger')).not.toBeNull();
+    expect(projects.querySelector('.verdict .chip')).toBeNull();
+    expect(projects.querySelector('a.open')!.getAttribute('href')).toBe('/projects/de');
+    // Owner, after the first look ("too much information"): the rest stays on the project's page.
+    for (const gone of ['How?', 'Targets', 'This month', 'Milestones', 'Deposit', 'By month']) {
+      expect(text(projects)).not.toContain(gone);
+    }
+    expect(projects.querySelector('table, .breakdown')).toBeNull();
+  });
+
+  it('offers the open projects with their status and remembers the one picked', async () => {
+    await open(overview(), summary(), noLoans, projectsResponse());
+
+    const select = await projectSelect();
+    expect(await select.getValueText()).toBe('Road to DE');
+    await select.open();
+    expect(await Promise.all((await select.getOptions()).map((option) => option.getText()))).toEqual([
+      'Road to DE · Off track',
+      'Car · On track',
+    ]);
+
+    await select.clickOptions({ text: 'Car · On track' });
+    harness.detectChanges();
+
+    const projects = card('projects');
+    expect(await select.getValueText()).toBe('Car');
+    expect(text(projects.querySelector('.title'))).toBe('Projects By 30 Jun 2027 · 9 months left');
+    expect(text(projects.querySelector('.verdict'))).toBe('On track, with SAR 2,000 to spare. Open project');
+    expect(projects.querySelector('a.open')!.getAttribute('href')).toBe('/projects/car');
+    expect(localStorage.getItem('nama.dashboard.project')).toBe('car');
+  });
+
+  it('opens on the project picked last on this device', async () => {
+    localStorage.setItem('nama.dashboard.project', 'car');
+    await open(overview(), summary(), noLoans, projectsResponse());
+
+    expect(await (await projectSelect()).getValueText()).toBe('Car');
+    expect(text(card('projects').querySelector('.title'))).toBe('Projects By 30 Jun 2027 · 9 months left');
+  });
+
+  it('shows the first open project when the one picked is done', async () => {
+    localStorage.setItem('nama.dashboard.project', 'wedding');
+    await open(overview(), summary(), noLoans, projectsResponse());
+
+    expect(await (await projectSelect()).getValueText()).toBe('Road to DE');
+  });
+
+  it('names the only open project instead of a dropdown', async () => {
+    await open(overview(), summary(), noLoans, projectsResponse([de, wedding]));
+
+    const projects = card('projects');
+    expect(projects.querySelector('mat-select')).toBeNull();
+    expect(text(projects.querySelector('.title'))).toBe('Projects Road to DE · By 30 Aug 2027 · 11 months left');
+  });
+
+  it('says how to add a project when there is none', async () => {
+    await open();
+    const projects = card('projects');
+    expect(projects.querySelector('.note')!.textContent?.trim()).toBe('No projects yet. Add one on Projects.');
+    expect(projects.querySelector('.note a')!.getAttribute('href')).toBe('/projects');
+    expect(projects.querySelector('mat-select')).toBeNull();
+  });
+
+  it('says there is no open project when every project is done', async () => {
+    await open(overview(), summary(), noLoans, projectsResponse([wedding]));
+    expect(card('projects').querySelector('.note')!.textContent?.trim()).toBe('No open projects. Add one on Projects.');
+  });
+
+  it('hides the projects card when the projects fail', async () => {
+    TestBed.inject(SummaryService).summary.set(summary());
+    harness = await RouterTestingHarness.create();
+    await harness.navigateByUrl('/');
+    (await overviewCall()).flush(overview());
+    (await loansCall()).flush(noLoans);
+    (await projectsCall()).flush('down', { status: 500, statusText: 'Server Error' });
+    await settle();
+    expect(card('projects')).toBeNull();
+    expect(card('loans')).not.toBeNull();
   });
 
   // FY-01 after the latest FY ended: the latest FY (GET /api/fiscal-years), no month in progress,
@@ -737,6 +948,7 @@ describe('Dashboard (PRD 5.9)', () => {
     (await vi.waitFor(() => http.expectOne('/api/fiscal-years'))).flush([fy2026]);
     (await overviewCall()).flush(ended);
     (await loansCall()).flush(noLoans);
+    (await projectsCall()).flush(projectsResponse([]));
     await settle();
     http.verify();
 

@@ -436,6 +436,30 @@
   margin: 4px 0 20px;
 }
 
+// DSH-08 (owner note 36): the project page's main card (docs/DESIGN.md "Projects") in Dashboard's
+// terms; the verdict and the link to the project share the last row, the link on the right.
+.story {
+  margin-top: 16px;
+}
+
+.verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 16px;
+  margin-top: 16px;
+  font-weight: 500;
+
+  .ok {
+    color: var(--ok);
+  }
+
+  .open {
+    margin-left: auto;
+    font-weight: 400;
+  }
+}
+
 @media (max-width: 767.98px) {
   .cards {
     gap: 12px;

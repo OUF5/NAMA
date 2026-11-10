@@ -189,6 +189,28 @@ html {
     )
   );
 
+  // Dropdowns (mat-select): the list is a menu. Hover and the keyboard's row are --surface-2; the
+  // chosen option is --primary-soft with --primary-text, as the active nav item and button toggle.
+  @include mat.select-overrides(
+    (
+      panel-background-color: var(--surface),
+      container-elevation-shadow: var(--shadow-overlay),
+      enabled-trigger-text-color: var(--text),
+      enabled-arrow-color: var(--text-2),
+      focused-arrow-color: var(--primary-text),
+    )
+  );
+
+  @include mat.option-overrides(
+    (
+      label-text-color: var(--text),
+      hover-state-layer-color: var(--surface-2),
+      focus-state-layer-color: var(--surface-2),
+      selected-state-layer-color: var(--primary-soft),
+      selected-state-label-text-color: var(--primary-text),
+    )
+  );
+
   // Setup wizard (PRD 5.2): the current and finished steps use the neutral accent.
   @include mat.stepper-overrides(
     (

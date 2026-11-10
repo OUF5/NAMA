@@ -247,6 +247,60 @@
       </section>
     }
 
+    <!-- DSH-08 (owner note 36): one project at a time, the main card of its page (PRJ-03). -->
+    @if (projects(); as p) {
+      <section class="card wide" aria-labelledby="projects-title">
+        <div class="card-head">
+          <div class="title">
+            <h2 id="projects-title">Projects</h2>
+            @if (p.view; as v) {
+              <span class="caption">{{ p.options.length === 1 ? v.project.name + ' · ' : '' }}{{ v.deadline }}</span>
+            }
+          </div>
+          @if (p.options.length > 1) {
+            <mat-form-field subscriptSizing="dynamic" class="filter">
+              <mat-label>Project</mat-label>
+              <mat-select [value]="p.view?.project?.id" (selectionChange)="pickProject($event.value)">
+                <mat-select-trigger>{{ p.view?.project?.name }}</mat-select-trigger>
+                @for (option of p.options; track option.id) {
+                  <mat-option [value]="option.id">{{ option.name }} <span class="caption">· {{ option.status }}</span></mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+          }
+        </div>
+        @if (p.view; as v) {
+          <app-project-bar [bar]="v.bar" />
+          <div class="kpis three story">
+            <div class="kpi">
+              <span class="caption">Now</span>
+              <span class="money value">{{ v.now }}</span>
+              <span class="caption">{{ v.nowParts }}</span>
+            </div>
+            <div class="kpi">
+              <span class="caption">By {{ formatDate(v.project.deadline) }}</span>
+              <span class="money value">{{ v.projected }}</span>
+              <span class="caption">{{ v.projectedCaption }}</span>
+            </div>
+            <div class="kpi">
+              <span class="caption">Still to save</span>
+              <span class="money value">{{ v.stillToSave }}</span>
+              <span class="caption">{{ v.progressLine }}</span>
+            </div>
+          </div>
+          <div class="verdict">
+            <span [class.danger]="v.verdict.tone === 'danger'" [class.ok]="v.verdict.tone === 'ok'">{{ v.verdict.text }}</span>
+            @if (v.project.state === 'unknown') {
+              <a routerLink="/banks">Open Banks</a>
+            }
+            <a class="open" [routerLink]="['/projects', v.project.id]">Open project</a>
+          </div>
+        } @else {
+          <p class="note">{{ p.empty }} Add one on <a routerLink="/projects">Projects</a>.</p>
+        }
+      </section>
+    }
+
     <!-- DSH-04: the total balance and a bar split by account (R-BAL-03, owner note 13). -->
     @if (banks(); as b) {
       <section class="card wide" aria-labelledby="banks-title">
